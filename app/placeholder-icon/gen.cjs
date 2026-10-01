@@ -120,7 +120,7 @@ const png = Buffer.concat([
   chunk('IEND', Buffer.alloc(0)),
 ]);
 
-const outDir = 'D:/uniterm/kaihongos/placeholder-icon';
+const outDir = 'D:/oneaiterm/app/placeholder-icon';
 fs.mkdirSync(outDir, { recursive: true });
 const outPath = path.join(outDir, 'app_icon_1024.png');
 fs.writeFileSync(outPath, png);

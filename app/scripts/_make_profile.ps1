@@ -1,4 +1,4 @@
-# internal: build unsgned debug profile json for net.uniterm.poc
+# internal: build unsgned debug profile json for com.oneaiterm.terminal
 # args: <appCert.cer> <out.json>
 param(
   [Parameter(Mandatory=$true)][string]$AppCert,
@@ -24,16 +24,16 @@ $profile = [ordered]@{
   'validity' = [ordered]@{ 'not-before' = $now; 'not-after' = $after }
   'type' = 'debug'
   'bundle-info' = [ordered]@{
-    'developer-id' = 'uniterm'
+    'developer-id' = 'upstream'
     'development-certificate' = $leaf
-    'bundle-name' = 'net.uniterm.poc'
+    'bundle-name' = 'com.oneaiterm.terminal'
     'apl' = 'normal'
     'app-feature' = 'hos_normal_app'
   }
   'acls' = [ordered]@{ 'allowed-acls' = @('') }
   'permissions' = [ordered]@{ 'restricted-permissions' = @('') }
   'debug-info' = [ordered]@{ 'device-ids' = @(); 'device-id-type' = 'udid' }
-  'issuer' = 'uniterm Profile Sign CA'
+  'issuer' = 'upstream Profile Sign CA'
 }
 
 $json = $profile | ConvertTo-Json -Depth 6

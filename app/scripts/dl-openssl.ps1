@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Continue"
-$out = "D:\uniterm\kaihongos\thirdparty\downloads"
+$out = "D:\oneaiterm\app\thirdparty\downloads"
 $dest = Join-Path $out "openssl-3.5.4.tar.gz"
 Remove-Item $dest -ErrorAction SilentlyContinue
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
