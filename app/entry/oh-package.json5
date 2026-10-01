@@ -1,0 +1,13 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "entry module",
+  "dependencies": {
+    "@ohos/libssh": "file:../thirdparty/libssh-x86_64-har"
+  },
+  "devDependencies": {
+    "liblocalpty.so": "file:./src/main/cpp/types/localpty",
+    "librdpproxy.so": "file:./src/main/cpp/types/rdpproxy"
+  },
+  "dynamicDependencies": {}
+}

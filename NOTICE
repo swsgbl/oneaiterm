@@ -1,0 +1,23 @@
+NOTICE
+======
+
+One AI Term (一站AI终端)
+Copyright 2026 The One AI Term Authors
+
+This product includes software originally developed for the "uniterm"
+project (https://github.com/ys-ll/uniterm), Copyright the uniterm authors,
+licensed under the Apache License, Version 2.0. Derivative works and
+modifications for KaihongOS/OpenHarmony, including the ArkTS/ArkUI
+application shell, the agent kernel, protocol client implementations
+(PostgreSQL v3 wire, Redis RESP, VNC RFB, Telnet IAC), NAPI native
+modules and cryptography layer, are Copyright 2026 The One AI Term
+Authors.
+
+This product additionally includes:
+  - libssh 0.11.1 (LGPL-2.1) via @ohos/libssh, dynamically linked,
+    unmodified, https://www.libssh.org
+  - OpenSSL 3.5.4 (Apache-2.0), https://www.openssl.org
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use these files except in compliance with the License.
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0

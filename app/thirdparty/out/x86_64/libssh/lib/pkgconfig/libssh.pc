@@ -1,0 +1,10 @@
+prefix=/mnt/d/uniterm/kaihongos/thirdparty/out/x86_64/libssh
+exec_prefix=${prefix}
+libdir=/mnt/d/uniterm/kaihongos/thirdparty/out/x86_64/libssh/lib
+includedir=/mnt/d/uniterm/kaihongos/thirdparty/out/x86_64/libssh/include
+
+Name: libssh
+Description: The SSH Library
+Version: 0.11.1
+Libs: -L${libdir} -lssh
+Cflags: -I${includedir}

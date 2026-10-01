@@ -1,0 +1,25 @@
+# 构建产物与缓存
+**/build/
+**/oh_modules/
+**/.hvigor/
+**/.cxx/
+**/.clangd/
+**/.idea/
+**/.preview/
+**/node_modules/
+**/.cache/
+/dist/
+*.log
+*.hap
+*.app
+*.zip
+# 密钥与签名材料(永不入库)
+**/*.p12
+**/*.p7b
+**/*.cer
+**/*.csr
+**/*.pem
+/thirdparty/signing/
+Thumbs.db
+.DS_Store
+_sweep.cjs

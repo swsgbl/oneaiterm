@@ -1,0 +1,8 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "entry module" },
+    { "name": "EntryAbility_desc", "value": "One AI Term" },
+    { "name": "EntryAbility_label", "value": "One AI Term" },
+    { "name": "internet_permission_reason", "value": "Used to establish SSH/SFTP network connections" }
+  ]
+}

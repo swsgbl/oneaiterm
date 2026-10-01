@@ -1,0 +1,61 @@
+{
+  "app": {
+    "signingConfigs": [],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "6.1.1(24)",
+        "targetSdkVersion": "6.1.1(24)",
+        "runtimeOS": "HarmonyOS"
+      },
+      {
+        "name": "store",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "5.0.2(14)",
+        "targetSdkVersion": "5.0.2(14)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      { "name": "debug" },
+      { "name": "release" }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [ "default" ]
+        },
+        {
+          "name": "store",
+          "applyToProducts": [ "store" ]
+        }
+      ]
+    },
+    {
+      "name": "library",
+      "srcPath": "./thirdparty/libssh-x86_64-har",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [ "default" ]
+        },
+        {
+          "name": "store",
+          "applyToProducts": [ "store" ]
+        }
+      ]
+    }
+  ]
+}
