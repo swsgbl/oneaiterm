@@ -23,3 +23,5 @@
 Thumbs.db
 .DS_Store
 _sweep.cjs
+
+/app/thirdparty/out/

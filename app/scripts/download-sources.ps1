@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$out = "D:\uniterm\kaihongos\thirdparty\downloads"
+$out = "D:\oneaiterm\app\thirdparty\downloads"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 $files = @(
   @{ name = "openssl-3.5.4.tar.gz"; urls = @(

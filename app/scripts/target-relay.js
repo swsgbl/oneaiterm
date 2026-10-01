@@ -1,7 +1,6 @@
-// uniterm KaihongOS 验收靶机链路(编排者建设):
+// upstream KaihongOS 验收靶机链路(编排者建�?:
 // guest 10.0.2.2:2222 --SLIRP--> 宿主 127.0.0.1:2222 (本relay) --> WSL Ubuntu sshd :22
-// 特性:启动时动态解析 WSL IP;目标连不上时先唤醒 WSL(wsl -- true)再重试一次。
-const net = require('net');
+// 特�?启动时动态解�?WSL IP;目标连不上时先唤�?WSL(wsl -- true)再重试一次�?const net = require('net');
 const { execSync } = require('child_process');
 
 function wslIp() {
