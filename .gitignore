@@ -27,3 +27,6 @@ _port.cjs
 .ag-token.txt
 
 /app/thirdparty/out/
+# 调试截图与布局 dump
+*.jpeg
+layout_*.json

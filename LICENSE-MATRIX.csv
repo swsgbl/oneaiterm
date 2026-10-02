@@ -1,0 +1,8 @@
+component,version,license,source,link_type,provenance_ref,modified
+libssh,0.11.1,LGPL-2.1,https://www.libssh.org,dynamic,@ohos/libssh 1.0.4 HAR (app/thirdparty/libssh-x86_64-har); SOURCE-PROVENANCE.md #3,no
+OpenSSL,3.5.4,Apache-2.0,https://www.openssl.org,dynamic,随 @ohos/libssh HAR 分发 (app/thirdparty/downloads/openssl-3.5.4.tar.gz); SOURCE-PROVENANCE.md #3,no
+uniTerm upstream,unknown(待确认),Apache-2.0,https://github.com/ys-ll/uniterm,source-import,SOURCE-PROVENANCE.md #1,yes(local patches, see PATCH-LEDGER.md)
+hmharness,-,-(非代码依赖),https://github.com/swsgbl/hmharness,none(external service only),SOURCE-PROVENANCE.md #2,n/a
+One AI Term own code,1.1.0,Apache-2.0,https://github.com/swsgbl/oneaiterm,n/a,SOURCE-PROVENANCE.md #4,n/a
+liblocalpty,1.0.0,Apache-2.0(own),app/entry/src/main/cpp + libs/{arm64-v8a,x86_64},static-napi,SOURCE-PROVENANCE.md #5,n/a
+librdpproxy,1.0.0,Apache-2.0(own),app/entry/src/main/cpp + libs/{arm64-v8a,x86_64},static-napi,SOURCE-PROVENANCE.md #5,n/a

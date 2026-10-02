@@ -7,7 +7,8 @@
   },
   "devDependencies": {
     "liblocalpty.so": "file:./src/main/cpp/types/localpty",
-    "librdpproxy.so": "file:./src/main/cpp/types/rdpproxy"
+    "librdpproxy.so": "file:./src/main/cpp/types/rdpproxy",
+    "@ohos/hypium": "1.0.6"
   },
   "dynamicDependencies": {}
 }

@@ -1,0 +1,81 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:oneaiterm-sbom-baseline-df6f159",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-01T00:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "OneAITerm",
+      "version": "1.1.0",
+      "bundleName": "com.oneaiterm.terminal",
+      "baselineCommit": "df6f159",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }]
+    },
+    "note": "SBOM 初始清单（Phase 0 冻结基线）。运行时第三方依赖为零 npm 包；dependencies 为空（app/oh-package.json5）。"
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "libssh",
+      "version": "0.11.1",
+      "licenses": [{ "license": { "id": "LGPL-2.1-only" } }],
+      "purl": "pkg:generic/libssh@0.11.1",
+      "scope": "runtime",
+      "comment": "动态链接，经 @ohos/libssh 1.0.4 HAR（app/thirdparty/libssh-x86_64-har），未修改"
+    },
+    {
+      "type": "library",
+      "name": "OpenSSL",
+      "version": "3.5.4",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:generic/openssl@3.5.4",
+      "scope": "runtime",
+      "comment": "动态链接，随 @ohos/libssh HAR 分发，未修改"
+    },
+    {
+      "type": "library",
+      "name": "@ohos/libssh",
+      "version": "1.0.4",
+      "licenses": [{ "license": { "id": "LGPL-2.1-only" } }],
+      "scope": "runtime",
+      "comment": "本地 HAR：app/thirdparty/libssh-x86_64-har（file:../thirdparty/libssh-x86_64-har）"
+    },
+    {
+      "type": "library",
+      "name": "liblocalpty.so",
+      "version": "1.0.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "scope": "runtime",
+      "comment": "自研 NAPI 模块（localpty.cpp），预编译双 ABI，静态集成"
+    },
+    {
+      "type": "library",
+      "name": "librdpproxy.so",
+      "version": "1.0.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "scope": "runtime",
+      "comment": "自研 NAPI 模块（rdpproxy.cpp），预编译双 ABI，静态集成"
+    },
+    {
+      "type": "library",
+      "name": "libssh_ohos_napi.so",
+      "version": "1.0.0",
+      "licenses": [{ "license": { "id": "LGPL-2.1-only" } }],
+      "scope": "runtime",
+      "comment": "@ohos/libssh HAR 内 NAPI 绑定库"
+    },
+    {
+      "type": "application",
+      "name": "uniTerm-upstream",
+      "version": "unknown (待确认)",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "scope": "excluded",
+      "comment": "来源快照一次性导入，upstream commit 哈希无法验证，不声明原创；见 SOURCE-PROVENANCE.md #1"
+    }
+  ],
+  "dependencies": [
+    { "ref": "OneAITerm@1.1.0", "dependsOn": ["libssh@0.11.1", "OpenSSL@3.5.4", "@ohos/libssh@1.0.4", "liblocalpty.so@1.0.0", "librdpproxy.so@1.0.0", "libssh_ohos_napi.so@1.0.0"] }
+  ]
+}

@@ -135,18 +135,52 @@ export class HarnessStream {
   private buf2str(buf: ArrayBuffer): string {
     const u8 = new Uint8Array(buf)
     let out = ''
-    for (let i = 0; i < u8.length; i++) {
-      out += String.fromCharCode(u8[i])
+    let i = 0
+    while (i < u8.length) {
+      const b = u8[i]
+      if (b < 0x80) {
+        out += String.fromCharCode(b)
+        i++
+      } else if (b < 0xC0) {
+        i++
+      } else if (b < 0xE0) {
+        if (i + 1 < u8.length) {
+          out += String.fromCharCode(((b & 0x1F) << 6) | (u8[i + 1] & 0x3F))
+          i += 2
+        } else {
+          i++
+        }
+      } else if (b < 0xF0) {
+        if (i + 2 < u8.length) {
+          out += String.fromCharCode(((b & 0x0F) << 12) | ((u8[i + 1] & 0x3F) << 6) | (u8[i + 2] & 0x3F))
+          i += 3
+        } else {
+          i++
+        }
+      } else {
+        if (i + 3 < u8.length) {
+          const cp = ((b & 0x07) << 18) | ((u8[i + 1] & 0x3F) << 12) | ((u8[i + 2] & 0x3F) << 6) | (u8[i + 3] & 0x3F)
+          const adj = cp - 0x10000
+          out += String.fromCharCode(0xD800 + (adj >> 10))
+          out += String.fromCharCode(0xDC00 + (adj & 0x3FF))
+          i += 4
+        } else {
+          i++
+        }
+      }
     }
     return out
   }
 
-  /** 发任务: POST /api/task {text,mode}。失败时经 cbs.onError 上抛。 */
-  send(task: string, mode: string): void {
+  /** 发任务: POST /api/task {text,mode,fresh,sessionId}。失败时经 cbs.onError 上抛。 */
+  send(task: string, mode: string, sessionId: string, fresh: boolean): void {
     const bodyObj: Record<string, string> = {}
     bodyObj['text'] = task
     bodyObj['mode'] = mode
-    bodyObj['fresh'] = 'true'
+    bodyObj['fresh'] = fresh ? 'true' : 'false'
+    if (sessionId !== '') {
+      bodyObj['sessionId'] = sessionId
+    }
     const p = this.base + '/api/task'
     const r = http.createHttp()
     r.request(p, {

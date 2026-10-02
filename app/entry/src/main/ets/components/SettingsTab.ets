@@ -1,8 +1,13 @@
 // 官方 SettingsTab 复刻:左侧分类(基础/终端/主题/语言/AI)+ 右侧配置区
 // M6 relay1: 全量主题化(P0-4) + 保存 toast(P0-1/3) + 密钥框可见性修复(P0-2) + 悬停 tooltip(P0-6) + 版本号 v1.1.0
+// 升级 Phase 1 / 任务 2.11 改造: 仅依赖 AgentProvider/AgentAdapter 收口——
+//   engines.hmh.baseUrl 经 AgentSettingsStore 管理（原 LlmConfigStore.harnessUrl 迁移）、
+//   审批策略三档新语义（strict/standard/open，open 档显式"风险自担"标注）、
+//   HMH 连接测试经 AgentAdapter.testHmh（不直接 import HarnessClient）。
 import { LlmConfigStore } from '../service/LlmConfigStore';
-import { AgentSettings, AgentSettingsStore, ApprovalMode } from '../service/AgentSettingsStore';
-import { HarnessClient, HarnessTestResult } from '../service/HarnessClient';
+import { AgentSettings, AgentSettingsStore } from '../service/AgentSettingsStore';
+import { AgentAdapter } from '../agent/AgentAdapter';
+import { ApprovalPolicyKind } from '../agent/AgentProvider';
 import { common } from '@kit.AbilityKit';
 import { AppTheme, themeByName } from '../common/AppTheme';
 
@@ -31,10 +36,10 @@ export struct SettingsTab {
   @State showKey: boolean = false // 密钥明文切换(P0-2)
   @State toast: string = '' // 保存反馈(P0-3)
   @State toastErr: boolean = false
-  // M6 relay3: 智能体审批门三档
-  @State agentMode: ApprovalMode = 'confirm_all'
+  // 升级 Phase 1: 智能体审批策略三档（strict 每次审批 / standard 仅危险 / open 风险自担）
+  @State agentMode: ApprovalPolicyKind = 'strict'
   @State agentToast: string = ''
-  // M6 relay5: 增强模式(hm harness 直连, 模式B)
+  // 升级 Phase 1: HMH 引擎地址（engines.hmh.baseUrl，原 harnessUrl 迁移目标）
   @State cfgHarnessUrl: string = ''
   @State harnessToast: string = ''
   @State harnessTesting: boolean = false
@@ -55,21 +60,22 @@ export struct SettingsTab {
     this.cfgBaseUrl = cfg.baseUrl
     this.cfgApiKey = cfg.apiKey
     this.cfgModel = cfg.model
-    this.cfgHarnessUrl = cfg.harnessUrl === undefined ? '' : cfg.harnessUrl
+    const s = AgentSettingsStore.read(this.filesDir)
+    this.cfgHarnessUrl = s.engines.hmh.baseUrl
     this.theme = this.themeName
-    this.agentMode = AgentSettingsStore.read(this.filesDir).mode
+    this.agentMode = s.security.approvalPolicy
   }
 
-  // M6 relay3: 智能体审批门三档写入(即时保存+toast)
-  saveAgentMode(m: ApprovalMode): void {
+  // 升级 Phase 1: 审批策略三档写入（即时保存+toast）
+  saveAgentMode(m: ApprovalPolicyKind): void {
     this.agentMode = m
-    const s = new AgentSettings()
-    s.mode = m
+    const s = AgentSettingsStore.read(this.filesDir)
+    s.security.approvalPolicy = m
     const err = AgentSettingsStore.write(this.filesDir, s)
     this.agentToast = err === '' ? '审批策略已保存: ' + this.agentModeLabel(m) : err
   }
 
-  // M6 relay5: 增强模式-连接测试(GET /api/state)
+  // 升级 Phase 1: HMH 连接测试（经 AgentAdapter，不直接 import 引擎层）
   testHarness(): void {
     const url = this.cfgHarnessUrl.trim()
     if (url === '') {
@@ -77,20 +83,28 @@ export struct SettingsTab {
       return
     }
     this.harnessTesting = true
-    HarnessClient.test(url).then((r: HarnessTestResult) => {
+    AgentAdapter.instance().testHmh(url).then((detail: string) => {
       this.harnessTesting = false
-      this.harnessToast = r.detail
+      this.harnessToast = detail
     })
   }
 
-  agentModeLabel(m: ApprovalMode): string {
-    if (m === 'confirm_all') {
-      return '全部确认'
+  agentModeLabel(m: ApprovalPolicyKind): string {
+    if (m === 'strict') {
+      return '每次审批'
     }
-    if (m === 'confirm_dangerous') {
-      return '仅危险确认'
+    if (m === 'standard') {
+      return '仅危险审批'
     }
-    return '全自动'
+    return '风险自担'
+  }
+
+  // 升级 Phase 1: HMH 地址保存到 engines.hmh.baseUrl（原 harnessUrl 迁移目标）
+  saveHarnessUrl(): void {
+    const s = AgentSettingsStore.read(this.filesDir)
+    s.engines.hmh.baseUrl = this.cfgHarnessUrl.trim()
+    const err = AgentSettingsStore.write(this.filesDir, s)
+    this.harnessToast = err === '' ? 'HMH 引擎地址已保存' : err
   }
 
   saveAi(): void {
@@ -99,8 +113,7 @@ export struct SettingsTab {
       provider: this.cfgProvider,
       baseUrl: this.cfgBaseUrl,
       apiKey: this.cfgApiKey,
-      model: this.cfgModel,
-      harnessUrl: this.cfgHarnessUrl
+      model: this.cfgModel
     })
     if (err === '') {
       this.toast = 'AI 配置已保存'
@@ -375,22 +388,22 @@ export struct SettingsTab {
               .fontColor(this.th().ink)
               .alignSelf(ItemAlign.Start)
             Column({ space: 6 }) {
-              ForEach(['confirm_all', 'confirm_dangerous', 'bypass'], (m: string) => {
-                Text(this.agentModeLabel(m as ApprovalMode))
+              ForEach(['strict', 'standard', 'open'], (m: string) => {
+                Text(this.agentModeLabel(m as ApprovalPolicyKind))
                   .fontSize(12)
                   .fontColor(this.agentMode === m ? this.th().brand : this.th().inkSubtle)
                   .padding({ left: 12, right: 12, top: 7, bottom: 7 })
                   .borderRadius(6)
                   .border({ width: 1, color: this.agentMode === m ? this.th().brand : this.th().hairline })
                   .backgroundColor(this.agentMode === m ? this.th().hover : this.th().panel)
-                  .onClick(() => this.saveAgentMode(m as ApprovalMode))
+                  .onClick(() => this.saveAgentMode(m as ApprovalPolicyKind))
               }, (m: string) => m)
             }
             .alignItems(HorizontalAlign.Start)
-            Text(this.agentMode === 'confirm_all' ? '每次工具调用都弹审批卡' :
-              (this.agentMode === 'confirm_dangerous' ? '只读命令直放, 危险命令才审批' : '所有命令直接执行(风险自担)'))
+            Text(this.agentMode === 'strict' ? '每次工具调用都弹审批卡' :
+              (this.agentMode === 'standard' ? '只读与普通写入直放, 危险/远端操作才审批' : '所有命令直接执行(风险自担)'))
               .fontSize(10)
-              .fontColor(this.th().inkSubtle)
+              .fontColor(this.agentMode === 'open' ? this.th().danger : this.th().inkSubtle)
             if (this.agentToast !== '') {
               Text(this.agentToast)
                 .fontSize(11)
@@ -441,7 +454,7 @@ export struct SettingsTab {
                   .borderRadius(6)
                   .border({ width: 1, color: this.th().hairline })
                   .backgroundColor(this.th().panel)
-                  .onClick(() => this.saveAi())
+                  .onClick(() => this.saveHarnessUrl())
               }
               if (this.harnessToast !== '') {
                 Text(this.harnessToast)

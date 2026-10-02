@@ -1,19 +1,27 @@
 /**
- * M6 relay3 - AI 智能体 Dock(底部可折叠工作坞)。
- * 展开态 ~320px: Dock 头(输入行 + 模式三档切换 + 轮次指示 R1/12 + 折叠钮) +
- * 消息流(用户气泡/AI 气泡/工具卡三类; 工具卡=命令+结果摘要+审批按钮 允许/拒绝)。
- * 折叠态 28px 细条。复用 LlmConfigStore 配置 + AgentSettingsStore 三档。
- * 主题经 @StorageProp('ut.theme') 接入(relay1 P0-4 范式)。
+ * AI 智能体 Dock（底部可折叠工作坞）——升级 Phase 4 / 任务 5.1~5.4 改造。
+ *
+ * 仅依赖 AgentProvider/AgentAdapter（收口）：经 AgentAdapter 六方法调用 AI 能力，
+ * UI 只消费统一 AgentEvent（无引擎协议解析）；三引擎选择（本地/HMH/ACP）。
+ * 展开态 220px（不遮挡终端下半区，spec 5.5.1.2）：
+ *   Dock 头(输入行 + 四类入口 + 审批策略三档 + 引擎选择 + 轮次指示 + 折叠钮) +
+ *   消息流(用户气泡/AI 气泡/工具卡三类; 工具卡=命令+结果摘要+审批按钮+档位徽标)。
+ * 四类 AI 入口（spec 5.5.1.1）：Explain/Generate/Execute/Agent Session。
+ * 档位徽标颜色分级（spec 5.5.1.5）：destructive=红/remote=橙/terminal=蓝/workspace_write=绿/read_only=灰。
+ * 折叠态 28px 细条。主题经 @StorageProp('ut.theme') 接入。
  */
 import { common } from '@kit.AbilityKit';
 import { AppTheme, themeByName } from '../common/AppTheme';
-import { AgentKernel, KernelEvent } from '../service/AgentKernel';
-import { AgentSettings, AgentSettingsStore, ApprovalMode } from '../service/AgentSettingsStore';
-import { LlmConfigStore } from '../service/LlmConfigStore';
-import { HarnessStream, HarnessEventCbs } from '../service/HarnessClient';
-import hilog from '@ohos.hilog';
+import {
+  AgentAdapter
+} from '../agent/AgentAdapter';
+import {
+  AgentEvent, AgentSessionConfig, AgentSessionHandle, PromptAck, PromptInput,
+  ApprovalDecision, ApprovalPolicyKind, APPROVAL_TIMEOUT_MS
+} from '../agent/AgentProvider';
+import { AgentSettings, AgentSettingsStore } from '../service/AgentSettingsStore';
 
-const HS_TAG: string = 'oat.dock';
+const TAG: string = 'oat.dock';
 
 /** Dock 消息条目(三类: user/assistant/tool + 审批态)。 */
 class DockMsg {
@@ -22,12 +30,11 @@ class DockMsg {
   name: string = ''
   args: string = ''
   result: string = ''
-  callId: string = ''
+  requestId: string = ''
   pending: boolean = false // 工具卡待审批(显示允许/拒绝按钮)
   refused: boolean = false
-  // M6 relay5: 增强模式(hmharness SSE)标记
-  harnessNote: string = '' // 增强模式卡片附注(等待宿主审批/结果摘要/中断提示)
-  harnessDone: boolean = false // 增强模式结果已回填
+  level: string = '' // 安全分级档位徽标（Phase 4 贯穿 UX）
+  note: string = '' // 卡片附注（审批等待/回落提示）
 }
 
 @Component
@@ -36,52 +43,79 @@ export struct AIDock {
   @State open: boolean = false
   @State input: string = ''
   @State msgs: DockMsg[] = []
-  @State mode: ApprovalMode = 'confirm_all'
+  @State policy: ApprovalPolicyKind = 'strict'
   @State round: number = 0
   @State running: boolean = false
   @State approvalPending: boolean = false
   @State msgSeq: number = 0
-  // M6 relay5: 双引擎(内置内核 / 增强模式 hmharness 直连)
-  @State enhanced: boolean = false
-  private hStream: HarnessStream | null = null
-  private hAssistant: DockMsg | null = null
-  private hToolMsgs: DockMsg[] = []
-  private hPendingApproval: DockMsg | null = null
+  // 引擎选择（'local' | 'hmh' | 'acp'；三引擎可切换）
+  @State engineType: string = 'local'
+  // AI 入口模式（'agent' | 'explain' | 'generate' | 'execute'）
+  @State aiMode: string = 'agent'
+  private sessionId: string = ''
+  private unsub: (() => void) | null = null
   private lastTask: string = ''
   private scroller: Scroller = new Scroller()
   private filesDir: string = ''
-  private modeNames: string[] = ['全部确认', '仅危险', '全自动']
-  private modeVals: ApprovalMode[] = ['confirm_all', 'confirm_dangerous', 'bypass']
+  private policyNames: string[] = ['每次审批', '仅危险', '风险自担']
+  private policyVals: ApprovalPolicyKind[] = ['strict', 'standard', 'open']
+  private engineNames: string[] = ['本地', 'HMH', 'ACP']
+  private engineVals: string[] = ['local', 'hmh', 'acp']
+  private modeNames: string[] = ['会话', '解释', '生成', '执行']
+  private modeVals: string[] = ['agent', 'explain', 'generate', 'execute']
+  private streamMsg: DockMsg | null = null
 
   private th(): AppTheme {
     return themeByName(this.themeName)
   }
 
+  private inputPlaceholder(): string {
+    if (this.aiMode === 'explain') {
+      return '选中命令/日志后点击解释，或输入要解释的内容'
+    }
+    if (this.aiMode === 'generate') {
+      return '描述想要的命令，如：查找大文件'
+    }
+    if (this.aiMode === 'execute') {
+      return '输入要执行的命令或描述操作'
+    }
+    return '描述任务，如：在终端执行 uname -a 并告诉我内核版本号'
+  }
+
+  private levelBadgeColor(level: string): number {
+    if (level === 'destructive') {
+      return this.th().danger
+    }
+    if (level === 'remote') {
+      return this.th().warn
+    }
+    if (level === 'terminal') {
+      return this.th().brand
+    }
+    if (level === 'workspace_write') {
+      return this.th().success
+    }
+    return this.th().inkSubtle
+  }
+
   aboutToAppear(): void {
     const ctx = getContext(this) as common.UIAbilityContext
     this.filesDir = ctx.filesDir
-    const s = AgentSettingsStore.read(this.filesDir)
-    this.mode = s.mode
-    AgentKernel.onEvent = (e: KernelEvent): void => {
-      this.onKernelEvent(e)
-    }
+    const s: AgentSettings = AgentSettingsStore.read(this.filesDir)
+    this.policy = s.security.approvalPolicy
   }
 
   aboutToDisappear(): void {
-    AgentKernel.onEvent = (e: KernelEvent): void => {
-    }
-    this.closeHarness()
+    this.closeSession()
   }
 
-  private closeHarness(): void {
-    const st = this.hStream
-    this.hStream = null
-    if (st !== null) {
-      st.close()
+  private closeSession(): void {
+    const u = this.unsub
+    this.unsub = null
+    if (u !== null) {
+      u()
     }
-    this.hAssistant = null
-    this.hToolMsgs = []
-    this.hPendingApproval = null
+    this.streamMsg = null
   }
 
   private pushMsg(m: DockMsg): void {
@@ -89,41 +123,81 @@ export struct AIDock {
     this.msgs.push(m)
   }
 
-  private onKernelEvent(e: KernelEvent): void {
-    if (e.kind === 'user') {
-      const m = new DockMsg()
-      m.kind = 'user'
-      m.text = e.text
-      this.pushMsg(m)
-    } else if (e.kind === 'assistant' || e.kind === 'done') {
-      const m = new DockMsg()
-      m.kind = 'assistant'
-      m.text = e.text
-      this.pushMsg(m)
-    } else if (e.kind === 'tool') {
+  private pushAssistant(text: string): void {
+    const m = new DockMsg()
+    m.kind = 'assistant'
+    m.text = text
+    this.pushMsg(m)
+  }
+
+  // ===== 统一 AgentEvent 消费（UI 无引擎协议解析） =====
+  private onAgentEvent(e: AgentEvent): void {
+    if (e.kind === 'message') {
+      const ab = this.streamMsg
+      if (ab !== null) {
+        ab.text = ab.text === '' ? e.text : ab.text + '\n' + e.text
+        if (this.msgs.indexOf(ab) < 0 && ab.text !== '') {
+          this.pushMsg(ab)
+        }
+      } else if (e.text !== '') {
+        this.pushAssistant(e.text)
+      }
+    } else if (e.kind === 'done') {
+      const sm = this.streamMsg
+      if (sm !== null) {
+        if (e.text !== '' && e.text !== sm.text) {
+          sm.text = e.text
+        }
+      } else if (e.text !== '') {
+        this.pushAssistant(e.text)
+      }
+      this.running = false
+      this.streamMsg = null
+      this.closeSession()
+    } else if (e.kind === 'tool_call') {
+      const tv = e.tool
       const m = new DockMsg()
       m.kind = 'tool'
-      m.name = e.name
-      m.args = e.args
-      m.result = e.result
-      m.callId = e.callId
+      m.name = tv !== null ? tv.name : 'tool'
+      m.args = tv !== null ? tv.argsDigest : ''
+      m.result = tv !== null && tv.result !== '' ? (tv.isError ? '✗ ' + tv.result : '✓ ' + tv.result) : ''
+      m.level = e.level
       this.pushMsg(m)
     } else if (e.kind === 'need_approval') {
+      const av = e.approval
       const m = new DockMsg()
       m.kind = 'tool'
-      m.name = e.name
-      m.args = e.args
-      m.callId = e.callId
+      m.name = av !== null ? av.toolName : 'approval'
+      m.args = av !== null ? av.argsDigest : ''
+      m.requestId = av !== null ? av.requestId : ''
+      m.level = e.level
       m.pending = true
+      m.note = '待审批(' + Math.round(APPROVAL_TIMEOUT_MS / 60000).toString() + ' 分钟超时自动拒绝)'
       this.pushMsg(m)
       this.approvalPending = true
-    } else if (e.kind === 'round') {
-      this.round = e.round
-    } else if (e.kind === 'err') {
-      const m = new DockMsg()
-      m.kind = 'assistant'
-      m.text = e.text
-      this.pushMsg(m)
+    } else if (e.kind === 'approval_result') {
+      const decision = e.text as ApprovalDecision
+      for (const m of this.msgs) {
+        if (m.kind === 'tool' && m.pending) {
+          m.pending = false
+          if (decision !== 'approved') {
+            m.refused = true
+            m.result = decision === 'timeout_denied' ? '已超时拒绝' : '已拒绝执行'
+          }
+        }
+      }
+      this.approvalPending = false
+    } else if (e.kind === 'turn') {
+      this.round = e.turn
+    } else if (e.kind === 'error') {
+      this.pushAssistant(e.text)
+      this.running = false
+      this.streamMsg = null
+      this.closeSession()
+    } else if (e.kind === 'state_changed' || e.kind === 'engine_state_changed') {
+      this.pushAssistant(e.text)
+    } else if (e.kind === 'audit_write_failed') {
+      this.pushAssistant('审计写入失败')
     }
     this.scrollBottom()
   }
@@ -134,6 +208,7 @@ export struct AIDock {
     }, 50)
   }
 
+  // ===== 发送（经 AgentAdapter 六方法；每任务新会话） =====
   private send(): void {
     const t = this.input.trim()
     if (t === '' || this.running) {
@@ -142,240 +217,137 @@ export struct AIDock {
     this.input = ''
     this.lastTask = t
     this.running = true
-    if (this.enhanced) {
-      this.sendEnhanced(t)
-      return
-    }
-    AgentKernel.run(t).then(() => {
+    const m = new DockMsg()
+    m.kind = 'user'
+    m.text = t
+    this.pushMsg(m)
+    const adapter = AgentAdapter.instance()
+    const cfg = new AgentSessionConfig()
+    cfg.engine = this.engineType as 'local' | 'acp' | 'hmh'
+    cfg.title = t.substring(0, 40)
+    adapter.createSession(cfg).then((h: AgentSessionHandle): void => {
+      this.sessionId = h.sessionId
+      this.closeSession()
+      this.unsub = adapter.subscribe(h.sessionId, (e: AgentEvent): void => {
+        this.onAgentEvent(e)
+      })
+      const note = adapter.getFallbackNote()
+      if (note !== '') {
+        this.pushAssistant(note)
+      }
+      this.streamMsg = new DockMsg()
+      this.streamMsg.kind = 'assistant'
+      this.streamMsg.text = ''
+      const pi = new PromptInput()
+      pi.text = this.buildPromptText(t)
+      adapter.prompt(h.sessionId, pi).then((ack: PromptAck): void => {
+        if (!ack.accepted) {
+          this.running = false
+          this.pushAssistant(ack.errCode === 'AGENT_MODEL_NOT_CONFIGURED'
+            ? '未配置模型(设置→AI 模型)' : '任务未受理(' + ack.errCode + ')')
+          this.closeSession()
+        }
+      }).catch((e: Object): void => {
+        this.running = false
+        this.pushAssistant('任务发送失败')
+        this.closeSession()
+      })
+    }).catch((e: Object): void => {
       this.running = false
-    }).catch((e: Object) => {
-      this.running = false
+      const msg = e instanceof Error ? e.message : JSON.stringify(e)
+      this.pushAssistant('创建会话失败: ' + msg)
     })
   }
 
-  // ===== M6 relay5: 增强模式(hm harness 直连) =====
-  private sendEnhanced(task: string): void {
-    const cfg = LlmConfigStore.read(this.filesDir)
-    const url = cfg.harnessUrl === undefined ? '' : cfg.harnessUrl
-    if (url === '') {
-      this.pushHarnessError('未配置增强模式服务地址(设置→AI 模型→增强模式)')
-      this.running = false
-      return
+  private buildPromptText(raw: string): string {
+    if (this.aiMode === 'explain') {
+      return '请解释以下内容：\n' + raw
     }
-    const m = new DockMsg()
-    m.kind = 'user'
-    m.text = task
-    this.pushMsg(m)
-    const st = new HarnessStream(url)
-    this.hStream = st
-    // 流式 assistant 气泡(打字机追加 line/delta)
-    const ab = new DockMsg()
-    ab.kind = 'assistant'
-    ab.text = ''
-    this.hAssistant = ab
-    const cbs: HarnessEventCbs = {
-      onEvent: (name: string, data: string): void => {
-        this.onHarnessEvent(name, data)
-      },
-      onError: (msg: string): void => {
-        this.onHarnessError(msg)
-      },
-      onEnd: (): void => {
-        this.onHarnessEnd()
-      }
+    if (this.aiMode === 'generate') {
+      return '请生成一个命令来完成以下需求（只返回命令，不要执行）：\n' + raw
     }
-    st.connect(cbs)
-    st.send(task, 'default')
-  }
-
-  private onHarnessEvent(name: string, data: string): void {
-    let obj: Record<string, string> = {}
-    try {
-      obj = JSON.parse(data) as Record<string, string>
-    } catch (e) {
-      obj = {}
+    if (this.aiMode === 'execute') {
+      return '请执行以下操作：\n' + raw
     }
-    if (name === 'line') {
-      const ab = this.hAssistant
-      if (ab !== null) {
-        ab.text = ab.text === '' ? (obj['text'] === undefined ? '' : obj['text']) : ab.text + '\n' + (obj['text'] === undefined ? '' : obj['text'])
-        // 首次有内容时入消息流
-        if (this.msgs.indexOf(ab) < 0 && ab.text !== '') {
-          this.pushMsg(ab)
-        }
-      }
-      this.scrollBottom()
-    } else if (name === 'delta') {
-      const ab = this.hAssistant
-      if (ab !== null) {
-        const chunk = obj['chunk'] === undefined ? '' : obj['chunk']
-        ab.text = ab.text + chunk
-        if (this.msgs.indexOf(ab) < 0 && ab.text !== '') {
-          this.pushMsg(ab)
-        }
-      }
-      this.scrollBottom()
-    } else if (name === 'tool') {
-      const cm = new DockMsg()
-      cm.kind = 'tool'
-      cm.name = obj['name'] === undefined ? 'tool' : obj['name']
-      cm.args = obj['args'] === undefined ? '' : obj['args'].toString().substring(0, 160)
-      this.pushMsg(cm)
-      this.hToolMsgs.push(cm)
-      this.scrollBottom()
-    } else if (name === 'toolResult') {
-      const last = this.hToolMsgs.length > 0 ? this.hToolMsgs[this.hToolMsgs.length - 1] : null
-      if (last !== null) {
-        last.harnessDone = true
-        const err = obj['isError'] === undefined ? false : obj['isError'] === 'true'
-        last.result = err ? '✗ ' + (obj['preview'] === undefined ? '' : obj['preview'].toString().substring(0, 200))
-          : '✓ ' + (obj['preview'] === undefined ? '' : obj['preview'].toString().substring(0, 200))
-      }
-      this.scrollBottom()
-    } else if (name === 'approvalReq') {
-      const am = new DockMsg()
-      am.kind = 'tool'
-      am.name = obj['name'] === undefined ? 'approval' : obj['name']
-      am.args = obj['args'] === undefined ? '' : obj['args'].toString().substring(0, 160)
-      am.harnessNote = '⚠ hmharness 等待宿主审批(web UI 决定), 5 分钟超时自动拒绝'
-      this.pushMsg(am)
-      this.hToolMsgs.push(am)
-      this.hPendingApproval = am
-      this.scrollBottom()
-    } else if (name === 'approvalDone') {
-      const pa = this.hPendingApproval
-      if (pa !== null) {
-        const granted = obj['granted'] === undefined ? false : obj['granted'] === 'true'
-        pa.harnessDone = true
-        pa.harnessNote = granted ? '✓ 宿主已批准' : '✗ 宿主已拒绝/超时'
-      }
-      this.hPendingApproval = null
-      this.scrollBottom()
-    } else if (name === 'final') {
-      const ab = this.hAssistant
-      const full = obj['text'] === undefined ? obj['result'] === undefined ? '' : obj['result'].toString() : obj['text']
-      if (ab !== null && full !== '') {
-        ab.text = full
-      } else if (full !== '') {
-        const fm = new DockMsg()
-        fm.kind = 'assistant'
-        fm.text = full
-        this.pushMsg(fm)
-      }
-      this.finishHarness()
-    } else if (name === 'error') {
-      const ab = this.hAssistant
-      if (ab !== null) {
-        ab.text = ab.text === '' ? (obj['message'] === undefined ? '服务报错' : obj['message']) : ab.text + '\n' + (obj['message'] === undefined ? '' : obj['message'])
-      }
-      this.finishHarness()
-    } else if (name === 'busy') {
-      const b = obj['busy']
-      if (b !== undefined) {
-        hilog.info(0x0111, HS_TAG, 'busy=%{public}s', b)
-      }
-    }
+    return raw
   }
 
-  private onHarnessError(msg: string): void {
-    // 连接失败/不可达 -> 回落内置内核
-    this.pushHarnessFallback(msg)
-  }
-
-  private onHarnessEnd(): void {
-    // SSE 流断开: 任务可能仍在宿主跑
-    const ab = this.hAssistant
-    if (ab !== null && ab.text === '') {
-      ab.text = '连接中断, 任务在宿主继续'
-      this.pushMsg(ab)
-    }
-    this.finishHarness()
-  }
-
-  private finishHarness(): void {
-    this.running = false
-    this.closeHarness()
-  }
-
-  private pushHarnessError(msg: string): void {
-    const m = new DockMsg()
-    m.kind = 'assistant'
-    m.text = msg
-    this.pushMsg(m)
-    this.scrollBottom()
-  }
-
-  private pushHarnessFallback(msg: string): void {
-    this.pushHarnessError('服务不可达(' + msg + '), 已回落内置内核')
-    this.closeHarness()
-    this.enhanced = false
-    const t = this.lastTask
-    if (t !== '') {
-      this.running = true
-      AgentKernel.run(t).then(() => {
-        this.running = false
-      }).catch((e: Object) => {
-        this.running = false
-      })
-    }
-  }
-
-
-  private setMode(m: ApprovalMode): void {
-    this.mode = m
-    const s = new AgentSettings()
-    s.mode = m
+  private setPolicy(p: ApprovalPolicyKind): void {
+    this.policy = p
+    const s = AgentSettingsStore.read(this.filesDir)
+    s.security.approvalPolicy = p
     AgentSettingsStore.write(this.filesDir, s)
   }
 
-  private approve(callId: string): void {
+  private approve(requestId: string): void {
     for (const m of this.msgs) {
-      if (m.callId === callId && m.pending) {
+      if (m.kind === 'tool' && m.requestId === requestId && m.pending) {
         m.pending = false
       }
     }
     this.approvalPending = false
-    AgentKernel.approve()
+    AgentAdapter.instance().approve(this.sessionId, requestId, 'approved')
   }
 
-  private deny(callId: string): void {
+  private deny(requestId: string): void {
     for (const m of this.msgs) {
-      if (m.callId === callId && m.pending) {
+      if (m.kind === 'tool' && m.requestId === requestId && m.pending) {
         m.pending = false
         m.refused = true
         m.result = '已拒绝执行'
       }
     }
     this.approvalPending = false
-    AgentKernel.deny()
+    AgentAdapter.instance().approve(this.sessionId, requestId, 'denied')
   }
 
   @Builder
-  ModePill(label: string, idx: number) {
+  PolicyPill(label: string, idx: number) {
     Text(label)
       .fontSize(10)
-      .fontColor(this.mode === this.modeVals[idx] ? this.th().surface : this.th().inkSubtle)
+      .fontColor(this.policy === this.policyVals[idx] ? this.th().surface : this.th().inkSubtle)
       .padding({ left: 8, right: 8, top: 3, bottom: 3 })
       .borderRadius(9)
-      .border({ width: 1, color: this.mode === this.modeVals[idx] ? this.th().brand : this.th().hairline })
-      .backgroundColor(this.mode === this.modeVals[idx] ? this.th().brand : Color.Transparent)
+      .border({ width: 1, color: this.policy === this.policyVals[idx] ? this.th().brand : this.th().hairline })
+      .backgroundColor(this.policy === this.policyVals[idx] ? this.th().brand : Color.Transparent)
       .margin({ left: 4 })
-      .onClick(() => this.setMode(this.modeVals[idx]))
+      .onClick(() => this.setPolicy(this.policyVals[idx]))
   }
 
   @Builder
-  EnhancedPill() {
-    Text('增强')
-      .fontSize(10)
-      .fontColor(this.enhanced ? this.th().surface : this.th().inkSubtle)
-      .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-      .borderRadius(9)
-      .border({ width: 1, color: this.enhanced ? this.th().success : this.th().hairline })
-      .backgroundColor(this.enhanced ? this.th().success : Color.Transparent)
-      .margin({ left: 4 })
-      .onClick(() => {
-        this.enhanced = !this.enhanced
-      })
+  EnginePill() {
+    Row({ space: 2 }) {
+      ForEach(this.engineVals, (val: string, idx?: number) => {
+        Text(this.engineNames[idx ?? 0])
+          .fontSize(9)
+          .fontColor(this.engineType === val ? this.th().surface : this.th().inkSubtle)
+          .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+          .borderRadius(7)
+          .border({ width: 1, color: this.engineType === val ? this.th().brand : this.th().hairline })
+          .backgroundColor(this.engineType === val ? this.th().brand : Color.Transparent)
+          .onClick(() => {
+            this.engineType = val
+          })
+      }, (val: string) => val)
+    }
+  }
+
+  @Builder
+  ModePill() {
+    Row({ space: 2 }) {
+      ForEach(this.modeVals, (val: string, idx?: number) => {
+        Text(this.modeNames[idx ?? 0])
+          .fontSize(9)
+          .fontColor(this.aiMode === val ? this.th().surface : this.th().inkSubtle)
+          .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+          .borderRadius(7)
+          .border({ width: 1, color: this.aiMode === val ? this.th().success : this.th().hairline })
+          .backgroundColor(this.aiMode === val ? this.th().success : Color.Transparent)
+          .onClick(() => {
+            this.aiMode = val
+          })
+      }, (val: string) => val)
+    }
   }
 
   @Builder
@@ -407,13 +379,21 @@ export struct AIDock {
       .width('100%')
       .margin({ top: 6, bottom: 2 })
     } else {
-      // 工具卡: 名称+命令 → 结果摘要 → 审批按钮(待审批时)
+      // 工具卡: 名称+命令(脱敏) → 结果摘要 → 审批按钮(待审批时)
       Column({ space: 4 }) {
         Row({ space: 6 }) {
           Text('⚙ ' + m.name)
             .fontSize(11)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.th().brand)
+          if (m.level !== '') {
+            Text(m.level)
+              .fontSize(9)
+              .fontColor(this.levelBadgeColor(m.level))
+              .padding({ left: 4, right: 4, top: 1, bottom: 1 })
+              .borderRadius(4)
+              .border({ width: 1, color: this.levelBadgeColor(m.level) })
+          }
           Text(m.args)
             .fontSize(11)
             .fontColor(this.th().ink)
@@ -422,10 +402,10 @@ export struct AIDock {
             .layoutWeight(1)
         }
         .width('100%')
-        if (m.harnessNote !== '') {
-          Text(m.harnessNote)
+        if (m.note !== '' && m.pending) {
+          Text(m.note)
             .fontSize(10)
-            .fontColor(m.harnessDone ? (m.refused ? this.th().danger : this.th().success) : this.th().warn)
+            .fontColor(this.th().warn)
             .width('100%')
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -452,14 +432,14 @@ export struct AIDock {
               .padding({ left: 14, right: 14, top: 4, bottom: 4 })
               .borderRadius(6)
               .backgroundColor(this.th().success)
-              .onClick(() => this.approve(m.callId))
+              .onClick(() => this.approve(m.requestId))
             Text('拒绝')
               .fontSize(11)
               .fontColor(this.th().surface)
               .padding({ left: 14, right: 14, top: 4, bottom: 4 })
               .borderRadius(6)
               .backgroundColor(this.th().danger)
-              .onClick(() => this.deny(m.callId))
+              .onClick(() => this.deny(m.requestId))
           }
           .width('100%')
           .justifyContent(FlexAlign.End)
@@ -478,45 +458,45 @@ export struct AIDock {
   build() {
     Column() {
       if (this.open) {
-        // ===== Dock 头(32px): 标题+轮次 + 模式三档 + 折叠钮 =====
-        Row({ space: 6 }) {
-          Text('✦ 智能体')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.th().brand)
-            .margin({ left: 10 })
-          Text(this.running ? ('R' + this.round.toString() + '/12') : '空闲')
-            .fontSize(10)
-            .fontColor(this.running ? this.th().brand : this.th().inkSubtle)
-          Blank()
-          this.ModePill(this.modeNames[0], 0)
-          this.ModePill(this.modeNames[1], 1)
-          this.ModePill(this.modeNames[2], 2)
-          this.EnhancedPill()
-          Text('▾')
+        // ===== Dock 头(36px): 标题+轮次 + 入口模式 + 审批策略 + 引擎选择 + 折叠钮 =====
+        Row({ space: 4 }) {
+          Text('✦')
             .fontSize(16)
             .fontWeight(FontWeight.Bold)
+            .fontColor(this.th().brand)
+            .margin({ left: 8 })
+          Text(this.running ? ('R' + this.round.toString() + '/12') : '空闲')
+            .fontSize(9)
+            .fontColor(this.running ? this.th().brand : this.th().inkSubtle)
+          this.ModePill()
+          Blank()
+          this.PolicyPill(this.policyNames[0], 0)
+          this.PolicyPill(this.policyNames[1], 1)
+          this.PolicyPill(this.policyNames[2], 2)
+          this.EnginePill()
+          Text('▾')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
             .fontColor(this.th().iconStrong)
-            .width(26)
-            .height(26)
+            .width(22)
+            .height(22)
             .textAlign(TextAlign.Center)
             .onClick(() => {
               this.open = false
             })
         }
         .width('100%')
-        .height(32)
+        .height(36)
         .alignItems(VerticalAlign.Center)
         .backgroundColor(this.th().surfaceRaised)
         .border({ width: { bottom: 1 }, color: this.th().hairline })
-        .shadow({ radius: 12, color: '#66000000', offsetX: 0, offsetY: -4 })
 
         // ===== 消息流(layoutWeight 撑满中段) =====
         Scroll(this.scroller) {
           Column() {
             ForEach(this.msgs, (m: DockMsg) => {
               this.MsgRow(m)
-            }, (m: DockMsg) => m.kind + '|' + m.callId + '|' + m.text.substring(0, 40) + '|' + m.pending.toString() + '|' + m.refused.toString())
+            }, (m: DockMsg) => m.kind + '|' + m.requestId + '|' + m.text.substring(0, 40) + '|' + m.pending.toString() + '|' + m.refused.toString())
           }
           .width('100%')
         }
@@ -528,7 +508,7 @@ export struct AIDock {
 
         // ===== 输入行 =====
         Row({ space: 8 }) {
-          TextInput({ placeholder: '描述任务,如: 在终端执行 uname -a 并告诉我内核版本号', text: this.input })
+          TextInput({ placeholder: this.inputPlaceholder(), text: this.input })
             .fontSize(12)
             .fontColor(this.th().ink)
             .placeholderColor(this.th().inkSubtle)
@@ -562,8 +542,8 @@ export struct AIDock {
           Text('智能体')
             .fontSize(11)
             .fontColor(this.th().ink)
-          if (this.enhanced) {
-            Text('增')
+          if (this.engineType !== 'local') {
+            Text(this.engineType === 'hmh' ? 'H' : 'A')
               .fontSize(9)
               .fontColor(this.th().success)
               .fontWeight(FontWeight.Bold)
@@ -591,6 +571,6 @@ export struct AIDock {
       }
     }
     .width('100%')
-    .height(this.open ? 320 : 28)
+    .height(this.open ? 220 : 28)
   }
 }

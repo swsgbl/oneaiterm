@@ -8,8 +8,7 @@ export class LlmConfig {
   baseUrl: string = 'https://api.anthropic.com'
   apiKey: string = ''
   model: string = 'claude-sonnet-4-5'
-  /** M6 relay5: 增强模式 hmharness 服务地址(空=未启用) */
-  harnessUrl: string = ''
+
 }
 
 export class LlmMsg {

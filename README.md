@@ -2,7 +2,7 @@
 
 面向 KaihongOS 桌面环境的**一站式 AI 终端管理软件**——远程连接、文件传输、数据库、远程桌面与**可操作终端的 AI 智能体**集于一体。
 
-## 核心能力(V1.1.0,均经真机验证)
+## 核心能力(V2.0.0,Agent Adapter 可插拔架构)
 
 | 类别 | 能力 |
 |---|---|
@@ -11,7 +11,9 @@
 | 数据库 | PostgreSQL(wire v3)· Redis(RESP)· MySQL |
 | 远程桌面 | VNC(RFB 3.8)· RDP(原生桥)|
 | 监控 | CPU/内存/进程实时面板 |
-| **AI 智能体** | **内置智能体内核**:自然语言下达任务→工具调用(读写终端/SFTP)→分级审批→会话审计;**增强模式**:可连接自建 [hmharness](https://github.com/swsgbl/hmharness) 服务获得多智能体/MCP 生态 |
+| **AI 引擎** | **三引擎可插拔**:本地引擎(12轮回路)· HMH 适配器(hmharness SSE)· ACP 适配器(JSON-RPC 2.0);自然语言→工具调用→五档安全分级→审批状态机→审计脱敏 |
+| **安全管控** | 五档分级(read_only/terminal/workspace_write/remote/destructive)· 审批卡(档位徽标+超时倒计时)· 脱敏审计日志 |
+| **能力探测** | 13种工具环境探测(node/git/python/docker/...)· 缓存+AI注入· 禁止模型猜测 |
 | 管理 | 分组/收藏/最近 · 配置加密(PBKDF2+AES-256-GCM)· .utm/connections.json 兼容导入导出 |
 | 外观 | 命令栏(Ctrl+K 命令面板)· 可折叠导航坞 · 状态栏 · 深浅双主题 · 中英双语 · 首启引导 |
 
