@@ -91,7 +91,7 @@ export class AgentSettingsStore {
         s.engines.local.model = m
       }
     } catch (e) {
-      hilog.warn(DOMAIN, TAG, 'migrateFromLlm fail %{public}s', JSON.stringify(e))
+      hilog.warn(DOMAIN, TAG, 'migrateFromLlm fail %{public}s', e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -149,7 +149,7 @@ export class AgentSettingsStore {
       s.migrated = obj.migrated === true
       return s
     } catch (e) {
-      hilog.warn(DOMAIN, TAG, 'read fail %{public}s', JSON.stringify(e))
+      hilog.warn(DOMAIN, TAG, 'read fail %{public}s', e instanceof Error ? e.message : String(e))
       return new AgentSettings()
     }
   }
@@ -180,7 +180,7 @@ export class AgentSettingsStore {
         } catch (e2) {
         }
       }
-      return '保存失败: ' + JSON.stringify(e).substring(0, 160)
+      return '保存失败: ' + (e instanceof Error ? e.message : String(e)).substring(0, 160)
     }
   }
 }

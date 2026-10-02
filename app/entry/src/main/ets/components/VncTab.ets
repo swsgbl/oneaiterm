@@ -3,6 +3,7 @@ import { VncClient } from '../service/VncClient';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import image from '@ohos.multimedia.image';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
 
 const VNC_TAG: string = 'oat.vnc';
 const VNC_DOMAIN: number = 0x0110;
@@ -23,8 +24,13 @@ export struct VncTab {
   private lastPtY: number = -1
   private lastPaintFrame: number = -1
   private lastPaintMs: number = 0
+  private pollTimer: number = -1
 
   aboutToDisappear(): void {
+    if (this.pollTimer >= 0) {
+      clearInterval(this.pollTimer)
+      this.pollTimer = -1
+    }
     this.vnc.close()
   }
 
@@ -50,7 +56,7 @@ export struct VncTab {
     })
     // 轮询状态
     let lastPaintLog = 0
-    setInterval(() => {
+    this.pollTimer = setInterval(() => {
       const s = this.vnc.status()
       if (s === 'running' && this.st !== 'running') {
         this.st = 'running'
@@ -81,44 +87,44 @@ export struct VncTab {
       Text('🖥')
         .fontSize(40)
       Text('VNC 远程桌面')
-        .fontSize(18)
+        .fontSize(DesignTokens.FONT_DISPLAY)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.th().ink)
       Text('RFB 3.8 · 纯 TS 协议栈 · raw 编码')
-        .fontSize(11)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)
       TextInput({ placeholder: '主机 (如 192.168.1.10)', text: this.host })
-        .fontSize(13)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontColor(this.th().ink)
         .backgroundColor(this.th().inputBg)
-        .borderRadius(6)
+        .borderRadius(DesignTokens.RADIUS_MD)
         .width(260)
         .onChange((v: string) => {
           this.host = v
         })
       TextInput({ placeholder: '端口 (默认 5900)', text: this.port })
-        .fontSize(13)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontColor(this.th().ink)
         .backgroundColor(this.th().inputBg)
-        .borderRadius(6)
+        .borderRadius(DesignTokens.RADIUS_MD)
         .width(260)
         .type(InputType.Number)
         .onChange((v: string) => {
           this.port = v
         })
       Text('连接')
-        .fontSize(14)
-        .fontColor(this.th().surface)
+        .fontSize(DesignTokens.FONT_HEADING)
+        .fontColor(this.th().onBrand)
         .fontWeight(FontWeight.Bold)
         .padding({ left: 28, right: 28, top: 9, bottom: 9 })
         .backgroundColor(this.th().brand)
-        .borderRadius(6)
+        .borderRadius(DesignTokens.RADIUS_MD)
         .onClick(() => this.doConnect())
       if (this.errText !== '') {
         Text(this.errText)
-          .fontSize(11)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().danger)
-          .padding(6)
+          .padding(DesignTokens.SPACE_SM)
       }
       Blank()
     }
@@ -136,7 +142,7 @@ export struct VncTab {
           Blank()
           LoadingProgress().width(40).height(40).color(this.th().brand)
           Text('正在建立 RFB 会话…')
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().inkSubtle)
           Blank()
         }
@@ -147,14 +153,14 @@ export struct VncTab {
         Column() {
           Row() {
             Text('VNC ' + this.host + ':' + this.port)
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th().ink)
             Blank()
             Text(this.vnc.width().toString() + 'x' + this.vnc.height().toString() + '  #' + this.frameTick.toString())
-              .fontSize(11)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().inkSubtle)
             Text('断开')
-              .fontSize(11)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().danger)
               .padding({ left: 8, right: 8 })
               .onClick(() => {
@@ -163,7 +169,7 @@ export struct VncTab {
               })
           }
           .width('100%')
-          .padding(8)
+          .padding(DesignTokens.SPACE_SM)
           .backgroundColor(this.th().panel)
           if (this.viewPm !== null) {
             Image(this.viewPm)
@@ -176,7 +182,7 @@ export struct VncTab {
             Column() {
               LoadingProgress().width(30).height(30).color(this.th().brand)
               Text('等待首帧…')
-                .fontSize(11)
+                .fontSize(DesignTokens.FONT_CAPTION)
                 .fontColor(this.th().inkSubtle)
             }
             .layoutWeight(1)

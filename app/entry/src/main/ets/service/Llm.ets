@@ -193,7 +193,7 @@ export class Llm {
       }, (err, resp) => {
         h.destroy()
         if (err) {
-          reject(new Error('http ' + JSON.stringify(err)))
+          reject(new Error('http ' + (err instanceof Error ? err.message : String(err))))
           return
         }
         if (resp.responseCode >= 400) {

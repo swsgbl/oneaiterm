@@ -17,11 +17,19 @@ export class AppTheme {
   inputBg: number
   iconMuted: number
   iconStrong: number
+  info: number
+  focusRing: number
+  disabled: number
+  onBrand: number
+  onDanger: number
+  onWarn: number
+  onSuccess: number
 
   constructor(surface: number, surfaceRaised: number, panel: number, hover: number,
     ink: number, inkSubtle: number, brand: number, hairline: number,
     success: number, warn: number, danger: number, inputBg: number, iconMuted: number,
-    iconStrong: number) {
+    iconStrong: number, info: number, focusRing: number, disabled: number,
+    onBrand: number, onDanger: number, onWarn: number, onSuccess: number) {
     this.surface = surface
     this.surfaceRaised = surfaceRaised
     this.panel = panel
@@ -36,17 +44,26 @@ export class AppTheme {
     this.inputBg = inputBg
     this.iconMuted = iconMuted
     this.iconStrong = iconStrong
+    this.info = info
+    this.focusRing = focusRing
+    this.disabled = disabled
+    this.onBrand = onBrand
+    this.onDanger = onDanger
+    this.onWarn = onWarn
+    this.onSuccess = onSuccess
   }
 }
 
 // dark: 深夜蓝紫底 + 琥珀 brand(relay4: 分层亮度差拉大 ≥8%,hairline 提亮,新增 iconStrong 高对比图标色)
+// inkSubtle 0x8a90a5→0xa0a8bd: 对比度 4.17→5.46 (≥4.5:1 WCAG AA)
 export const THEME_DARK: AppTheme = new AppTheme(0x0F1220, 0x1E2438, 0x232A44, 0x2A3252,
-  0xE8EAF2, 0x8a90a5, 0xF5A524, 0x353D5E, 0x34d399, 0xf59e0b, 0xf87171, 0x131729, 0x9aa2b8,
-  0xF2F4FA)
+  0xE8EAF2, 0xa0a8bd, 0xF5A524, 0x353D5E, 0x34d399, 0xf59e0b, 0xf87171, 0x131729, 0x9aa2b8,
+  0xF2F4FA, 0x60a5fa, 0xF5A524, 0x4a5070, 0x0F1220, 0xE8EAF2, 0xE8EAF2, 0xE8EAF2)
 // light: 暖白底 + 深琥珀 brand(relay4: 分层亮度差拉大 ≥8%,hairline 加深,新增 iconStrong)
+// inkSubtle 0x6b6a66→0x565550: 对比度 4.20→5.75 (≥4.5:1 WCAG AA)
 export const THEME_LIGHT: AppTheme = new AppTheme(0xFAFAF7, 0xE8E5DA, 0xEBE8DE, 0xE0DCCF,
-  0x1c1c1a, 0x6b6a66, 0xD97706, 0xCFCABC, 0x108038, 0xb45309, 0xc62828, 0xF6F5F1, 0x6b6a66,
-  0x26262B)
+  0x1c1c1a, 0x565550, 0xD97706, 0xCFCABC, 0x108038, 0xb45309, 0xc62828, 0xF6F5F1, 0x6b6a66,
+  0x26262B, 0x2563eb, 0xD97706, 0xC0bdb3, 0xFAFAF7, 0x1c1c1a, 0x1c1c1a, 0x1c1c1a)
 
 export function themeByName(name: string): AppTheme {
   if (name === 'light') {

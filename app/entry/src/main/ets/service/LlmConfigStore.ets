@@ -25,7 +25,7 @@ export class LlmConfigStore {
       const cfg = JSON.parse(raw) as LlmConfig
       return cfg
     } catch (e) {
-      hilog.error(CFG_DOMAIN, CFG_TAG, 'read fail %{public}s', JSON.stringify(e))
+      hilog.error(CFG_DOMAIN, CFG_TAG, 'read fail %{public}s', e instanceof Error ? e.message : String(e))
       return { provider: 'anthropic', baseUrl: 'https://api.anthropic.com', apiKey: '', model: 'claude-sonnet-4-5' }
     }
   }
@@ -54,7 +54,7 @@ export class LlmConfigStore {
         } catch (e2) {
         }
       }
-      const es = JSON.stringify(e)
+      const es = e instanceof Error ? e.message : String(e)
       const msg = es !== '' ? es.substring(0, 200) : 'unknown'
       hilog.error(CFG_DOMAIN, CFG_TAG, 'write FAIL p=%{public}s err=%{public}s', p, msg)
       return '保存失败: ' + msg

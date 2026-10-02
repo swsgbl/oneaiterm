@@ -11,6 +11,7 @@ import { IdentityRec } from '../store/IdentityStore';
 import { CredentialManager } from '../store/CredentialManager';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
 
 const ITAG: string = 'oat.identui';
 const IDOMAIN: number = 0x0110;
@@ -45,13 +46,13 @@ export struct IdentityManager {
     Column({ space: 10 }) {
       Row() {
         Text('身份库')
-          .fontSize(18)
+          .fontSize(DesignTokens.FONT_DISPLAY)
           .fontWeight(FontWeight.Bold)
         Blank()
         Text('关闭')
-          .fontSize(14)
+          .fontSize(DesignTokens.FONT_HEADING)
           .fontColor(this.th().inkSubtle)
-          .padding(6)
+          .padding(DesignTokens.SPACE_SM)
           .onClick(() => {
             this.onClose();
           })
@@ -60,7 +61,7 @@ export struct IdentityManager {
 
       if (this.cred === null || !this.cred.hasMasterPassword()) {
         Text('提示: 未设置主密码,身份密钥/密码将以明文保存(建议先设置主密码)')
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().warn)
       }
 
@@ -69,33 +70,33 @@ export struct IdentityManager {
           ForEach(this.list, (id: IdentityRec, idx: number) => {
             Row({ space: 8 }) {
               Text(id.authType)
-                .fontSize(10)
+                .fontSize(DesignTokens.FONT_CAPTION)
                 .fontColor(this.th().surfaceRaised)
                 .backgroundColor(id.authType === 'password' ? this.th().success :
                   (id.authType === 'keyText' ? this.th().brand : this.th().inkSubtle))
-                .borderRadius(4)
+                .borderRadius(DesignTokens.RADIUS_SM)
                 .padding({ left: 6, right: 6, top: 2, bottom: 2 })
               Column({ space: 2 }) {
                 Text(id.name)
-                  .fontSize(15)
+                  .fontSize(DesignTokens.FONT_HEADING)
                   .fontColor(this.th().surface)
                 Text(id.username + (id.keyPath.length > 0 ? ' key:' + id.keyPath : ''))
-                  .fontSize(12)
+                  .fontSize(DesignTokens.FONT_BODY)
                   .fontColor(this.th().inkSubtle)
               }
               .alignItems(HorizontalAlign.Start)
               .layoutWeight(1)
               Text('编辑')
-                .fontSize(13)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th().inkSubtle)
-                .padding(4)
+                .padding(DesignTokens.SPACE_XS)
                 .onClick(() => {
                   this.beginEdit(idx);
                 })
               Text('删除')
-                .fontSize(13)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th().danger)
-                .padding(4)
+                .padding(DesignTokens.SPACE_XS)
                 .onClick(() => {
                   this.deleteIdent(idx);
                 })
@@ -105,7 +106,7 @@ export struct IdentityManager {
           }, (id: IdentityRec) => id.id + id.name + id.authType)
           if (this.list.length === 0) {
             Text('(空) 添加一个身份后,主机可选择"身份"认证引用它')
-              .fontSize(13)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th().inkSubtle)
           }
         }
@@ -127,9 +128,9 @@ export struct IdentityManager {
     }
     .width('86%')
     .height('86%')
-    .padding(16)
+    .padding(DesignTokens.SPACE_LG)
     .backgroundColor(this.th().surfaceRaised)
-    .borderRadius(12)
+    .borderRadius(DesignTokens.RADIUS_LG)
     .alignItems(HorizontalAlign.Start)
   }
 
@@ -169,7 +170,7 @@ export struct IdentityManager {
   EditForm() {
     Column({ space: 8 }) {
       Text(this.editIdx >= 0 ? '编辑身份' : '新增身份')
-        .fontSize(15)
+        .fontSize(DesignTokens.FONT_HEADING)
         .fontWeight(FontWeight.Bold)
       TextInput({ placeholder: '名称(如: prod-root)', text: this.eName })
         .onChange((v: string) => {
@@ -182,10 +183,10 @@ export struct IdentityManager {
       Row({ space: 8 }) {
         ForEach(AUTH_TYPES, (t: string) => {
           Text(t)
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.eAuth === t ? this.th().surfaceRaised : this.th().ink)
             .backgroundColor(this.eAuth === t ? this.th().brand : this.th().panel)
-            .borderRadius(6)
+            .borderRadius(DesignTokens.RADIUS_MD)
             .padding({ left: 10, right: 10, top: 6, bottom: 6 })
             .onClick(() => {
               this.eAuth = t;
@@ -221,7 +222,7 @@ export struct IdentityManager {
           })
       }
       if (this.err.length > 0) {
-        Text(this.err).fontSize(13).fontColor(this.th().danger)
+        Text(this.err).fontSize(DesignTokens.FONT_BODY).fontColor(this.th().danger)
       }
       Row({ space: 10 }) {
         Button('取消')
@@ -239,8 +240,8 @@ export struct IdentityManager {
       .width('100%')
     }
     .width('100%')
-    .padding(12)
-    .borderRadius(8)
+    .padding(DesignTokens.SPACE_MD)
+    .borderRadius(DesignTokens.RADIUS_MD)
     .backgroundColor(this.th().surfaceRaised)
   }
 

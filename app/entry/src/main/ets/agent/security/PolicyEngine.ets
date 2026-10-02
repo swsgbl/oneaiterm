@@ -62,6 +62,22 @@ export class PolicyEngine {
     return ''
   }
 
+  /** workspace_write 工具名匹配。 */
+  private static readonly WRITE_TOOLS: RegExp =
+    /^(write|edit|create|file_write|file_edit|file_create|patch|save)\b/
+
+  /** terminal 类工具名匹配（与 term_write 等价处理）。 */
+  private static readonly SHELL_TOOLS: RegExp =
+    /^(shell|bash|execute|term_write)\b/
+
+  /** remote 类工具名匹配。 */
+  private static readonly REMOTE_TOOLS: RegExp =
+    /^(sftp|scp|ssh|remote)\b/
+
+  /** destructive 类工具名匹配。 */
+  private static readonly DESTRUCTIVE_TOOLS: RegExp =
+    /^(rm|delete|format|destructive)\b/
+
   /** 全参数拼接（注入扫描用，覆盖全部字段值）。 */
   private static allArgs(argsJson: string): string {
     if (argsJson === '') {
@@ -82,19 +98,52 @@ export class PolicyEngine {
   /** 五档判定主入口。 */
   static evaluate(ctx: ToolCallContext): PolicyDecision {
     const d = new PolicyDecision()
-    if (ctx.toolName === 'term_write') {
+    // terminal 类工具（term_write/shell/bash/execute）：destructive 黑名单 → 远端/本地档
+    if (PolicyEngine.SHELL_TOOLS.test(ctx.toolName)) {
       const cmd = PolicyEngine.argString(ctx.argsJson, 'cmd')
-      // destructive 黑名单：命中即 destructive（须审批）
       if (PolicyEngine.DESTRUCTIVE.test(cmd)) {
         d.kind = 'require_approval'
         d.level = 'destructive'
         d.reason = '危险命令黑名单命中'
         return d
       }
-      // 远端写提升 remote 档；本地终端写为 terminal 档；均须审批
       d.kind = 'require_approval'
       d.level = ctx.target === 'remote' ? 'remote' : 'terminal'
       d.reason = ctx.target === 'remote' ? '远端终端写入' : '终端写入'
+      return d
+    }
+    // destructive 类工具（rm/delete/format）：一律 destructive 档须审批
+    if (PolicyEngine.DESTRUCTIVE_TOOLS.test(ctx.toolName)) {
+      d.kind = 'require_approval'
+      d.level = 'destructive'
+      d.reason = '破坏性操作'
+      return d
+    }
+    // remote 类工具（sftp/scp/ssh/remote）：一律 remote 档须审批
+    if (PolicyEngine.REMOTE_TOOLS.test(ctx.toolName)) {
+      d.kind = 'require_approval'
+      d.level = 'remote'
+      d.reason = '远端操作'
+      return d
+    }
+    // workspace_write 工具（write/edit/create 等）：注入/逃逸前置 deny，否则 require_approval
+    if (PolicyEngine.WRITE_TOOLS.test(ctx.toolName)) {
+      const all = PolicyEngine.allArgs(ctx.argsJson)
+      if (PolicyEngine.TRAVERSAL.test(all)) {
+        d.kind = 'deny'
+        d.level = 'workspace_write'
+        d.reason = '路径穿越特征（../）被拦截'
+        return d
+      }
+      if (PolicyEngine.INJECTION.test(all)) {
+        d.kind = 'deny'
+        d.level = 'workspace_write'
+        d.reason = '命令注入特征（;/|/`/$() 被拦截'
+        return d
+      }
+      d.kind = 'require_approval'
+      d.level = 'workspace_write'
+      d.reason = '工作区写入操作'
       return d
     }
     // 只读工具（term_read/session_info/sftp_list）：注入/逃逸前置 deny，否则 allow

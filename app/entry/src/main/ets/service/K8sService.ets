@@ -35,7 +35,7 @@ export class K8sService {
       }, (err, resp) => {
         h.destroy()
         if (err) {
-          reject(new Error(JSON.stringify(err).substring(0, 200)))
+          reject(new Error((err instanceof Error ? err.message : String(err)).substring(0, 200)))
           return
         }
         const body = typeof resp.result === 'string' ? resp.result : ''

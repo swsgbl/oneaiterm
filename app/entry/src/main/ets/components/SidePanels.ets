@@ -2,6 +2,9 @@
 import fs from '@ohos.file.fs';
 import { SessionService } from '../service/SessionService';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
+import { AppIcons } from '../common/AppIcons';
+import { EmptyState } from './EmptyState';
 
 interface QuickCmd {
   id: number
@@ -111,14 +114,14 @@ export struct QuickCommandsPanel {
     Column({ space: 6 }) {
       Row() {
         Text('快捷命令')
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.th().ink)
         Blank()
         Text(this.editing ? '×' : '✚')
-          .fontSize(14)
+          .fontSize(DesignTokens.FONT_HEADING)
           .fontColor(this.th().brand)
-          .padding(4)
+          .padding(DesignTokens.SPACE_XS)
           .onClick(() => {
             this.editing = !this.editing
           })
@@ -127,64 +130,71 @@ export struct QuickCommandsPanel {
       .padding({ left: 4, right: 4, top: 10 })
       if (this.toast !== '') {
         Text(this.toast)
-          .fontSize(10)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().success)
-          .padding(4)
+          .padding(DesignTokens.SPACE_XS)
       }
       if (this.editing) {
         Column({ space: 4 }) {
           TextInput({ placeholder: '名称', text: this.nName })
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().ink)
             .backgroundColor(this.th().inputBg)
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .onChange((v: string) => {
               this.nName = v
             })
           TextInput({ placeholder: '命令', text: this.nCmd })
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().ink)
             .backgroundColor(this.th().inputBg)
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .onChange((v: string) => {
               this.nCmd = v
             })
           Text('保存')
-            .fontSize(11)
-            .fontColor(0xffffff)
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontColor(this.th().onBrand)
             .padding({ left: 12, right: 12, top: 5, bottom: 5 })
             .backgroundColor(this.th().brand)
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .alignSelf(ItemAlign.End)
             .onClick(() => this.add())
         }
         .width('100%')
-        .padding(8)
-        .borderRadius(6)
+        .padding(DesignTokens.SPACE_SM)
+        .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th().panel)
+      }
+      if (this.cmds.length === 0) {
+        EmptyState({
+          icon: AppIcons.PANEL_QUICK,
+          title: '暂无快捷命令',
+          description: '点击右上角 + 添加常用命令'
+        })
       }
       List({ space: 2 }) {
         ForEach(this.cmds, (c: QuickCmd) => {
           ListItem() {
             Row({ space: 6 }) {
               Text('⚡ ' + c.name)
-                .fontSize(12)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th().ink)
                 .layoutWeight(1)
-              Text('▶')
-                .fontSize(12)
+              Text(AppIcons.OP_RUN)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th().brand)
-                .padding(4)
+                .padding(DesignTokens.SPACE_XS)
                 .onClick(() => this.run(c))
-              Text('🗑')
-                .fontSize(11)
+              Text(AppIcons.OP_DELETE)
+                .fontSize(DesignTokens.FONT_CAPTION)
                 .fontColor(this.th().inkSubtle)
-                .padding(4)
+                .padding(DesignTokens.SPACE_XS)
                 .onClick(() => this.del(c.id))
             }
             .width('100%')
-            .padding(6)
-            .borderRadius(4)
+            .padding(DesignTokens.SPACE_SM)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .backgroundColor(this.th().panel)
           }
         }, (c: QuickCmd) => c.id.toString())
@@ -224,35 +234,36 @@ export struct HistoryPanel {
   build() {
     Column({ space: 6 }) {
       Text('历史命令')
-        .fontSize(13)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.th().ink)
         .padding({ top: 10, left: 4 })
       if (this.items.length === 0) {
-        Text('暂无历史——终端执行命令后记录于此')
-          .fontSize(11)
-          .fontColor(this.th().inkSubtle)
-          .padding(10)
+        EmptyState({
+          icon: AppIcons.PANEL_HISTORY,
+          title: '暂无历史',
+          description: '终端执行命令后记录于此'
+        })
       }
       List({ space: 2 }) {
         ForEach(this.items, (h: HistoryItem, idx: number) => {
           ListItem() {
             Row({ space: 6 }) {
               Text(h.cmd)
-                .fontSize(11)
+                .fontSize(DesignTokens.FONT_CAPTION)
                 .fontColor(this.th().ink)
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
                 .layoutWeight(1)
-              Text('▶')
-                .fontSize(11)
+              Text(AppIcons.OP_RUN)
+                .fontSize(DesignTokens.FONT_CAPTION)
                 .fontColor(this.th().brand)
-                .padding(4)
+                .padding(DesignTokens.SPACE_XS)
                 .onClick(() => SessionService.write(h.cmd + '\n'))
             }
             .width('100%')
-            .padding(6)
-            .borderRadius(4)
+            .padding(DesignTokens.SPACE_SM)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .backgroundColor(this.th().panel)
           }
         }, (h: HistoryItem, idx: number) => idx.toString() + h.ts.toString())
@@ -281,21 +292,21 @@ export struct PersonalizationPanel {
   build() {
     Column({ space: 8 }) {
       Text('个性化')
-        .fontSize(13)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.th().ink)
         .padding({ top: 10, left: 4 })
       Text('界面主题')
-        .fontSize(11)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)
         .alignSelf(ItemAlign.Start)
       Row({ space: 6 }) {
         ForEach(['dark', 'light'], (n: string) => {
           Text(n === 'dark' ? '暗色' : '浅色')
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.theme === n ? this.th().brand : this.th().inkSubtle)
             .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .backgroundColor(this.theme === n ? this.th().hover : this.th().panel)
             .onClick(() => {
               this.theme = n
@@ -305,16 +316,16 @@ export struct PersonalizationPanel {
       }
       .width('100%')
       Text('终端配色')
-        .fontSize(11)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)
         .alignSelf(ItemAlign.Start)
       Column({ space: 2 }) {
         ForEach(['default', 'dracula', 'solarized-dark', 'gruvbox-dark', 'nord'], (n: string) => {
           Text(n)
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.termTheme === n ? this.th().brand : this.th().inkSubtle)
             .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .backgroundColor(this.termTheme === n ? this.th().hover : Color.Transparent)
             .alignSelf(ItemAlign.Start)
             .onClick(() => {
@@ -325,9 +336,9 @@ export struct PersonalizationPanel {
       .alignItems(HorizontalAlign.Start)
       Blank()
       Text('自定义背景/28 终端主题按官方路线接入')
-        .fontSize(10)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)
-        .padding(6)
+        .padding(DesignTokens.SPACE_SM)
     }
     .width('100%')
     .height('100%')

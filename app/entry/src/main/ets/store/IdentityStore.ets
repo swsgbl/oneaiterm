@@ -99,7 +99,7 @@ export class IdentityStore {
       }
       hilog.info(DOMAIN, TAG, 'load identities=%{public}d', this.identities.length);
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'load fail %{public}s', JSON.stringify(e));
+      hilog.error(DOMAIN, TAG, 'load fail %{public}s', e instanceof Error ? e.message : String(e));
       this.identities = [];
     }
   }
@@ -169,7 +169,7 @@ export class IdentityStore {
       fileIo.closeSync(f);
       fileIo.renameSync(tmp, this.path);
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'save fail %{public}s', JSON.stringify(e));
+      hilog.error(DOMAIN, TAG, 'save fail %{public}s', e instanceof Error ? e.message : String(e));
       return '';
     }
     hilog.info(DOMAIN, TAG, 'save ok identities=%{public}d bytes=%{public}d', arr.length, json.length);

@@ -70,9 +70,9 @@ export class HarnessStream {
     }
     this.req.requestInStream(this.base + '/api/events', opts, (err: Error, code: number) => {
       if (err !== undefined && err !== null && err.message !== '') {
-        hilog.error(HS_DOMAIN, HS_TAG, 'stream start fail err=%{public}s', JSON.stringify(err))
+        hilog.error(HS_DOMAIN, HS_TAG, 'stream start fail err=%{public}s', err instanceof Error ? err.message : String(err))
         if (this.cbs !== null) {
-          this.cbs.onError('连接失败: ' + JSON.stringify(err).substring(0, 120))
+          this.cbs.onError('连接失败: ' + (err instanceof Error ? err.message : String(err)).substring(0, 120))
         }
         return
       }
@@ -191,9 +191,9 @@ export class HarnessStream {
       readTimeout: 30000
     }, (err: Error, resp: http.HttpResponse) => {
       if (err !== undefined && err !== null && err.message !== '') {
-        hilog.error(HS_DOMAIN, HS_TAG, 'task send fail err=%{public}s', JSON.stringify(err))
+        hilog.error(HS_DOMAIN, HS_TAG, 'task send fail err=%{public}s', err instanceof Error ? err.message : String(err))
         if (this.cbs !== null) {
-          this.cbs.onError('任务发送失败: ' + JSON.stringify(err).substring(0, 120))
+          this.cbs.onError('任务发送失败: ' + (err instanceof Error ? err.message : String(err)).substring(0, 120))
         }
         return
       }
@@ -244,7 +244,7 @@ export class HarnessClient {
         readTimeout: 8000
       }, (err: Error, resp: http.HttpResponse) => {
         if (err !== undefined && err !== null && err.message !== '') {
-          resolve({ ok: false, detail: '不可达: ' + JSON.stringify(err).substring(0, 80) })
+          resolve({ ok: false, detail: '不可达: ' + (err instanceof Error ? err.message : String(err)).substring(0, 80) })
           return
         }
         if (resp.responseCode !== 200) {

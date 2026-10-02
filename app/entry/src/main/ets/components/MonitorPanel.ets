@@ -3,6 +3,8 @@
 import fs from '@ohos.file.fs';
 import statfs from '@ohos.statfs';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
+import { TimingConstants } from '../common/TimingConstants';
 
 interface NetIo {
   rxKB: number
@@ -31,7 +33,7 @@ export struct MonitorPanel {
 
   aboutToAppear(): void {
     this.sample()
-    this.timer = setInterval(() => this.sample(), 3000)
+    this.timer = setInterval(() => this.sample(), TimingConstants.MONITOR_SAMPLE_MS)
   }
 
   aboutToDisappear(): void {
@@ -182,11 +184,11 @@ export struct MonitorPanel {
     Column({ space: 6 }) {
       Row() {
         Text(title)
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().inkSubtle)
         Blank()
         Text(pct.toString() + '%')
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontWeight(FontWeight.Medium)
           .fontColor(color)
       }
@@ -196,25 +198,25 @@ export struct MonitorPanel {
         .backgroundColor(this.th().inputBg)
         .width('100%')
       Text(text)
-        .fontSize(11)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)
     }
     .width('100%')
-    .padding(12)
-    .borderRadius(8)
+    .padding(DesignTokens.SPACE_MD)
+    .borderRadius(DesignTokens.RADIUS_MD)
     .backgroundColor(this.th().panel)
   }
 
   build() {
     Column({ space: 10 }) {
       Text('服务器监控')
-        .fontSize(13)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.th().ink)
         .padding({ top: 10, bottom: 2 })
       if (this.procDeny !== '') {
         Text(this.procDeny)
-          .fontSize(11)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().warn)
           .padding({ left: 4, right: 4 })
       }
@@ -224,35 +226,35 @@ export struct MonitorPanel {
       Row({ space: 10 }) {
         Column({ space: 4 }) {
           Text('↓ ' + this.rxRate.toString() + ' KB/s')
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(0x4c9df0)
           Text('下行')
-            .fontSize(10)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
         }
         .layoutWeight(1)
-        .padding(10)
-        .borderRadius(8)
+        .padding(DesignTokens.SPACE_MD)
+        .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th().panel)
         Column({ space: 4 }) {
           Text('↑ ' + this.txRate.toString() + ' KB/s')
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(0xa78bfa)
           Text('上行')
-            .fontSize(10)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
         }
         .layoutWeight(1)
-        .padding(10)
-        .borderRadius(8)
+        .padding(DesignTokens.SPACE_MD)
+        .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th().panel)
       }
       .width('100%')
       Blank()
       Text('3s 刷新 · 远程主机监控(经 SSH)按官方路线接入')
-        .fontSize(10)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)
-        .padding(8)
+        .padding(DesignTokens.SPACE_SM)
     }
     .width('100%')
     .height('100%')

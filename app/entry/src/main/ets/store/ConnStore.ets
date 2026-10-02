@@ -232,7 +232,7 @@ export class ConnectionStore {
       }
       raw = fileIo.readTextSync(this.path, { encoding: 'utf-8' });
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'load read-fail %{public}s', JSON.stringify(e));
+      hilog.error(DOMAIN, TAG, 'load read-fail %{public}s', e instanceof Error ? e.message : String(e));
       this.groups = [];
       this.connections = [];
       return;
@@ -439,13 +439,13 @@ export class ConnectionStore {
       fileIo.writeSync(file.fd, json);
       fileIo.closeSync(file);
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'save write-fail %{public}s', JSON.stringify(e));
+      hilog.error(DOMAIN, TAG, 'save write-fail %{public}s', e instanceof Error ? e.message : String(e));
       return '';
     }
     try {
       fileIo.renameSync(tmp, this.path);
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'save rename-fail %{public}s', JSON.stringify(e));
+      hilog.error(DOMAIN, TAG, 'save rename-fail %{public}s', e instanceof Error ? e.message : String(e));
       return '';
     }
     this.saveCount++;

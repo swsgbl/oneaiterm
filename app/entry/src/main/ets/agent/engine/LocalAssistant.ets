@@ -269,7 +269,7 @@ export class LocalAssistant implements AgentProvider {
     this.runSession(st, input.text).then((): void => {
       hilog.info(DOMAIN, TAG, 'session done %{public}s', sessionId)
     }).catch((e: Object): void => {
-      hilog.error(DOMAIN, TAG, 'session FAIL %{public}s', JSON.stringify(e))
+      hilog.error(DOMAIN, TAG, 'session FAIL %{public}s', e instanceof Error ? e.message : String(e))
     })
     return ack
   }
@@ -384,7 +384,7 @@ export class LocalAssistant implements AgentProvider {
       this.auditRun(st, userText, final)
       this.finishSession(st, st.cancelled ? 'cancelled' : 'finished')
     } catch (e) {
-      const msg = e instanceof Error ? e.message : JSON.stringify(e)
+      const msg = e instanceof Error ? e.message : String(e)
       hilog.error(DOMAIN, TAG, 'run FAIL %{public}s', msg)
       this.emitMsg(sid, 'error', '执行失败: ' + msg, st.round, '')
       this.finishSession(st, 'aborted')
@@ -436,7 +436,7 @@ export class LocalAssistant implements AgentProvider {
       out = await this.execTool(st, tc)
     } catch (e) {
       ok = false
-      out = '工具执行异常: ' + (e instanceof Error ? e.message : JSON.stringify(e))
+      out = '工具执行异常: ' + (e instanceof Error ? e.message : String(e))
     }
     const approvalRec: ApprovalDecision | '' = decision.kind === 'allow' ? '' : 'approved'
     this.emitTool(sid, round, decision.level, tc.name, argsDigest, out, !ok)

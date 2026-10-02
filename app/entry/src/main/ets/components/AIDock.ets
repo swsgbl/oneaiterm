@@ -20,6 +20,10 @@ import {
   ApprovalDecision, ApprovalPolicyKind, APPROVAL_TIMEOUT_MS
 } from '../agent/AgentProvider';
 import { AgentSettings, AgentSettingsStore } from '../service/AgentSettingsStore';
+import { DesignTokens } from '../common/DesignTokens';
+import { AppIcons } from '../common/AppIcons';
+import { EmptyState } from './EmptyState';
+import { LoadingState } from './LoadingState';
 
 const TAG: string = 'oat.dock';
 
@@ -254,7 +258,7 @@ export struct AIDock {
       })
     }).catch((e: Object): void => {
       this.running = false
-      const msg = e instanceof Error ? e.message : JSON.stringify(e)
+      const msg = e instanceof Error ? e.message : String(e)
       this.pushAssistant('创建会话失败: ' + msg)
     })
   }
@@ -273,10 +277,14 @@ export struct AIDock {
   }
 
   private setPolicy(p: ApprovalPolicyKind): void {
+    const prev = this.policy
     this.policy = p
     const s = AgentSettingsStore.read(this.filesDir)
     s.security.approvalPolicy = p
-    AgentSettingsStore.write(this.filesDir, s)
+    const err = AgentSettingsStore.write(this.filesDir, s)
+    if (err !== '') {
+      this.policy = prev
+    }
   }
 
   private approve(requestId: string): void {
@@ -303,31 +311,41 @@ export struct AIDock {
 
   @Builder
   PolicyPill(label: string, idx: number) {
-    Text(label)
-      .fontSize(10)
-      .fontColor(this.policy === this.policyVals[idx] ? this.th().surface : this.th().inkSubtle)
-      .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-      .borderRadius(9)
-      .border({ width: 1, color: this.policy === this.policyVals[idx] ? this.th().brand : this.th().hairline })
-      .backgroundColor(this.policy === this.policyVals[idx] ? this.th().brand : Color.Transparent)
-      .margin({ left: 4 })
-      .onClick(() => this.setPolicy(this.policyVals[idx]))
+    Stack() {
+      Text(label)
+        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontColor(this.policy === this.policyVals[idx] ? this.th().surface : this.th().inkSubtle)
+        .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+        .borderRadius(DesignTokens.RADIUS_MD)
+        .border({ width: 1, color: this.policy === this.policyVals[idx] ? this.th().brand : this.th().hairline })
+        .backgroundColor(this.policy === this.policyVals[idx] ? this.th().brand : Color.Transparent)
+    }
+    .width(44)
+    .height(32)
+    .hitTestBehavior(HitTestMode.Default)
+    .margin({ left: 2 })
+    .onClick(() => this.setPolicy(this.policyVals[idx]))
   }
 
   @Builder
   EnginePill() {
     Row({ space: 2 }) {
       ForEach(this.engineVals, (val: string, idx?: number) => {
-        Text(this.engineNames[idx ?? 0])
-          .fontSize(9)
-          .fontColor(this.engineType === val ? this.th().surface : this.th().inkSubtle)
-          .padding({ left: 5, right: 5, top: 2, bottom: 2 })
-          .borderRadius(7)
-          .border({ width: 1, color: this.engineType === val ? this.th().brand : this.th().hairline })
-          .backgroundColor(this.engineType === val ? this.th().brand : Color.Transparent)
-          .onClick(() => {
-            this.engineType = val
-          })
+        Stack() {
+          Text(this.engineNames[idx ?? 0])
+            .fontSize(DesignTokens.FONT_LABEL)
+            .fontColor(this.engineType === val ? this.th().surface : this.th().inkSubtle)
+            .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+            .borderRadius(DesignTokens.RADIUS_MD)
+            .border({ width: 1, color: this.engineType === val ? this.th().brand : this.th().hairline })
+            .backgroundColor(this.engineType === val ? this.th().brand : Color.Transparent)
+        }
+        .width(36)
+        .height(28)
+        .hitTestBehavior(HitTestMode.Default)
+        .onClick(() => {
+          this.engineType = val
+        })
       }, (val: string) => val)
     }
   }
@@ -336,16 +354,21 @@ export struct AIDock {
   ModePill() {
     Row({ space: 2 }) {
       ForEach(this.modeVals, (val: string, idx?: number) => {
-        Text(this.modeNames[idx ?? 0])
-          .fontSize(9)
-          .fontColor(this.aiMode === val ? this.th().surface : this.th().inkSubtle)
-          .padding({ left: 5, right: 5, top: 2, bottom: 2 })
-          .borderRadius(7)
-          .border({ width: 1, color: this.aiMode === val ? this.th().success : this.th().hairline })
-          .backgroundColor(this.aiMode === val ? this.th().success : Color.Transparent)
-          .onClick(() => {
-            this.aiMode = val
-          })
+        Stack() {
+          Text(this.modeNames[idx ?? 0])
+            .fontSize(DesignTokens.FONT_LABEL)
+            .fontColor(this.aiMode === val ? this.th().surface : this.th().inkSubtle)
+            .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+            .borderRadius(DesignTokens.RADIUS_MD)
+            .border({ width: 1, color: this.aiMode === val ? this.th().success : this.th().hairline })
+            .backgroundColor(this.aiMode === val ? this.th().success : Color.Transparent)
+        }
+        .width(36)
+        .height(28)
+        .hitTestBehavior(HitTestMode.Default)
+        .onClick(() => {
+          this.aiMode = val
+        })
       }, (val: string) => val)
     }
   }
@@ -356,10 +379,10 @@ export struct AIDock {
       Row() {
         Blank()
         Text(m.text)
-          .fontSize(12)
-          .fontColor(this.th().surface)
+          .fontSize(DesignTokens.FONT_BODY)
+          .fontColor(this.th().onBrand)
           .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .borderRadius(10)
+          .borderRadius(DesignTokens.RADIUS_MD)
           .backgroundColor(this.th().brand)
           .constraintSize({ maxWidth: '80%' })
       }
@@ -368,10 +391,10 @@ export struct AIDock {
     } else if (m.kind === 'assistant') {
       Row() {
         Text(m.text)
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().ink)
           .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .borderRadius(10)
+          .borderRadius(DesignTokens.RADIUS_MD)
           .backgroundColor(this.th().panel)
           .border({ width: 1, color: this.th().hairline })
           .constraintSize({ maxWidth: '80%' })
@@ -383,19 +406,19 @@ export struct AIDock {
       Column({ space: 4 }) {
         Row({ space: 6 }) {
           Text('⚙ ' + m.name)
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.th().brand)
           if (m.level !== '') {
             Text(m.level)
-              .fontSize(9)
+              .fontSize(DesignTokens.FONT_LABEL)
               .fontColor(this.levelBadgeColor(m.level))
               .padding({ left: 4, right: 4, top: 1, bottom: 1 })
-              .borderRadius(4)
+              .borderRadius(DesignTokens.RADIUS_SM)
               .border({ width: 1, color: this.levelBadgeColor(m.level) })
           }
           Text(m.args)
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().ink)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -404,40 +427,40 @@ export struct AIDock {
         .width('100%')
         if (m.note !== '' && m.pending) {
           Text(m.note)
-            .fontSize(10)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().warn)
             .width('100%')
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .padding({ left: 6, right: 6, top: 4, bottom: 4 })
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .backgroundColor(this.th().hover)
         }
         if (m.result !== '' && !m.pending) {
           Text(m.result)
-            .fontSize(10)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .maxLines(4)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .width('100%')
             .padding({ left: 6, right: 6, top: 4, bottom: 4 })
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .backgroundColor(this.th().hover)
         }
         if (m.pending) {
           Row({ space: 8 }) {
             Text('允许')
-              .fontSize(11)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().surface)
               .padding({ left: 14, right: 14, top: 4, bottom: 4 })
-              .borderRadius(6)
+              .borderRadius(DesignTokens.RADIUS_MD)
               .backgroundColor(this.th().success)
               .onClick(() => this.approve(m.requestId))
             Text('拒绝')
-              .fontSize(11)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().surface)
               .padding({ left: 14, right: 14, top: 4, bottom: 4 })
-              .borderRadius(6)
+              .borderRadius(DesignTokens.RADIUS_MD)
               .backgroundColor(this.th().danger)
               .onClick(() => this.deny(m.requestId))
           }
@@ -446,11 +469,11 @@ export struct AIDock {
         }
       }
       .width('100%')
-      .padding(8)
-      .borderRadius(8)
+      .padding(DesignTokens.SPACE_SM)
+      .borderRadius(DesignTokens.RADIUS_MD)
       .backgroundColor(this.th().surfaceRaised)
       .border({ width: 1, color: this.th().hairline })
-      .shadow({ radius: 12, color: '#66000000', offsetX: 0, offsetY: 2 })
+      .shadow({ radius: DesignTokens.SHADOW_SM_RADIUS, color: DesignTokens.SHADOW_SM_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_SM_OFFSET_Y })
       .margin({ top: 4, bottom: 4 })
     }
   }
@@ -460,13 +483,13 @@ export struct AIDock {
       if (this.open) {
         // ===== Dock 头(36px): 标题+轮次 + 入口模式 + 审批策略 + 引擎选择 + 折叠钮 =====
         Row({ space: 4 }) {
-          Text('✦')
-            .fontSize(16)
+          Text(AppIcons.CMD_AI)
+            .fontSize(DesignTokens.FONT_DISPLAY)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.th().brand)
             .margin({ left: 8 })
           Text(this.running ? ('R' + this.round.toString() + '/12') : '空闲')
-            .fontSize(9)
+            .fontSize(DesignTokens.FONT_LABEL)
             .fontColor(this.running ? this.th().brand : this.th().inkSubtle)
           this.ModePill()
           Blank()
@@ -475,14 +498,20 @@ export struct AIDock {
           this.PolicyPill(this.policyNames[2], 2)
           this.EnginePill()
           Text('▾')
-            .fontSize(14)
+            .fontSize(DesignTokens.FONT_HEADING)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.th().iconStrong)
             .width(22)
             .height(22)
             .textAlign(TextAlign.Center)
+            .accessibilityText('折叠AI坞')
             .onClick(() => {
-              this.open = false
+              animateTo({
+                duration: DesignTokens.DURATION_NORMAL,
+                curve: Curve.EaseInOut
+              }, () => {
+                this.open = false
+              })
             })
         }
         .width('100%')
@@ -494,9 +523,19 @@ export struct AIDock {
         // ===== 消息流(layoutWeight 撑满中段) =====
         Scroll(this.scroller) {
           Column() {
-            ForEach(this.msgs, (m: DockMsg) => {
-              this.MsgRow(m)
-            }, (m: DockMsg) => m.kind + '|' + m.requestId + '|' + m.text.substring(0, 40) + '|' + m.pending.toString() + '|' + m.refused.toString())
+            if (this.msgs.length === 0 && !this.running) {
+              EmptyState({
+                icon: AppIcons.CMD_AI,
+                title: 'AI 智能体',
+                description: '输入自然语言指令,AI 将帮你操作终端'
+              })
+            } else if (this.running && this.msgs.length === 0) {
+              LoadingState({ message: 'AI 思考中...' })
+            } else {
+              ForEach(this.msgs, (m: DockMsg) => {
+                this.MsgRow(m)
+              }, (m: DockMsg) => m.kind + '|' + m.requestId + '|' + m.text.substring(0, 40) + '|' + m.pending.toString() + '|' + m.refused.toString())
+            }
           }
           .width('100%')
         }
@@ -509,12 +548,12 @@ export struct AIDock {
         // ===== 输入行 =====
         Row({ space: 8 }) {
           TextInput({ placeholder: this.inputPlaceholder(), text: this.input })
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().ink)
             .placeholderColor(this.th().inkSubtle)
             .backgroundColor(this.th().inputBg)
             .border({ width: 1, color: this.th().hairline })
-            .borderRadius(6)
+            .borderRadius(DesignTokens.RADIUS_MD)
             .height(32)
             .layoutWeight(1)
             .onChange((v: string) => {
@@ -522,10 +561,10 @@ export struct AIDock {
             })
             .onSubmit(() => this.send())
           Text(this.running ? '…' : '发送')
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().surface)
             .padding({ left: 14, right: 14, top: 7, bottom: 7 })
-            .borderRadius(6)
+            .borderRadius(DesignTokens.RADIUS_MD)
             .backgroundColor(this.running ? this.th().iconMuted : this.th().brand)
             .onClick(() => this.send())
         }
@@ -535,29 +574,30 @@ export struct AIDock {
       } else {
         // ===== 折叠态(28px 细条) =====
         Row({ space: 8 }) {
-          Text('✦')
-            .fontSize(18)
+          Text(AppIcons.CMD_AI)
+            .fontSize(DesignTokens.FONT_DISPLAY)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.th().brand)
           Text('智能体')
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().ink)
           if (this.engineType !== 'local') {
             Text(this.engineType === 'hmh' ? 'H' : 'A')
-              .fontSize(9)
+              .fontSize(DesignTokens.FONT_LABEL)
               .fontColor(this.th().success)
               .fontWeight(FontWeight.Bold)
           }
           if (this.running) {
             Text('R' + this.round.toString() + '/12')
-              .fontSize(10)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().brand)
           }
           Blank()
           Text('▴')
-            .fontSize(16)
+            .fontSize(DesignTokens.FONT_DISPLAY)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.th().iconStrong)
+            .accessibilityText('展开AI坞')
         }
         .width('100%')
         .height(28)
@@ -566,7 +606,12 @@ export struct AIDock {
         .backgroundColor(this.th().surfaceRaised)
         .border({ width: { top: 1 }, color: this.th().hairline })
         .onClick(() => {
-          this.open = true
+          animateTo({
+            duration: DesignTokens.DURATION_NORMAL,
+            curve: Curve.EaseInOut
+          }, () => {
+            this.open = true
+          })
         })
       }
     }

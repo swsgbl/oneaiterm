@@ -19,6 +19,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { SessionService } from '../service/SessionService';
 import { libssh } from '@ohos/libssh';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
 
 interface SftpEntry {
   name: string;
@@ -75,7 +76,7 @@ export struct SftpPanel {
       this.busy = false;
     }).catch((e: Object) => {
       this.status = 'error';
-      this.errText = e instanceof Error ? e.message : JSON.stringify(e);
+      this.errText = e instanceof Error ? e.message : String(e);
       this.busy = false;
       hilog.error(0x0110, 'oat.sftp', 'open+list FAIL %{public}s', this.errText);
     });
@@ -107,7 +108,7 @@ export struct SftpPanel {
         resolve();
       }).catch((e: Object) => {
         this.status = 'error';
-        this.errText = e instanceof Error ? e.message : JSON.stringify(e);
+        this.errText = e instanceof Error ? e.message : String(e);
         hilog.error(0x0110, 'oat.sftp', 'list FAIL %{public}s', this.errText);
         resolve();
       });
@@ -166,7 +167,7 @@ export struct SftpPanel {
         fileIo.mkdirSync(this.localBase(), true);
       }
     } catch (e) {
-      hilog.warn(0x0110, 'oat.sftp', 'mkdir sftp: %{public}s', JSON.stringify(e));
+      hilog.warn(0x0110, 'oat.sftp', 'mkdir sftp: %{public}s', e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -184,7 +185,7 @@ export struct SftpPanel {
       hilog.info(0x0110, 'oat.sftp', 'dl ok %{public}s %{public}d bytes', name, n);
     }).catch((e: Object) => {
       this.status = 'error';
-      this.errText = e instanceof Error ? e.message : JSON.stringify(e);
+      this.errText = e instanceof Error ? e.message : String(e);
       this.busy = false;
       hilog.error(0x0110, 'oat.sftp', 'dl FAIL %{public}s %{public}s', name, this.errText);
     });
@@ -229,7 +230,7 @@ export struct SftpPanel {
       hilog.info(0x0110, 'oat.sftp', 'ul ok %{public}s %{public}d bytes', name, n);
     }).catch((e: Object) => {
       this.status = 'error';
-      this.errText = e instanceof Error ? e.message : JSON.stringify(e);
+      this.errText = e instanceof Error ? e.message : String(e);
       this.busy = false;
       hilog.error(0x0110, 'oat.sftp', 'ul FAIL %{public}s %{public}s', name, this.errText);
     });
@@ -249,12 +250,12 @@ export struct SftpPanel {
         Row({ space: 8 }) {
           Column() {
             Text(this.title)
-              .fontSize(17)
+              .fontSize(DesignTokens.FONT_DISPLAY)
               .fontWeight(FontWeight.Bold)
               .fontColor(this.th().surfaceRaised)
               .maxLines(1)
             Text(this.status + (this.busy ? ' ...' : '') + '  ' + this.entries.length.toString() + ' items')
-              .fontSize(11)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().inkSubtle)
               .maxLines(1)
           }
@@ -262,7 +263,7 @@ export struct SftpPanel {
           .layoutWeight(1)
 
           Button('close')
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .backgroundColor(this.th().danger)
             .onClick(() => {
               this.closePanel();
@@ -273,7 +274,7 @@ export struct SftpPanel {
 
         if (this.status === 'error' && this.errText.length > 0) {
           Text('error: ' + this.errText)
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().danger)
             .maxLines(3)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -282,7 +283,7 @@ export struct SftpPanel {
         }
         if (this.lastOp.length > 0) {
           Text(this.lastOp)
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().success)
             .width('100%')
             .padding({ left: 12, right: 12, bottom: 4 })
@@ -294,7 +295,7 @@ export struct SftpPanel {
       // cwd bar: [..] path [refresh] [upload]
       Row({ space: 8 }) {
         Button('..')
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .backgroundColor(this.th().panel)
           .onClick(() => {
             if (this.busy) {
@@ -308,13 +309,13 @@ export struct SftpPanel {
             });
           })
         Text(this.cwd)
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().ink)
           .layoutWeight(1)
           .maxLines(1)
           .fontFamily('monospace')
         Button('refresh')
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .backgroundColor(this.th().panel)
           .onClick(() => {
             if (this.busy) {
@@ -327,7 +328,7 @@ export struct SftpPanel {
             });
           })
         Button('upload')
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .backgroundColor(this.th().success)
           .onClick(() => {
             if (this.busy) {
@@ -343,7 +344,7 @@ export struct SftpPanel {
       // transfer line
       if (this.xferText.length > 0) {
         Text(this.xferText)
-          .fontSize(11)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().warn)
           .width('100%')
           .padding({ left: 12, right: 12, top: 2, bottom: 2 })
@@ -355,23 +356,23 @@ export struct SftpPanel {
           ListItem() {
             Row({ space: 8 }) {
               Text(e.isDir ? 'd' : '-')
-                .fontSize(14)
+                .fontSize(DesignTokens.FONT_HEADING)
                 .fontColor(e.isDir ? this.th().warn : this.th().inkSubtle)
                 .width(16)
               Text(e.name)
-                .fontSize(14)
+                .fontSize(DesignTokens.FONT_HEADING)
                 .fontColor(e.isDir ? this.th().brand : this.th().ink)
                 .layoutWeight(1)
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
               Text(this.fmtSize(e.size))
-                .fontSize(11)
+                .fontSize(DesignTokens.FONT_CAPTION)
                 .fontColor(this.th().inkSubtle)
             }
             .width('100%')
             .padding({ left: 12, right: 12, top: 6, bottom: 6 })
             .backgroundColor(idx % 2 === 0 ? this.th().surface : this.th().surface)
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .onClick(() => {
               this.onTapEntry(e);
             })
@@ -384,7 +385,7 @@ export struct SftpPanel {
 
       // footer
       Text('tap dir=navigate  tap file=download to filesDir/sftp/  upload=newest local file')
-        .fontSize(10)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)
         .width('100%')
         .textAlign(TextAlign.Center)

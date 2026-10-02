@@ -1,6 +1,8 @@
 // relay4 C1: 首启 4 步引导浮层(欢迎→新建连接→终端与AI Dock→设置与主题)
 // 可跳过;完成/跳过均调 onFinish(Index 写 filesDir/guide_done 标记永不再弹)
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
+import { AppIcons } from '../common/AppIcons';
 
 @Component
 export struct GuideOverlay {
@@ -24,7 +26,7 @@ export struct GuideOverlay {
     '底部 ✦ 智能体 Dock:用自然语言驱动终端——读写屏幕、执行命令、传输文件,每一步都有审批卡把关。',
     '点顶栏齿轮进设置:AI 模型配置(Anthropic / OpenAI 兼容)、主题深浅切换、数据导入导出都在这里。'
   ]
-  private icons: string[] = ['✦', '+', '▣', '⚙']
+  private icons: string[] = [AppIcons.CMD_AI, AppIcons.OP_ADD, AppIcons.CONN_RDP, AppIcons.CMD_SETTINGS]
 
   next(): void {
     if (this.step >= 3) {
@@ -55,19 +57,19 @@ export struct GuideOverlay {
           .width(72)
           .height(72)
           .textAlign(TextAlign.Center)
-          .borderRadius(20)
+          .borderRadius(DesignTokens.RADIUS_XL)
           .backgroundColor(this.th.surface)
           .border({ width: 1, color: this.th.hairline })
           .margin({ bottom: 14 })
 
         Text(this.titles[this.step])
-          .fontSize(18)
+          .fontSize(DesignTokens.FONT_DISPLAY)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.th.ink)
           .margin({ bottom: 10 })
 
         Text(this.descs[this.step])
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th.inkSubtle)
           .textAlign(TextAlign.Center)
           .lineHeight(20)
@@ -75,22 +77,22 @@ export struct GuideOverlay {
 
         Row({ space: 10 }) {
           Text(this.step === 3 ? '完成' : '跳过')
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th.inkSubtle)
             .height(36)
             .padding({ left: 18, right: 18 })
-            .borderRadius(18)
+            .borderRadius(DesignTokens.RADIUS_XL)
             .backgroundColor(this.th.surface)
             .border({ width: 1, color: this.th.hairline })
             .textAlign(TextAlign.Center)
             .onClick(() => this.onFinish())
           Text(this.step === 3 ? '开始使用' : '下一步')
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.th.surface)
             .height(36)
             .padding({ left: 22, right: 22 })
-            .borderRadius(18)
+            .borderRadius(DesignTokens.RADIUS_XL)
             .backgroundColor(this.th.brand)
             .textAlign(TextAlign.Center)
             .onClick(() => this.next())
@@ -100,10 +102,10 @@ export struct GuideOverlay {
       }
       .width(380)
       .padding({ top: 30, bottom: 26, left: 24, right: 24 })
-      .borderRadius(14)
+      .borderRadius(DesignTokens.RADIUS_LG)
       .backgroundColor(this.th.surfaceRaised)
       .border({ width: 1, color: this.th.hairline })
-      .shadow({ radius: 24, color: '#99000000', offsetX: 0, offsetY: 8 })
+      .shadow({ radius: DesignTokens.SHADOW_LG_RADIUS, color: DesignTokens.SHADOW_LG_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_LG_OFFSET_Y })
       .alignItems(HorizontalAlign.Center)
     }
     .width('100%')

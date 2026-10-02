@@ -22,6 +22,9 @@ import { IdentityStore, IdentityRec } from '../store/IdentityStore';
 import { SessionService } from '../service/SessionService';
 import { IdentityManager } from '../components/IdentityManager';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
+import { AppIcons } from '../common/AppIcons';
+import { EmptyState } from '../components/EmptyState';
 
 const EDITABLE_TYPES_SET: string[] = ['ssh'];
 
@@ -45,7 +48,7 @@ function readDevFile(path: string): string | null {
     hilog.warn(IDOMAIN, ITAG, 'devimport direct read OK len=%{public}d', t.length);
     return t;
   } catch (e) {
-    hilog.warn(IDOMAIN, ITAG, 'devimport direct read FAIL %{public}s', JSON.stringify(e));
+    hilog.warn(IDOMAIN, ITAG, 'devimport direct read FAIL %{public}s', e instanceof Error ? e.message : String(e));
   }
   const name = path.substring(path.lastIndexOf('/') + 1);
   try {
@@ -53,14 +56,14 @@ function readDevFile(path: string): string | null {
     hilog.warn(IDOMAIN, ITAG, 'devimport tmp read OK len=%{public}d', t.length);
     return t;
   } catch (e) {
-    hilog.warn(IDOMAIN, ITAG, 'devimport tmp read FAIL %{public}s', JSON.stringify(e));
+    hilog.warn(IDOMAIN, ITAG, 'devimport tmp read FAIL %{public}s', e instanceof Error ? e.message : String(e));
   }
   try {
     const t = fileIo.readTextSync(gSandboxFiles + '/' + name, { encoding: 'utf-8' });
     hilog.warn(IDOMAIN, ITAG, 'devimport files read OK len=%{public}d', t.length);
     return t;
   } catch (e) {
-    hilog.warn(IDOMAIN, ITAG, 'devimport files read FAIL %{public}s', JSON.stringify(e));
+    hilog.warn(IDOMAIN, ITAG, 'devimport files read FAIL %{public}s', e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -274,7 +277,7 @@ export struct ConnList {
           hilog.info(IDOMAIN, ITAG, 'credUnlock via want OK');
           this.showToast('已解锁(want 通道)');
         } catch (e) {
-          hilog.error(IDOMAIN, ITAG, 'credUnlock via want FAIL %{public}s', JSON.stringify(e));
+          hilog.error(IDOMAIN, ITAG, 'credUnlock via want FAIL %{public}s', e instanceof Error ? e.message : String(e));
         }
       }
       // M3 relay-2d: apply want-injected identities (create or update by id),
@@ -284,7 +287,9 @@ export struct ConnList {
         this.applyIdentityParams(identParams0);
       }
       this.sync();
-    }).catch(() => {});
+    }).catch((e: Object) => {
+      hilog.error(IDOMAIN, ITAG, 'store load fail: %{public}s', e instanceof Error ? e.message : String(e));
+    });
 
     try {
       const ctx = getContext(this) as common.UIAbilityContext;
@@ -316,7 +321,7 @@ export struct ConnList {
       await this.identStore!.revealSecrets();
       this.identities = this.identStore!.identities.slice();
     }).catch((e: Object) => {
-      hilog.error(IDOMAIN, ITAG, 'identities save fail %{public}s', JSON.stringify(e));
+      hilog.error(IDOMAIN, ITAG, 'identities save fail %{public}s', e instanceof Error ? e.message : String(e));
     });
     this.identities = this.identStore.identities.slice();
   }
@@ -465,10 +470,10 @@ export struct ConnList {
         }
         this.importFromUri(uris[0]);
       }).catch((e: Object) => {
-        this.showToast('选择文件失败: ' + JSON.stringify(e));
+        this.showToast('选择文件失败: ' + (e instanceof Error ? e.message : String(e)));
       });
     } catch (e) {
-      this.showToast('打开选择器失败: ' + JSON.stringify(e));
+      this.showToast('打开选择器失败: ' + (e instanceof Error ? e.message : String(e)));
     }
   }
 
@@ -496,7 +501,7 @@ export struct ConnList {
       }
       this.applyImportText(text, '');
     } catch (e) {
-      this.showToast('读取文件失败: ' + JSON.stringify(e));
+      this.showToast('读取文件失败: ' + (e instanceof Error ? e.message : String(e)));
     }
   }
 
@@ -519,7 +524,7 @@ export struct ConnList {
     parseImportEnc(text, password).then((res: ImportResult) => {
       this.mergeImport(res);
     }).catch((e: Object) => {
-      const em = e instanceof ImportError ? e.message : JSON.stringify(e);
+      const em = e instanceof ImportError ? e.message : String(e);
       this.showToast('导入失败: ' + em);
       if (this.impDialog) {
         this.impErr = em; // keep dialog open for retry with corrected password
@@ -606,7 +611,7 @@ export struct ConnList {
         fileIo.writeSync(f.fd, json);
         fileIo.closeSync(f);
       } catch (e) {
-        this.exportErr = '写入失败: ' + JSON.stringify(e);
+        this.exportErr = '写入失败: ' + (e instanceof Error ? e.message : String(e));
         return;
       }
       this.exportDialog = false;
@@ -623,8 +628,8 @@ export struct ConnList {
         hilog.info(IDOMAIN, ITAG, 'UTMB64 %{public}d %{public}s', ci, b64.substring(ci, ci + 3000));
       }
     }).catch((e: Object) => {
-      this.exportErr = e instanceof Error ? e.message : JSON.stringify(e);
-      hilog.error(IDOMAIN, ITAG, 'export fail %{public}s', JSON.stringify(e));
+      this.exportErr = e instanceof Error ? e.message : String(e);
+      hilog.error(IDOMAIN, ITAG, 'export fail %{public}s', e instanceof Error ? e.message : String(e));
     });
   }
 
@@ -634,25 +639,25 @@ export struct ConnList {
         // header(官方 sidebar-header 紧凑风:深色、小字号)
         Row({ space: 8 }) {
           Text('连接')
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.th().ink)
           Blank()
           Text('+ 分组')
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .onClick(() => {
               this.groupDialogMode = 1;
               this.groupName = '';
             })
           Text('+ 主机')
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().brand)
             .padding({ left: 8, right: 8, top: 4, bottom: 4 })
             .backgroundColor(this.th().hover)
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .onClick(() => {
               this.beginAdd();
             })
@@ -662,13 +667,13 @@ export struct ConnList {
 
         Row({ space: 8 }) {
           Text('🔒 ' + (this.hasMaster ? (this.unlocked ? '已解锁' : '主密码未解锁') : '未设主密码'))
-            .fontSize(10)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.hasMaster && this.unlocked ? this.th().success : this.th().warn)
           if (!this.hasMaster) {
             Text('设置')
-              .fontSize(10).fontColor(this.th().ink)
+              .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().ink)
               .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .borderRadius(4).backgroundColor(this.th().hover)
+              .borderRadius(DesignTokens.RADIUS_SM).backgroundColor(this.th().hover)
               .onClick(() => {
                 this.credPass1 = '';
                 this.credPass2 = '';
@@ -678,9 +683,9 @@ export struct ConnList {
           } else {
             if (!this.unlocked) {
               Text('解锁')
-                .fontSize(10).fontColor(this.th().ink)
+                .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().ink)
                 .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                .borderRadius(4).backgroundColor(this.th().hover)
+                .borderRadius(DesignTokens.RADIUS_SM).backgroundColor(this.th().hover)
                 .onClick(() => {
                   this.credPass1 = '';
                   this.credErr = '';
@@ -688,9 +693,9 @@ export struct ConnList {
                 })
             } else {
               Text('锁定')
-                .fontSize(10).fontColor(this.th().inkSubtle)
+                .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().inkSubtle)
                 .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                .borderRadius(4).backgroundColor(this.th().hover)
+                .borderRadius(DesignTokens.RADIUS_SM).backgroundColor(this.th().hover)
                 .onClick(() => {
                   this.cred!.lock();
                   this.unlocked = false;
@@ -702,14 +707,15 @@ export struct ConnList {
                       this.identities = this.identStore.identities.slice();
                     }
                     this.sync();
-                  }).catch(() => {});
-                  this.showToast('已锁定:凭据已从内存清除');
+                  }).catch((e: Object) => {
+                    hilog.error(IDOMAIN, ITAG, 'lock reload fail: %{public}s', e instanceof Error ? e.message : String(e));
+                  });
                 })
             }
             Text('忘记主密码')
-              .fontSize(10).fontColor(this.th().danger)
+              .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().danger)
               .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .borderRadius(4).backgroundColor('#26f87171')
+              .borderRadius(DesignTokens.RADIUS_SM).backgroundColor('#26f87171')
               .onClick(() => {
                 this.cred!.reset();
                 this.hasMaster = false;
@@ -723,29 +729,29 @@ export struct ConnList {
 
         Flex({ wrap: FlexWrap.Wrap, direction: FlexDirection.Row }) {
           Text('导入:')
-            .fontSize(10)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .margin({ right: 6 })
           Text('选择文件(.utm/.json)')
-            .fontSize(10).fontColor(this.th().inkSubtle)
+            .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().inkSubtle)
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .borderRadius(3).backgroundColor(this.th().hover)
+            .borderRadius(DesignTokens.RADIUS_SM).backgroundColor(this.th().hover)
             .margin({ right: 4 })
             .onClick(() => {
               this.pickAndImport();
             })
           Text('开发者导入')
-            .fontSize(10).fontColor(this.th().inkSubtle)
+            .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().inkSubtle)
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .borderRadius(3).backgroundColor(this.th().hover)
+            .borderRadius(DesignTokens.RADIUS_SM).backgroundColor(this.th().hover)
             .margin({ right: 4 })
             .onClick(() => {
               this.devImport();
             })
           Text('导出.utm')
-            .fontSize(10).fontColor(this.th().inkSubtle)
+            .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().inkSubtle)
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .borderRadius(3).backgroundColor(this.th().hover)
+            .borderRadius(DesignTokens.RADIUS_SM).backgroundColor(this.th().hover)
             .margin({ right: 4 })
             .onClick(() => {
               this.exportPassword = '';
@@ -753,9 +759,9 @@ export struct ConnList {
               this.exportDialog = true;
             })
           Text('身份')
-            .fontSize(10).fontColor(this.th().inkSubtle)
+            .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().inkSubtle)
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .borderRadius(3).backgroundColor(this.th().hover)
+            .borderRadius(DesignTokens.RADIUS_SM).backgroundColor(this.th().hover)
             .onClick(() => {
               this.identVisible = true;
             })
@@ -765,7 +771,7 @@ export struct ConnList {
 
         if (this.toast.length > 0) {
           Text(this.toast)
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().success)
             .padding({ left: 12 })
             .alignSelf(ItemAlign.Start)
@@ -774,11 +780,21 @@ export struct ConnList {
         // list
         Scroll() {
           Column() {
-            this.QuickAccess()
-            ForEach(this.groups, (g: GroupRec) => {
-              this.GroupSection(g)
-            }, (g: GroupRec) => g.id + g.name)
-            this.RootSection()
+            if (this.conns.length === 0 && this.groups.length === 0) {
+              EmptyState({
+                icon: AppIcons.PANEL_CONNECTIONS,
+                title: '暂无连接',
+                description: '点击右上角 + 新建连接',
+                actionLabel: '新建连接',
+                onAction: () => { this.formVisible = true }
+              })
+            } else {
+              this.QuickAccess()
+              ForEach(this.groups, (g: GroupRec) => {
+                this.GroupSection(g)
+              }, (g: GroupRec) => g.id + g.name)
+              this.RootSection()
+            }
           }
           .width('100%')
           .padding({ bottom: 20 })
@@ -820,7 +836,7 @@ export struct ConnList {
       if (this.groupDialogMode > 0) {
         Column({ space: 12 }) {
           Text(this.groupDialogMode === 1 ? '新增分组' : '重命名分组')
-            .fontSize(17)
+            .fontSize(DesignTokens.FONT_DISPLAY)
             .fontWeight(FontWeight.Bold)
           TextInput({ placeholder: '分组名称', text: this.groupName })
             .onChange((v: string) => {
@@ -856,10 +872,10 @@ export struct ConnList {
           .width('100%')
         }
         .width('60%')
-        .padding(18)
+        .padding(DesignTokens.SPACE_LG)
         .backgroundColor(this.th().surfaceRaised)
-        .borderRadius(12)
-        .shadow({ radius: 24, color: '#99000000', offsetX: 0, offsetY: 8 })
+        .borderRadius(DesignTokens.RADIUS_LG)
+        .shadow({ radius: DesignTokens.SHADOW_LG_RADIUS, color: DesignTokens.SHADOW_LG_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_LG_OFFSET_Y })
         .justifyContent(FlexAlign.Center)
       }
 
@@ -870,10 +886,10 @@ export struct ConnList {
         Column() {
           Column({ space: 12 }) {
             Text('加密 .utm 导入')
-              .fontSize(17)
+              .fontSize(DesignTokens.FONT_DISPLAY)
               .fontWeight(FontWeight.Bold)
             Text('该文件已加密,请输入导出时设置的密码')
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th().inkSubtle)
             TextInput({ placeholder: '导入密码' })
               .type(InputType.Password)
@@ -881,7 +897,7 @@ export struct ConnList {
                 this.impPassword = v;
               })
             if (this.impErr.length > 0) {
-              Text(this.impErr).fontSize(13).fontColor(this.th().danger)
+              Text(this.impErr).fontSize(DesignTokens.FONT_BODY).fontColor(this.th().danger)
             }
             Row({ space: 12 }) {
               Button('取消')
@@ -900,10 +916,10 @@ export struct ConnList {
             .width('100%')
           }
           .width('72%')
-          .padding(18)
+          .padding(DesignTokens.SPACE_LG)
           .backgroundColor(this.th().surfaceRaised)
-          .borderRadius(12)
-          .shadow({ radius: 24, color: '#99000000', offsetX: 0, offsetY: 8 })
+          .borderRadius(DesignTokens.RADIUS_LG)
+          .shadow({ radius: DesignTokens.SHADOW_LG_RADIUS, color: DesignTokens.SHADOW_LG_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_LG_OFFSET_Y })
         }
         .width('100%')
         .height('100%')
@@ -919,10 +935,10 @@ export struct ConnList {
         Column() {
           Column({ space: 12 }) {
             Text('导出 .utm')
-              .fontSize(17)
+              .fontSize(DesignTokens.FONT_DISPLAY)
               .fontWeight(FontWeight.Bold)
             Text('密码留空导出明文(密码字段清空);输入密码则用 PBKDF2(100k)+AES-GCM 加密')
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th().inkSubtle)
             TextInput({ placeholder: '导出密码(可留空)' })
               .type(InputType.Password)
@@ -930,7 +946,7 @@ export struct ConnList {
                 this.exportPassword = v;
               })
             if (this.exportErr.length > 0) {
-              Text(this.exportErr).fontSize(13).fontColor(this.th().danger)
+              Text(this.exportErr).fontSize(DesignTokens.FONT_BODY).fontColor(this.th().danger)
             }
             Row({ space: 12 }) {
               Button('取消')
@@ -948,10 +964,10 @@ export struct ConnList {
             .width('100%')
           }
           .width('72%')
-          .padding(18)
+          .padding(DesignTokens.SPACE_LG)
           .backgroundColor(this.th().surfaceRaised)
-          .borderRadius(12)
-          .shadow({ radius: 24, color: '#99000000', offsetX: 0, offsetY: 8 })
+          .borderRadius(DesignTokens.RADIUS_LG)
+          .shadow({ radius: DesignTokens.SHADOW_LG_RADIUS, color: DesignTokens.SHADOW_LG_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_LG_OFFSET_Y })
         }
         .width('100%')
         .height('100%')
@@ -1014,29 +1030,29 @@ export struct ConnList {
       Column() {
         Column({ space: 2 }) {
           Text('连接 ' + this.rowActionConn.name)
-            .fontSize(12).fontColor(this.th().ink)
-            .width('100%').padding(8).borderRadius(4).textAlign(TextAlign.Start)
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink)
+            .width('100%').padding(DesignTokens.SPACE_SM).borderRadius(DesignTokens.RADIUS_SM).textAlign(TextAlign.Start)
             .onClick(() => { this.rowActionVisible = false; this.onOpenConn(this.rowActionConn!.id); })
           Text('测试连通')
-            .fontSize(12).fontColor(this.th().ink)
-            .width('100%').padding(8).borderRadius(4).textAlign(TextAlign.Start)
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink)
+            .width('100%').padding(DesignTokens.SPACE_SM).borderRadius(DesignTokens.RADIUS_SM).textAlign(TextAlign.Start)
             .onClick(() => { this.testing = this.rowActionConn; this.testVisible = true; this.rowActionVisible = false; })
           Text('编辑')
-            .fontSize(12).fontColor(this.th().ink)
-            .width('100%').padding(8).borderRadius(4).textAlign(TextAlign.Start)
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink)
+            .width('100%').padding(DesignTokens.SPACE_SM).borderRadius(DesignTokens.RADIUS_SM).textAlign(TextAlign.Start)
             .onClick(() => { this.beginEdit(this.rowActionConn!); this.rowActionVisible = false; })
           Divider().strokeWidth(1).color(this.th().hover).margin({ top: 2, bottom: 2 })
           Text('删除')
-            .fontSize(12).fontColor(this.th().danger)
-            .width('100%').padding(8).borderRadius(4).textAlign(TextAlign.Start)
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().danger)
+            .width('100%').padding(DesignTokens.SPACE_SM).borderRadius(DesignTokens.RADIUS_SM).textAlign(TextAlign.Start)
             .onClick(() => { this.doDeleteConn(this.rowActionConn!); this.rowActionVisible = false; })
         }
         .width(150)
-        .padding(6)
-        .borderRadius(8)
+        .padding(DesignTokens.SPACE_SM)
+        .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th().surfaceRaised)
         .border({ width: 1, color: this.th().hairline })
-        .shadow({ radius: 24, color: '#99000000', offsetX: 0, offsetY: 8 })
+        .shadow({ radius: DesignTokens.SHADOW_LG_RADIUS, color: DesignTokens.SHADOW_LG_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_LG_OFFSET_Y })
       }
       .position({ x: 100, y: 200 })
       .onClick(() => { this.rowActionVisible = false; })
@@ -1049,11 +1065,11 @@ export struct ConnList {
       Column() {
         Column({ space: 12 }) {
           Text(this.credDialog === 1 ? '设置主密码' : '解锁主密码')
-            .fontSize(17)
+            .fontSize(DesignTokens.FONT_DISPLAY)
             .fontWeight(FontWeight.Bold)
           if (this.credDialog === 1) {
             Text('主密码用于加密 connections.json 中的密码/私钥字段,忘记后不可恢复')
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th().inkSubtle)
           }
           TextInput({ placeholder: this.credDialog === 1 ? '主密码(至少4字符)' : '主密码' })
@@ -1069,7 +1085,7 @@ export struct ConnList {
               })
           }
           if (this.credErr.length > 0) {
-            Text(this.credErr).fontSize(13).fontColor(this.th().danger)
+            Text(this.credErr).fontSize(DesignTokens.FONT_BODY).fontColor(this.th().danger)
           }
           Row({ space: 12 }) {
             Button('取消')
@@ -1114,11 +1130,12 @@ export struct ConnList {
                         this.identities = this.identStore.identities.slice();
                       }
                       this.sync();
-                    }).catch(() => {});
-                    this.showToast('已解锁');
+                    }).catch((e: Object) => {
+                      hilog.error(IDOMAIN, ITAG, 'unlock reload fail: %{public}s', e instanceof Error ? e.message : String(e));
+                    });
                   }
                 } catch (e) {
-                  const em = e instanceof CredError ? e.message : JSON.stringify(e);
+                  const em = e instanceof CredError ? e.message : String(e);
                   hilog.error(IDOMAIN, ITAG, 'cred dialog error: %{public}s', em);
                   this.credErr = em;
                 }
@@ -1127,10 +1144,10 @@ export struct ConnList {
           .width('100%')
         }
         .width('72%')
-        .padding(18)
+        .padding(DesignTokens.SPACE_LG)
         .backgroundColor(this.th().surfaceRaised)
-        .borderRadius(12)
-        .shadow({ radius: 24, color: '#99000000', offsetX: 0, offsetY: 8 })
+        .borderRadius(DesignTokens.RADIUS_LG)
+        .shadow({ radius: DesignTokens.SHADOW_LG_RADIUS, color: DesignTokens.SHADOW_LG_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_LG_OFFSET_Y })
       }
       .width('100%')
       .height('100%')
@@ -1147,20 +1164,20 @@ export struct ConnList {
     Column() {
       Row({ space: 6 }) {
         Text('▸ ' + g.name)
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.th().inkSubtle)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
         Text(this.connsOf(g.id).length.toString())
-          .fontSize(9)
+          .fontSize(DesignTokens.FONT_LABEL)
           .fontColor(this.th().inkSubtle)
           .backgroundColor(this.th().hover)
           .padding({ left: 5, right: 5, top: 1, bottom: 1 })
-          .borderRadius(8)
+          .borderRadius(DesignTokens.RADIUS_MD)
         Text('⋯')
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().inkSubtle)
           .width(22)
           .textAlign(TextAlign.Center)
@@ -1197,20 +1214,20 @@ export struct ConnList {
         Flex({ wrap: FlexWrap.Wrap, direction: FlexDirection.Row }) {
           ForEach(this.quickItems(), (c: ConnRec) => {
             Row({ space: 8 }) {
-              Text('◷')
-                .fontSize(16)
+              Text(AppIcons.PANEL_HISTORY)
+                .fontSize(DesignTokens.FONT_DISPLAY)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(this.th().brand)
                 .width(16)
                 .textAlign(TextAlign.Center)
               Column({ space: 1 }) {
                 Text(c.name)
-                  .fontSize(12)
+                  .fontSize(DesignTokens.FONT_BODY)
                   .fontColor(this.th().ink)
                   .maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                 Text(this.hostLineOf(c))
-                  .fontSize(10)
+                  .fontSize(DesignTokens.FONT_CAPTION)
                   .fontColor(this.th().inkSubtle)
                   .maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1220,7 +1237,7 @@ export struct ConnList {
             }
             .width('100%')
             .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .onClick(() => {
               this.onOpenConn(c.id);
             })
@@ -1261,7 +1278,7 @@ export struct ConnList {
   RootSection() {    Column() {
       if (this.connsOf(null).length > 0) {
         Text('▸ 未分组')
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.th().inkSubtle)
           .width('100%')
@@ -1275,42 +1292,52 @@ export struct ConnList {
     .alignItems(HorizontalAlign.Start)
   }
 
+  private connTypeIcon(type: string): string {
+    if (type === 'ssh') return AppIcons.CONN_SSH
+    if (type === 'rdp') return AppIcons.CONN_RDP
+    if (type === 'vnc') return AppIcons.CONN_VNC
+    if (type === 'local') return AppIcons.CONN_LOCAL
+    if (type === 'k8s') return AppIcons.CONN_K8S
+    if (type === 'redis' || type === 'mysql' || type === 'pg') return AppIcons.CONN_DB
+    return AppIcons.CONN_SSH
+  }
+
   @Builder
   ConnRow(c: ConnRec) {
     Row({ space: 8 }) {
       // 左侧协议小图标(relay4: 16px iconStrong Bold 高对比)
-      Text(c.type === 'ssh' ? '⌗' : (c.type === 'rdp' ? '▤' : (c.type === 'vnc' ? '▣' : '○')))
-        .fontSize(16)
+      Text(this.connTypeIcon(c.type))
+        .fontSize(DesignTokens.FONT_DISPLAY)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.th().iconStrong)
         .width(16)
         .textAlign(TextAlign.Center)
       if (c.undecryptable) {
         Text('密文不可读')
-          .fontSize(9)
+          .fontSize(DesignTokens.FONT_LABEL)
           .fontColor(this.th().surfaceRaised)
           .backgroundColor(this.th().warn)
-          .borderRadius(3)
+          .borderRadius(DesignTokens.RADIUS_SM)
           .padding({ left: 4, right: 4, top: 1, bottom: 1 })
       }
       if (c.authType === 'identity' && !this.identityExists(c.identityId)) {
         Text('身份缺失')
-          .fontSize(9)
+          .fontSize(DesignTokens.FONT_LABEL)
           .fontColor(this.th().surfaceRaised)
           .backgroundColor(this.th().danger)
-          .borderRadius(3)
+          .borderRadius(DesignTokens.RADIUS_SM)
           .padding({ left: 4, right: 4, top: 1, bottom: 1 })
       }
       Column({ space: 1 }) {
         Text(c.name)
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.th().ink)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(EDITABLE_TYPES_SET.indexOf(c.type) >= 0 ? this.hostLine(c) :
           this.hostLine(c) + '(暂不支持连接)')
-          .fontSize(10)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().inkSubtle)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1320,7 +1347,7 @@ export struct ConnList {
 
       // 官方:右缘仅星标;连接=整行点击
       Text(c.favorite ? '★' : '☆')
-        .fontSize(13)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontColor(c.favorite ? this.th().warn : this.th().inkSubtle)
         .width(24)
         .height(24)
@@ -1333,7 +1360,7 @@ export struct ConnList {
     }
     .width('100%')
     .padding({ left: 14, right: 10, top: 7, bottom: 7 })
-    .borderRadius(4)
+    .borderRadius(DesignTokens.RADIUS_SM)
     .margin({ bottom: 2 })
     .onClick(() => {
       if (EDITABLE_TYPES_SET.indexOf(c.type) >= 0) {

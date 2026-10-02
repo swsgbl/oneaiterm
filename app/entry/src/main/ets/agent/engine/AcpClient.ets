@@ -29,7 +29,7 @@ import { AgentSettings, AgentSettingsStore } from '../../service/AgentSettingsSt
 import { PolicyEngine, ToolCallContext } from '../security/PolicyEngine';
 import { ApprovalManager } from '../security/ApprovalManager';
 import { AuditWriter, AuditRecord } from '../security/AuditWriter';
-import { ToolLevelUtils } from '../ToolLevelUtils';
+
 
 const TAG: string = 'oat.acp';
 const DOMAIN: number = 0x0110;
@@ -94,11 +94,11 @@ class HttpSseTransport implements AcpTransport {
         readTimeout: REQUEST_TIMEOUT_MS
       }, (err: Error, resp: http.HttpResponse) => {
         if (err !== undefined && err !== null && err.message !== '') {
-          hilog.error(DOMAIN, TAG, 'rpc send fail %{public}s', JSON.stringify(err).substring(0, 120))
+          hilog.error(DOMAIN, TAG, 'rpc send fail %{public}s', err instanceof Error ? err.message : String(err))
           const er = new RpcResponse()
           er.error = new RpcError()
           er.error.code = -1
-          er.error.message = '传输失败: ' + JSON.stringify(err).substring(0, 80)
+          er.error.message = '传输失败: ' + (err instanceof Error ? err.message : String(err)).substring(0, 80)
           resolve(er)
           return
         }
@@ -129,7 +129,7 @@ class HttpSseTransport implements AcpTransport {
           }
           resolve(rp)
         } catch (e) {
-          hilog.error(DOMAIN, TAG, 'rpc parse fail %{public}s', JSON.stringify(e).substring(0, 80))
+          hilog.error(DOMAIN, TAG, 'rpc parse fail %{public}s', (e instanceof Error ? e.message : String(e)).substring(0, 80))
           const er = new RpcResponse()
           er.error = new RpcError()
           er.error.code = -1
@@ -158,7 +158,7 @@ class HttpSseTransport implements AcpTransport {
     }
     this.sseReq.requestInStream(url, opts, (err: Error, code: number) => {
       if (err !== undefined && err !== null && err.message !== '') {
-        hilog.error(DOMAIN, TAG, 'sse connect fail %{public}s', JSON.stringify(err).substring(0, 120))
+        hilog.error(DOMAIN, TAG, 'sse connect fail %{public}s', err instanceof Error ? err.message : String(err))
         return
       }
       if (code !== 200) {
@@ -676,15 +676,28 @@ export class AcpClient implements AgentProvider {
     } else if (kind === 'tool_call' || kind === 'tool') {
       const name = typeof obj['name'] === 'string' ? obj['name'] as string : ''
       const args = typeof obj['args'] === 'string' ? obj['args'] as string : JSON.stringify(obj['args'] ?? '')
-      const level = ToolLevelUtils.level(name)
-      this.emitTool(st.sessionId, st.turn, level, name, AuditWriter.digest(args), '', false)
+      const ctx = new ToolCallContext()
+      ctx.toolName = name
+      ctx.argsJson = args
+      ctx.target = 'remote'
+      const policyDecision = PolicyEngine.evaluate(ctx)
+      const argsDigest = AuditWriter.digest(args)
+      if (policyDecision.kind === 'deny') {
+        this.emitTool(st.sessionId, st.turn, policyDecision.level, name, argsDigest, '安全拦截: ' + policyDecision.reason, true)
+      } else {
+        this.emitTool(st.sessionId, st.turn, policyDecision.level, name, argsDigest, '', false)
+      }
     } else if (kind === 'tool_result' || kind === 'toolResult') {
       const name = typeof obj['name'] === 'string' ? obj['name'] as string : ''
       const isError = obj['isError'] === true
       const result = typeof obj['result'] === 'string' ? obj['result'] as string :
         (typeof obj['output'] === 'string' ? obj['output'] as string : '')
-      const level = ToolLevelUtils.level(name)
-      this.emitTool(st.sessionId, st.turn, level, name, '', result, isError)
+      const ctx = new ToolCallContext()
+      ctx.toolName = name
+      ctx.argsJson = ''
+      ctx.target = 'remote'
+      const policyDecision = PolicyEngine.evaluate(ctx)
+      this.emitTool(st.sessionId, st.turn, policyDecision.level, name, '', result, isError)
     } else {
       const text = typeof obj['text'] === 'string' ? obj['text'] as string : ''
       if (text !== '') {
@@ -716,7 +729,7 @@ export class AcpClient implements AgentProvider {
     view.sessionId = st.sessionId
     view.toolName = toolName
     view.argsDigest = argsDigest
-    view.level = ToolLevelUtils.level(toolName)
+    view.level = policyDecision.level
     const settings: AgentSettings = AgentSettingsStore.read(this.filesDir)
     const policy: ApprovalPolicyKind = settings.security.approvalPolicy
     this.approval(st).setTurn(st.turn)

@@ -73,7 +73,7 @@ export class VncClient {
 
   close(): void {
     if (this.sock !== null) {
-      try { this.sock.close(); } catch (e) { }
+      try { this.sock.close(); } catch (e) { hilog.error(VNC_DOMAIN, VNC_TAG, 'sock.close failed: %{public}s', e instanceof Error ? e.message : String(e)); }
       this.sock = null;
     }
     this.st = 'closed';

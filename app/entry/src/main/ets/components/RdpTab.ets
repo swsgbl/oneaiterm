@@ -2,6 +2,7 @@ import { rdpConnect, rdpDisconnect } from 'librdpproxy.so';
 import image from '@ohos.multimedia.image';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
 
 const RDP_TAG: string = 'oat.rdp';
 const RDP_DOMAIN: number = 0x0110;
@@ -32,7 +33,7 @@ export struct RdpTab {
       rdpDisconnect()
       hilog.info(RDP_DOMAIN, RDP_TAG, 'rdp disconnected');
     } catch (e) {
-      hilog.error(RDP_DOMAIN, RDP_TAG, 'rdp disconnect err: %{public}s', JSON.stringify(e).substring(0, 120));
+      hilog.error(RDP_DOMAIN, RDP_TAG, 'rdp disconnect err: %{public}s', (e instanceof Error ? e.message : String(e)).substring(0, 120));
     }
     this.connected = false
   }
@@ -53,8 +54,8 @@ export struct RdpTab {
         })
     } catch (e) {
       this.connected = false
-      this.errText = 'rdpproxy 加载失败: ' + JSON.stringify(e).substring(0, 200)
-      hilog.error(RDP_DOMAIN, RDP_TAG, 'rdp connect failed: %{public}s', JSON.stringify(e).substring(0, 200));
+      this.errText = 'rdpproxy 加载失败: ' + (e instanceof Error ? e.message : String(e)).substring(0, 200)
+      hilog.error(RDP_DOMAIN, RDP_TAG, 'rdp connect failed: %{public}s', (e instanceof Error ? e.message : String(e)).substring(0, 200));
     }
   }
 
@@ -89,41 +90,41 @@ export struct RdpTab {
           Blank()
           Text('🖥').fontSize(40)
           Text('RDP 远程桌面')
-            .fontSize(18)
+            .fontSize(DesignTokens.FONT_DISPLAY)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.th().ink)
           Text('FreerDP 3.9 · NAPI 桥 · x86_64')
-            .fontSize(11)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
           TextInput({ placeholder: '主机 (如 192.168.1.10)', text: this.host })
-            .fontSize(13).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(6).width(280)
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(DesignTokens.RADIUS_MD).width(280)
             .onChange((v: string) => {
               this.host = v
             })
           TextInput({ placeholder: '端口 (默认 3389)', text: this.port })
-            .fontSize(13).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(6).width(280)
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(DesignTokens.RADIUS_MD).width(280)
             .type(InputType.Number)
             .onChange((v: string) => {
               this.port = v
             })
           TextInput({ placeholder: '用户名', text: this.user })
-            .fontSize(13).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(6).width(280)
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(DesignTokens.RADIUS_MD).width(280)
             .onChange((v: string) => {
               this.user = v
             })
           TextInput({ placeholder: '密码', text: this.password })
-            .fontSize(13).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(6).width(280)
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(DesignTokens.RADIUS_MD).width(280)
             .type(InputType.Password)
             .onChange((v: string) => {
               this.password = v
             })
           Text('连接')
-            .fontSize(14).fontColor(this.th().surface).fontWeight(FontWeight.Bold)
+            .fontSize(DesignTokens.FONT_HEADING).fontColor(this.th().onBrand).fontWeight(FontWeight.Bold)
             .padding({ left: 30, right: 30, top: 9, bottom: 9 })
-            .backgroundColor(this.th().brand).borderRadius(6)
+            .backgroundColor(this.th().brand).borderRadius(DesignTokens.RADIUS_MD)
             .onClick(() => this.doConnect())
           if (this.errText !== '') {
-            Text(this.errText).fontSize(11).fontColor(this.th().danger).padding(6)
+            Text(this.errText).fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().danger).padding(DesignTokens.SPACE_SM)
           }
           Blank()
         }
@@ -132,16 +133,16 @@ export struct RdpTab {
         Column() {
           Row() {
             Text('RDP ' + this.host + ':' + this.port)
-              .fontSize(12).fontColor(this.th().ink)
+              .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink)
             Blank()
             Text(this.fbW.toString() + 'x' + this.fbH.toString())
-              .fontSize(11).fontColor(this.th().inkSubtle)
+              .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().inkSubtle)
             Text('断开')
-              .fontSize(11).fontColor(this.th().danger)
+              .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().danger)
               .padding({ left: 8, right: 8 })
               .onClick(() => this.disconnect())
           }
-          .width('100%').padding(8).backgroundColor(this.th().panel)
+          .width('100%').padding(DesignTokens.SPACE_SM).backgroundColor(this.th().panel)
           if (this.pm !== null) {
             Image(this.pm)
               .objectFit(ImageFit.Contain)
@@ -151,7 +152,7 @@ export struct RdpTab {
             Column({ space: 8 }) {
               LoadingProgress().width(32).height(32).color(this.th().brand)
               Text('正在协商 RDP 连接…')
-                .fontSize(11).fontColor(this.th().inkSubtle)
+                .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().inkSubtle)
             }
             .layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
           }

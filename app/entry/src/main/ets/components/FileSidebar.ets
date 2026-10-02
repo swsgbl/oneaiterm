@@ -1,6 +1,7 @@
 // 官方 FileSidebar 复刻(本地设备版):文件/目录浏览 + 面包屑 + 基本信息卡
 import fs from '@ohos.file.fs';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
 
 interface FileRow {
   name: string
@@ -82,19 +83,19 @@ export struct FileSidebar {
   build() {
     Column({ space: 6 }) {
       Text('文件')
-        .fontSize(13)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.th().ink)
         .padding({ top: 10, left: 4 })
       // 面包屑 + 上级
       Row({ space: 4 }) {
         Text('↑')
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().inkSubtle)
-          .padding(4)
+          .padding(DesignTokens.SPACE_XS)
           .onClick(() => this.up())
         Text(this.cwd)
-          .fontSize(11)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().inkSubtle)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -103,31 +104,31 @@ export struct FileSidebar {
       .width('100%')
       if (this.err !== '') {
         Text(this.err)
-          .fontSize(11)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().danger)
-          .padding(8)
+          .padding(DesignTokens.SPACE_SM)
       }
       List({ space: 1 }) {
         ForEach(this.rows, (r: FileRow) => {
           ListItem() {
             Row({ space: 6 }) {
               Text(r.isDir ? '📁' : '📄')
-                .fontSize(12)
+                .fontSize(DesignTokens.FONT_BODY)
               Text(r.name)
-                .fontSize(12)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.selected === r.name ? this.th().brand : this.th().ink)
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
                 .layoutWeight(1)
               if (!r.isDir) {
                 Text(this.fmtSize(r.size))
-                  .fontSize(10)
+                  .fontSize(DesignTokens.FONT_CAPTION)
                   .fontColor(this.th().inkSubtle)
               }
             }
             .width('100%')
             .padding({ left: 6, right: 6, top: 5, bottom: 5 })
-            .borderRadius(4)
+            .borderRadius(DesignTokens.RADIUS_SM)
             .backgroundColor(this.selected === r.name ? this.th().hover : Color.Transparent)
             .onClick(() => {
               if (r.isDir) {
@@ -142,9 +143,9 @@ export struct FileSidebar {
       .layoutWeight(1)
       .width('100%')
       Text('本地文件浏览 · SFTP 远程文件经终端标签 ▦ 打开')
-        .fontSize(10)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)
-        .padding(6)
+        .padding(DesignTokens.SPACE_SM)
     }
     .width('100%')
     .height('100%')

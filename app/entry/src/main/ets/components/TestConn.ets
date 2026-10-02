@@ -7,6 +7,7 @@
 import { libssh } from '@ohos/libssh';
 import { ConnRec } from '../store/ConnStore';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
 
 @Component
 export struct TestConn {
@@ -51,7 +52,7 @@ export struct TestConn {
         this.result = '✗ 失败: 未取到 banner (超时/拒绝)';
       }
     } catch (e) {
-      this.result = '✗ 失败: ' + JSON.stringify(e);
+      this.result = '✗ 失败: ' + (e instanceof Error ? e.message : String(e));
     } finally {
       this.busy = false;
     }
@@ -60,22 +61,22 @@ export struct TestConn {
   build() {
     Column({ space: 14 }) {
       Text('测试连接')
-        .fontSize(18)
+        .fontSize(DesignTokens.FONT_DISPLAY)
         .fontWeight(FontWeight.Bold)
       Text(this.conn !== null ? this.conn.name + '  ' + this.conn.host + ':' +
         (this.conn !== null ? this.conn.port.toString() : '') : '')
-        .fontSize(14)
+        .fontSize(DesignTokens.FONT_HEADING)
         .fontColor(this.th().inkSubtle)
       Scroll() {
         Text(this.result)
-          .fontSize(15)
+          .fontSize(DesignTokens.FONT_HEADING)
           .fontColor(this.busy ? this.th().inkSubtle : (this.ok ? this.th().success : this.th().danger))
-          .padding(6)
+          .padding(DesignTokens.SPACE_SM)
       }
       .constraintSize({ maxHeight: 160 })
       .width('100%')
       .backgroundColor(this.th().surfaceRaised)
-      .borderRadius(8)
+      .borderRadius(DesignTokens.RADIUS_MD)
 
       if (this.busy) {
         LoadingProgress().width(28).height(28)
@@ -99,9 +100,9 @@ export struct TestConn {
       .width('100%')
     }
     .width('78%')
-    .padding(18)
+    .padding(DesignTokens.SPACE_LG)
     .backgroundColor(this.th().surfaceRaised)
-    .borderRadius(12)
+    .borderRadius(DesignTokens.RADIUS_LG)
     .justifyContent(FlexAlign.Center)
   }
 }

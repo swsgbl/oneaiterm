@@ -22,6 +22,10 @@ import { AIDock } from '../components/AIDock';
 import { GuideOverlay } from '../components/GuideOverlay';
 import { common } from '@kit.AbilityKit';
 import { fileIo } from '@kit.CoreFileKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { DesignTokens } from '../common/DesignTokens';
+import { LayoutConstants } from '../common/LayoutConstants';
+import { AppIcons } from '../common/AppIcons';
 
 interface TabInfo {
   id: number
@@ -64,13 +68,15 @@ struct Index {
   // M5 relay6 fix: th 原为 private 普通属性,applyTheme 重赋值不触发重渲染,
   // 主题切换从未真正生效(菜单高亮变、颜色不变)。改 @State 使颜色随主题刷新。
   @State th: AppTheme = themeByName('dark')
-  private sideIcons: string[] = ['⌗', '▤', '∿', '⇄', '⚡', '◷', '◈']
+  private sideIcons: string[] = [AppIcons.PANEL_CONNECTIONS, AppIcons.PANEL_FILES, AppIcons.PANEL_MONITOR, AppIcons.PANEL_TUNNEL, AppIcons.PANEL_QUICK, AppIcons.PANEL_HISTORY, AppIcons.PANEL_WORKSPACE]
   private sideTips: string[] = ['连接', '文件', '监控', '隧道', '快捷命令', '历史', '工作台']
   private sideViewNames: string[] = ['连接', '文件', '监控', '隧道', '快捷命令', '历史', '工作台']
   // 状态栏: 当前连接名(活跃终端标签)
   @State statusConn: string = ''
   // relay4 C1: 首启引导浮层(filesDir/guide_done 存在则不再弹)
   @State guideShow: boolean = false
+  @StorageLink('ut.openSftp') @Watch('onOpenSftp') openSftpSignal: string = ''
+  @StorageLink('ut.closeTab') @Watch('onCloseTab') closeTabSignal: string = ''
 
   aboutToAppear(): void {
     this.applyTheme(this.themeName)
@@ -89,30 +95,38 @@ struct Index {
     } catch (e) {
       this.guideShow = true // 拿不到路径宁可弹(有跳过钮)
     }
-    AppStorage.setOrCreate('ut.openSftp', '')
-    AppStorage.setOrCreate('ut.closeTab', '')
-    setInterval(() => {
-      const sftp = AppStorage.get<string>('ut.openSftp')
-      if (sftp !== null && sftp !== undefined && sftp !== '') {
-        AppStorage.setOrCreate('ut.openSftp', '')
-        this.openSftpTab(sftp)
+  }
+
+  onOpenSftp(): void {
+    if (this.openSftpSignal !== '') {
+      const connId = this.openSftpSignal
+      this.openSftpSignal = ''
+      this.openSftpTab(connId)
+    }
+    this.refreshStatusConn()
+  }
+
+  onCloseTab(): void {
+    if (this.closeTabSignal !== '') {
+      const closeId = this.closeTabSignal
+      this.closeTabSignal = ''
+      const t = this.tabs.find(x => x.connId === closeId)
+      if (t !== undefined) {
+        this.closeTab(t.id)
       }
-      const closeId = AppStorage.get<string>('ut.closeTab')
-      if (closeId !== null && closeId !== undefined && closeId !== '') {
-        AppStorage.setOrCreate('ut.closeTab', '')
-        const t = this.tabs.find(x => x.connId === closeId)
-        if (t !== undefined) {
-          this.closeTab(t.id)
-        }
-      }
-      this.refreshStatusConn()
-    }, 400)
+    }
+    this.refreshStatusConn()
   }
 
   applyTheme(name: string): void {
-    this.themeName = name
-    this.th = themeByName(name)
-    AppStorage.setOrCreate('ut.theme', name)
+    animateTo({
+      duration: DesignTokens.DURATION_NORMAL,
+      curve: Curve.EaseInOut
+    }, () => {
+      this.themeName = name
+      this.th = themeByName(name)
+      AppStorage.setOrCreate('ut.theme', name)
+    })
   }
 
   // relay4 C1: 引导完成/跳过 → 写标记文件,永不再弹
@@ -125,6 +139,7 @@ struct Index {
       fileIo.writeSync(f.fd, 'done')
       fileIo.closeSync(f)
     } catch (e) {
+      hilog.error(0x0110, 'oat.index', 'finishGuide write fail: %{public}s', e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -132,15 +147,15 @@ struct Index {
   paletteItems(): PaletteItem[] {
     const items: PaletteItem[] = []
     items.push({
-      key: 'cmd.newconn', icon: '+', label: '新建连接', hint: '打开连接面板',
+      key: 'cmd.newconn', icon: AppIcons.OP_ADD, label: '新建连接', hint: '打开连接面板',
       run: () => { this.sideView = 0; this.sidebarVisible = true }
     })
     items.push({
-      key: 'cmd.local', icon: '▤', label: '本地终端', hint: '开一个本地 shell 标签',
+      key: 'cmd.local', icon: AppIcons.CONN_LOCAL, label: '本地终端', hint: '开一个本地 shell 标签',
       run: () => this.openLocalTerminal()
     })
     items.push({
-      key: 'cmd.settings', icon: '⚙', label: '设置', hint: '打开设置标签页',
+      key: 'cmd.settings', icon: AppIcons.CMD_SETTINGS, label: '设置', hint: '打开设置标签页',
       run: () => this.openSettingsTab()
     })
     items.push({
@@ -152,39 +167,39 @@ struct Index {
       run: () => this.applyTheme('light')
     })
     items.push({
-      key: 'cmd.sftp', icon: '▦', label: 'SFTP 文件传输', hint: '打开 SFTP 标签',
+      key: 'cmd.sftp', icon: AppIcons.TAB_SFTP, label: 'SFTP 文件传输', hint: '打开 SFTP 标签',
       run: () => this.openKindTab('sftp', 'SFTP')
     })
     items.push({
-      key: 'cmd.pg', icon: '⬮', label: 'PostgreSQL', hint: '打开数据库标签',
+      key: 'cmd.pg', icon: AppIcons.CONN_DB, label: 'PostgreSQL', hint: '打开数据库标签',
       run: () => this.openKindTab('pg', 'PostgreSQL')
     })
     items.push({
-      key: 'cmd.redis', icon: '⬮', label: 'Redis', hint: '打开数据库标签',
+      key: 'cmd.redis', icon: AppIcons.CONN_DB, label: 'Redis', hint: '打开数据库标签',
       run: () => this.openKindTab('redis', 'Redis')
     })
     items.push({
-      key: 'cmd.mysql', icon: '⬮', label: 'MySQL', hint: '打开数据库标签',
+      key: 'cmd.mysql', icon: AppIcons.CONN_DB, label: 'MySQL', hint: '打开数据库标签',
       run: () => this.openKindTab('mysql', 'MySQL')
     })
     items.push({
-      key: 'cmd.k8s', icon: '☸', label: 'K8s', hint: '打开集群标签',
+      key: 'cmd.k8s', icon: AppIcons.CONN_K8S, label: 'K8s', hint: '打开集群标签',
       run: () => this.openKindTab('k8s', 'K8s')
     })
     items.push({
-      key: 'cmd.vnc', icon: '◫', label: 'VNC', hint: '远程桌面',
+      key: 'cmd.vnc', icon: AppIcons.CONN_VNC, label: 'VNC', hint: '远程桌面',
       run: () => this.openKindTab('vnc', 'VNC')
     })
     items.push({
-      key: 'cmd.rdp', icon: '▣', label: 'RDP', hint: '远程桌面',
+      key: 'cmd.rdp', icon: AppIcons.CONN_RDP, label: 'RDP', hint: '远程桌面',
       run: () => this.openKindTab('rdp', 'RDP')
     })
     items.push({
-      key: 'cmd.spice', icon: '◈', label: 'SPICE', hint: '远程桌面',
+      key: 'cmd.spice', icon: AppIcons.CONN_SPICE, label: 'SPICE', hint: '远程桌面',
       run: () => this.openKindTab('spice', 'SPICE')
     })
     items.push({
-      key: 'cmd.split', icon: '◫', label: '分屏', hint: '当前标签钉到右栏',
+      key: 'cmd.split', icon: AppIcons.CMD_SPLIT, label: '分屏', hint: '当前标签钉到右栏',
       run: () => this.toggleSplit()
     })
     // 连接: 按搜索词过滤
@@ -204,11 +219,10 @@ struct Index {
         })
       }
     } catch (e) {
+      hilog.error(0x0110, 'oat.index', 'paletteItems store read fail: %{public}s', e instanceof Error ? e.message : String(e));
     }
     return items
   }
-
-  // ===== 状态栏数据 =====
   refreshStatusConn(): void {
     const t = this.tabs.find(x => x.id === this.activeTab)
     if (t !== undefined && t.kind === 'terminal') {
@@ -254,6 +268,7 @@ struct Index {
         name = c.name !== '' ? c.name : (c.user + '@' + c.host)
       }
     } catch (e) {
+      hilog.error(0x0110, 'oat.index', 'openConnTab store read fail: %{public}s', e instanceof Error ? e.message : String(e));
     }
     const id = this.nextTabId++
     this.tabs.push({ id: id, name: name, kind: 'terminal', connId: connId })
@@ -344,15 +359,16 @@ struct Index {
   @Builder
   HeaderBtn(icon: string, tip: string, action: () => void) {
     Text(icon)
-      .fontSize(18)
+      .fontSize(DesignTokens.FONT_DISPLAY)
       .fontWeight(FontWeight.Bold)
       .fontColor(this.hoverOn && this.hoverTip === tip ? this.th.brand : this.th.iconStrong)
       .width(30)
       .height(30)
       .textAlign(TextAlign.Center)
-      .borderRadius(6)
+      .borderRadius(DesignTokens.RADIUS_MD)
       .margin({ left: 2, right: 2 })
       .backgroundColor(this.hoverOn && this.hoverTip === tip ? this.th.hover : Color.Transparent)
+      .accessibilityText(tip)
       .onClick(() => action())
       .onHover((h: boolean) => {
         this.hoverTip = h ? tip : ''
@@ -368,35 +384,41 @@ struct Index {
   @Builder
   TabItem(t: TabInfo) {
     Row({ space: 5 }) {
-      Text(t.kind === 'start' ? '⌂' : (t.kind === 'sftp' ? '▦' : (t.kind === 'settings' ? '⚙' : '▸')))
-        .fontSize(14)
+      Text(t.kind === 'start' ? AppIcons.TAB_START : (t.kind === 'sftp' ? AppIcons.TAB_SFTP : (t.kind === 'settings' ? AppIcons.TAB_SETTINGS : AppIcons.TAB_TERMINAL)))
+        .fontSize(DesignTokens.FONT_HEADING)
         .fontColor(t.id === this.activeTab ? this.th.surface : this.th.inkSubtle)
       Text(t.name)
-        .fontSize(12)
+        .fontSize(DesignTokens.FONT_BODY)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .fontColor(t.id === this.activeTab ? this.th.surface : this.th.inkSubtle)
         .constraintSize({ maxWidth: 180 })
-      Text('×')
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.hoverOn && this.hoverTip === ('close' + t.id.toString()) ? this.th.danger : (t.id === this.activeTab ? this.th.surface : this.th.inkSubtle))
-        .padding({ left: 4, right: 4, top: 2, bottom: 2 })
-        .borderRadius(3)
-        .onClick(() => this.closeTab(t.id))
-        .onHover((h: boolean) => {
-          this.hoverTip = h ? ('close' + t.id.toString()) : ''
-          this.hoverOn = h
-        })
-        .bindPopup(this.hoverOn && this.hoverTip === ('close' + t.id.toString()), {
-          message: '关闭标签 ' + t.name,
-          placementOnTop: true
-        })
+      Stack() {
+        Text(AppIcons.OP_DELETE)
+          .fontSize(DesignTokens.FONT_BODY)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.hoverOn && this.hoverTip === ('close' + t.id.toString()) ? this.th.danger : (t.id === this.activeTab ? this.th.surface : this.th.inkSubtle))
+          .padding({ left: 4, right: 4, top: 2, bottom: 2 })
+          .borderRadius(DesignTokens.RADIUS_SM)
+      }
+      .width(28)
+      .height(24)
+      .hitTestBehavior(HitTestMode.Default)
+      .accessibilityText('关闭标签 ' + t.name)
+      .onClick(() => this.closeTab(t.id))
+      .onHover((h: boolean) => {
+        this.hoverTip = h ? ('close' + t.id.toString()) : ''
+        this.hoverOn = h
+      })
+      .bindPopup(this.hoverOn && this.hoverTip === ('close' + t.id.toString()), {
+        message: '关闭标签 ' + t.name,
+        placementOnTop: true
+      })
     }
     .height(24)
     .constraintSize({ minWidth: 110 })
     .padding({ left: 10, right: 6 })
-    .borderRadius(12)
+    .borderRadius(DesignTokens.RADIUS_LG)
     .backgroundColor(t.id === this.activeTab ? this.th.brand : this.th.panel)
     .border({ width: 1, color: t.id === this.activeTab ? this.th.brand : this.th.hairline })
     .margin({ left: 2, right: 2 })
@@ -411,16 +433,16 @@ struct Index {
   DockIcon(idx: number) {
     Row({ space: 8 }) {
       Text(this.sideIcons[idx])
-        .fontSize(20)
+        .fontSize(DesignTokens.FONT_DISPLAY)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.sideView === idx ? this.th.surface : this.th.iconStrong)
-        .width(28)
-        .height(28)
+        .width(LayoutConstants.DOCK_ICON_SIZE)
+        .height(LayoutConstants.DOCK_ICON_SIZE)
         .textAlign(TextAlign.Center)
-        .borderRadius(6)
+        .borderRadius(DesignTokens.RADIUS_MD)
       if (this.dockWide) {
         Text(this.sideViewNames[idx])
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontWeight(this.sideView === idx ? FontWeight.Bold : FontWeight.Normal)
           .fontColor(this.sideView === idx ? this.th.surface : this.th.inkSubtle)
           .layoutWeight(1)
@@ -455,12 +477,12 @@ struct Index {
   }
 
   cardIcon(c: ConnRec): string {
-    if (c.type === 'local') return '▤';
-    if (c.type === 'rdp') return '▣';
-    if (c.type === 'vnc') return '◫';
-    if (c.type === 'k8s') return '☸';
-    if (c.type === 'redis' || c.type === 'mysql' || c.type === 'pg') return '⬮';
-    return '⌗';
+    if (c.type === 'local') return AppIcons.CONN_LOCAL;
+    if (c.type === 'rdp') return AppIcons.CONN_RDP;
+    if (c.type === 'vnc') return AppIcons.CONN_VNC;
+    if (c.type === 'k8s') return AppIcons.CONN_K8S;
+    if (c.type === 'redis' || c.type === 'mysql' || c.type === 'pg') return AppIcons.CONN_DB;
+    return AppIcons.CONN_SSH;
   }
 
   cardIconColor(c: ConnRec): string {
@@ -473,23 +495,23 @@ struct Index {
   StartConnCard(c: ConnRec) {
     Row({ space: 10 }) {
       Text(this.cardIcon(c))
-        .fontSize(20)
+        .fontSize(DesignTokens.FONT_DISPLAY)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.cardIconColor(c))
         .width(34)
         .height(34)
         .textAlign(TextAlign.Center)
-        .borderRadius(8)
+        .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th.surfaceRaised)
       Column({ space: 2 }) {
         Text(c.name)
-          .fontSize(13)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.th.ink)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.cardMeta(c))
-          .fontSize(11)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th.inkSubtle)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -499,7 +521,7 @@ struct Index {
     }
     .width(230)
     .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-    .borderRadius(12)
+    .borderRadius(DesignTokens.RADIUS_LG)
     .backgroundColor(this.th.panel)
     .border({ width: 1, color: this.th.hairline })
     .alignItems(VerticalAlign.Center)
@@ -520,15 +542,15 @@ struct Index {
           Row({ space: 8 }) {
             Row({ space: 6 }) {
               Text('▍')
-                .fontSize(13)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th.brand)
               Text('本地终端')
-                .fontSize(12)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th.ink)
             }
             .height(30)
             .padding({ left: 14, right: 14 })
-            .borderRadius(15)
+            .borderRadius(DesignTokens.RADIUS_LG)
             .backgroundColor(this.th.panel)
             .border({ width: 1, color: this.th.hairline })
             .alignItems(VerticalAlign.Center)
@@ -536,55 +558,55 @@ struct Index {
               this.openLocalTerminal()
             })
             Text('PostgreSQL')
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th.ink)
               .height(30)
               .padding({ left: 14, right: 14 })
-              .borderRadius(15)
+              .borderRadius(DesignTokens.RADIUS_LG)
               .backgroundColor(this.th.panel)
               .border({ width: 1, color: this.th.hairline })
               .onClick(() => {
                 this.openKindTab('pg', 'PostgreSQL')
               })
             Text('Redis')
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th.ink)
               .height(30)
               .padding({ left: 14, right: 14 })
-              .borderRadius(15)
+              .borderRadius(DesignTokens.RADIUS_LG)
               .backgroundColor(this.th.panel)
               .border({ width: 1, color: this.th.hairline })
               .onClick(() => {
                 this.openKindTab('redis', 'Redis')
               })
             Text('MySQL')
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th.ink)
               .height(30)
               .padding({ left: 14, right: 14 })
-              .borderRadius(15)
+              .borderRadius(DesignTokens.RADIUS_LG)
               .backgroundColor(this.th.panel)
               .border({ width: 1, color: this.th.hairline })
               .onClick(() => {
                 this.openKindTab('mysql', 'MySQL')
               })
             Text('VNC')
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th.ink)
               .height(30)
               .padding({ left: 14, right: 14 })
-              .borderRadius(15)
+              .borderRadius(DesignTokens.RADIUS_LG)
               .backgroundColor(this.th.panel)
               .border({ width: 1, color: this.th.hairline })
               .onClick(() => {
                 this.openKindTab('vnc', 'VNC')
               })
             Text('RDP')
-              .fontSize(12)
+              .fontSize(DesignTokens.FONT_BODY)
               .fontColor(this.th.ink)
               .height(30)
               .padding({ left: 14, right: 14 })
-              .borderRadius(15)
+              .borderRadius(DesignTokens.RADIUS_LG)
               .backgroundColor(this.th.panel)
               .border({ width: 1, color: this.th.hairline })
               .onClick(() => {
@@ -597,17 +619,17 @@ struct Index {
           // 快速新建行
           Row({ space: 10 }) {
             Row({ space: 6 }) {
-              Text('+')
-                .fontSize(14)
+              Text(AppIcons.OP_ADD)
+                .fontSize(DesignTokens.FONT_HEADING)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(this.th.surface)
               Text('新建连接')
-                .fontSize(13)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th.surface)
             }
             .height(32)
             .padding({ left: 16, right: 16 })
-            .borderRadius(16)
+            .borderRadius(DesignTokens.RADIUS_XL)
             .backgroundColor(this.th.brand)
             .alignItems(VerticalAlign.Center)
             .onClick(() => {
@@ -616,16 +638,16 @@ struct Index {
             })
             // M5 relay4 fix(bug1): Local Terminal 按钮原先无 onClick,点击无反应。
             Row({ space: 6 }) {
-              Text('▤')
-                .fontSize(13)
+              Text(AppIcons.CONN_LOCAL)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th.ink)
               Text('本地终端')
-                .fontSize(13)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th.ink)
             }
             .height(32)
             .padding({ left: 16, right: 16 })
-            .borderRadius(16)
+            .borderRadius(DesignTokens.RADIUS_XL)
             .backgroundColor(this.th.panel)
             .border({ width: 1, color: this.th.hairline })
             .alignItems(VerticalAlign.Center)
@@ -637,7 +659,7 @@ struct Index {
           .alignItems(VerticalAlign.Center)
 
           Text('最近连接')
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.th.inkSubtle)
             .letterSpacing(1)
@@ -646,7 +668,7 @@ struct Index {
           Column({ space: 10 }) {
             // relay4 C3: 空状态引导卡(替代单行文案)
             Column({ space: 8 }) {
-              Text('+')
+              Text(AppIcons.OP_ADD)
                 .fontSize(28)
                 .fontWeight(FontWeight.Bold)
                 .fontColor(this.th.brand)
@@ -657,30 +679,30 @@ struct Index {
                 .backgroundColor(this.th.surfaceRaised)
                 .border({ width: 1, color: this.th.hairline })
               Text('新建第一个连接')
-                .fontSize(15)
+                .fontSize(DesignTokens.FONT_HEADING)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(this.th.ink)
               Text('连接一台远程主机,或直接开本地终端')
-                .fontSize(12)
+                .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th.inkSubtle)
               Row({ space: 10 }) {
                 Text('打开连接面板')
-                  .fontSize(13)
+                  .fontSize(DesignTokens.FONT_BODY)
                   .fontColor(this.th.surface)
                   .height(34)
                   .padding({ left: 18, right: 18 })
-                  .borderRadius(17)
+                  .borderRadius(DesignTokens.RADIUS_XL)
                   .backgroundColor(this.th.brand)
                   .onClick(() => {
                     this.sideView = 0
                     this.sidebarVisible = true
                   })
                 Text('本地终端')
-                  .fontSize(13)
+                  .fontSize(DesignTokens.FONT_BODY)
                   .fontColor(this.th.ink)
                   .height(34)
                   .padding({ left: 18, right: 18 })
-                  .borderRadius(17)
+                  .borderRadius(DesignTokens.RADIUS_XL)
                   .backgroundColor(this.th.surfaceRaised)
                   .border({ width: 1, color: this.th.hairline })
                   .onClick(() => this.openLocalTerminal())
@@ -688,7 +710,7 @@ struct Index {
               .alignItems(VerticalAlign.Center)
             }
             .padding({ top: 36, bottom: 36, left: 24, right: 24 })
-            .borderRadius(14)
+            .borderRadius(DesignTokens.RADIUS_LG)
             .backgroundColor(this.th.panel)
             .border({ width: 1, color: this.th.hairline })
             .alignItems(HorizontalAlign.Center)
@@ -712,19 +734,19 @@ struct Index {
   PaletteRow(item: PaletteItem, idx: number) {
     Row({ space: 8 }) {
       Text(item.icon)
-        .fontSize(15)
+        .fontSize(DesignTokens.FONT_HEADING)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.paletteSel === idx ? this.th.brand : this.th.iconStrong)
         .width(20)
         .textAlign(TextAlign.Center)
       Text(item.label)
-        .fontSize(12)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontColor(this.paletteSel === idx ? this.th.ink : this.th.inkSubtle)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .layoutWeight(1)
       Text(item.hint)
-        .fontSize(10)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th.inkSubtle)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -732,7 +754,7 @@ struct Index {
     .width('100%')
     .height(30)
     .padding({ left: 12, right: 12 })
-    .borderRadius(6)
+    .borderRadius(DesignTokens.RADIUS_MD)
     .backgroundColor(this.paletteSel === idx ? this.th.hover : Color.Transparent)
     .alignItems(VerticalAlign.Center)
     .onClick(() => {
@@ -755,11 +777,11 @@ struct Index {
     }
     .width(360)
     .constraintSize({ maxHeight: 300 })
-    .padding(6)
-    .borderRadius(10)
+    .padding(DesignTokens.SPACE_SM)
+    .borderRadius(DesignTokens.RADIUS_MD)
     .backgroundColor(this.th.surfaceRaised)
     .border({ width: 1, color: this.th.hairline })
-    .shadow({ radius: 24, color: '#99000000', offsetX: 0, offsetY: 8 })
+    .shadow({ radius: DesignTokens.SHADOW_LG_RADIUS, color: DesignTokens.SHADOW_LG_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_LG_OFFSET_Y })
     .position({ x: 210, y: 4 })
   }
 
@@ -768,16 +790,16 @@ struct Index {
   SettingsMenu() {
     Column({ space: 1 }) {
       Text('主题')
-        .fontSize(11)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th.inkSubtle)
         .padding({ left: 10, right: 10, top: 6, bottom: 4 })
         .alignSelf(ItemAlign.Start)
       ForEach(['dark', 'light'], (n: string) => {
         Text(n === 'dark' ? '● 暗色' : '● 浅色')
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.themeName === n ? this.th.brand : this.th.ink)
           .padding({ left: 24, right: 10, top: 6, bottom: 6 })
-          .borderRadius(4)
+          .borderRadius(DesignTokens.RADIUS_SM)
           .backgroundColor(this.themeName === n ? this.th.panel : Color.Transparent)
           .alignSelf(ItemAlign.Start)
           .onClick(() => this.applyTheme(n))
@@ -787,20 +809,20 @@ struct Index {
         .color(this.th.hairline)
         .margin({ top: 4, bottom: 4 })
       Text('设置')
-        .fontSize(12)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontColor(this.th.ink)
         .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .borderRadius(4)
+        .borderRadius(DesignTokens.RADIUS_SM)
         .alignSelf(ItemAlign.Start)
         .onClick(() => {
           this.openSettingsTab()
           this.showSettingsMenu = false
         })
       Text('导入 / 导出')
-        .fontSize(12)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontColor(this.th.ink)
         .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .borderRadius(4)
+        .borderRadius(DesignTokens.RADIUS_SM)
         .alignSelf(ItemAlign.Start)
         .onClick(() => {
           this.showSettingsMenu = false
@@ -808,10 +830,10 @@ struct Index {
           this.sidebarVisible = true
         })
       Text('关于')
-        .fontSize(12)
+        .fontSize(DesignTokens.FONT_BODY)
         .fontColor(this.th.ink)
         .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .borderRadius(4)
+        .borderRadius(DesignTokens.RADIUS_SM)
         .alignSelf(ItemAlign.Start)
         .onClick(() => {
           this.showSettingsMenu = false
@@ -822,18 +844,18 @@ struct Index {
         .color(this.th.hairline)
         .margin({ top: 4, bottom: 4 })
       Text('Redis / K8s / PostgreSQL / MySQL / VNC / RDP / SPICE')
-        .fontSize(10)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th.inkSubtle)
         .padding({ left: 10, right: 40, top: 4, bottom: 6 })
         .alignSelf(ItemAlign.Start)
     }
-    .width(200)
-    .padding(6)
-    .borderRadius(8)
+    .width(LayoutConstants.DOCK_WIDE_WIDTH)
+    .padding(DesignTokens.SPACE_SM)
+    .borderRadius(DesignTokens.RADIUS_MD)
     .backgroundColor(this.th.hover)
     .border({ width: 1, color: this.th.hairline })
     .position({ x: '78%', y: 4 })
-    .shadow({ radius: 24, color: '#99000000', offsetX: 0, offsetY: 8 })
+    .shadow({ radius: DesignTokens.SHADOW_LG_RADIUS, color: DesignTokens.SHADOW_LG_COLOR, offsetX: 0, offsetY: DesignTokens.SHADOW_LG_OFFSET_Y })
   }
 
   build() {
@@ -842,7 +864,7 @@ struct Index {
       // ===== 命令栏(44px): 品牌 + 坞折叠钮 + 搜索命令面板 + AI/齿轮/分屏 =====
       Row() {
         Text('一站AI终端')
-          .fontSize(14)
+          .fontSize(DesignTokens.FONT_HEADING)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.th.brand)
           .margin({ left: 12, right: 4 })
@@ -850,7 +872,7 @@ struct Index {
           this.dockWide = !this.dockWide
           this.sidebarVisible = true
         })
-        this.HeaderBtn('⌗', '连接列表', () => {
+        this.HeaderBtn(AppIcons.PANEL_CONNECTIONS, '连接列表', () => {
           this.sideView = 0
           this.sidebarVisible = !this.sidebarVisible
         })
@@ -875,13 +897,13 @@ struct Index {
                 pick.run()
               }
             })
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th.ink)
             .placeholderColor(this.th.inkSubtle)
             .height(30)
             .width(240)
             .backgroundColor(this.th.inputBg)
-            .borderRadius(6)
+            .borderRadius(DesignTokens.RADIUS_MD)
             .padding({ left: 12, right: 12 })
             .underlineColor(Color.Transparent)
             .caretColor(this.th.brand)
@@ -892,17 +914,17 @@ struct Index {
         .width(240)
         .height(30)
         Blank()
-        this.HeaderBtn('▣', '分屏', () => this.toggleSplit())
+        this.HeaderBtn(AppIcons.CMD_SPLIT, '分屏', () => this.toggleSplit())
         // M6 relay3: 智能体 Dock 切换钮
         this.HeaderBtn('✧', '智能体', () => {
           this.aiDockOpen = !this.aiDockOpen
         })
-        this.HeaderBtn('⚙', '设置', () => {
+        this.HeaderBtn(AppIcons.CMD_SETTINGS, '设置', () => {
           this.showSettingsMenu = !this.showSettingsMenu
         })
       }
       .width('100%')
-      .height(44)
+      .height(LayoutConstants.CMD_BAR_HEIGHT)
       .padding({ left: 0, right: 8 })
       .alignItems(VerticalAlign.Center)
       .backgroundColor(this.th.surfaceRaised)
@@ -914,16 +936,17 @@ struct Index {
             ForEach(this.tabs, (t: TabInfo) => {
               this.TabItem(t)
             }, (t: TabInfo) => t.id.toString())
-            Text('+')
-              .fontSize(15)
+            Text(AppIcons.OP_ADD)
+              .fontSize(DesignTokens.FONT_HEADING)
               .fontWeight(FontWeight.Bold)
               .fontColor(this.th.iconMuted)
               .width(26)
               .height(26)
               .textAlign(TextAlign.Center)
-              .borderRadius(13)
+              .borderRadius(DesignTokens.RADIUS_LG)
               .backgroundColor(this.th.panel)
               .border({ width: 1, color: this.th.hairline })
+              .accessibilityText('新建标签')
               .onClick(() => this.addStartTab())
               .onHover((h: boolean) => {
                 this.hoverTip = h ? 'newTab' : ''
@@ -938,7 +961,7 @@ struct Index {
         }
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
-        .height(28)
+        .height(LayoutConstants.TAB_BAR_HEIGHT)
         .width('100%')
         .padding({ left: 12 })
         .margin({ top: 4, bottom: 4 })
@@ -962,7 +985,7 @@ struct Index {
               // 宽态: 视图名 + 面板内容(连接视图嵌 ConnList)
               if (this.dockWide) {
                 Text(this.sideViewNames[this.sideView])
-                  .fontSize(11)
+                  .fontSize(DesignTokens.FONT_CAPTION)
                   .fontColor(this.th.inkSubtle)
                   .letterSpacing(1)
                   .width('100%')
@@ -1013,11 +1036,11 @@ struct Index {
                 } else {
                   Column() {
                     Text(this.sideTips[this.sideView])
-                      .fontSize(13)
+                      .fontSize(DesignTokens.FONT_BODY)
                       .fontColor(this.th.inkSubtle)
-                      .margin(16)
+                      .margin(DesignTokens.SPACE_LG)
                     Text('按官方路线图逐步开放')
-                      .fontSize(11)
+                      .fontSize(DesignTokens.FONT_CAPTION)
                       .fontColor(this.th.inkSubtle)
                   }
                   .layoutWeight(1)
@@ -1074,8 +1097,8 @@ struct Index {
               }
               .layoutWeight(1)
               .height('100%')
-              .margin(6)
-              .borderRadius(10)
+              .margin(DesignTokens.SPACE_SM)
+              .borderRadius(DesignTokens.RADIUS_MD)
               .border({ width: 1, color: this.th.hairline })
               .clip(true)
               .backgroundColor(this.th.surface)
@@ -1103,8 +1126,8 @@ struct Index {
                 }
                 .layoutWeight(1)
                 .height('100%')
-                .margin(6)
-                .borderRadius(10)
+                .margin(DesignTokens.SPACE_SM)
+                .borderRadius(DesignTokens.RADIUS_MD)
                 .border({ width: 1, color: this.th.hairline })
                 .clip(true)
                 .backgroundColor(this.th.surface)
@@ -1139,7 +1162,7 @@ struct Index {
             .height(8)
             .fill(this.statusConn !== '' ? this.th.success : this.th.inkSubtle)
           Text(this.statusConn !== '' ? this.statusConn : '未连接')
-            .fontSize(10)
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.statusConn !== '' ? this.th.ink : this.th.inkSubtle)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1148,14 +1171,14 @@ struct Index {
         .alignItems(VerticalAlign.Center)
 
         Text('UTF-8')
-          .fontSize(10)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th.inkSubtle)
         Text('v1.1.0')
-          .fontSize(10)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th.inkSubtle)
         Blank()
         Text('一站AI终端 · One AI Term')
-          .fontSize(10)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th.inkSubtle)
       }
       .width('100%')

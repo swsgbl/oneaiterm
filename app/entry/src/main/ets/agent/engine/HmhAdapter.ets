@@ -35,7 +35,7 @@ import { AgentSettings, AgentSettingsStore } from '../../service/AgentSettingsSt
 import { PolicyEngine, ToolCallContext } from '../security/PolicyEngine';
 import { ApprovalManager } from '../security/ApprovalManager';
 import { AuditWriter, AuditRecord } from '../security/AuditWriter';
-import { ToolLevelUtils } from '../ToolLevelUtils';
+
 
 const TAG: string = 'oat.hmh';
 const DOMAIN: number = 0x0110;
@@ -375,9 +375,17 @@ export class HmhAdapter implements AgentProvider {
   private onToolEvent(st: HmhSessionState, obj: Record<string, Object>): void {
     const name = typeof obj['name'] === 'string' ? obj['name'] as string : ''
     const args = typeof obj['args'] === 'string' ? obj['args'] as string : JSON.stringify(obj['args'] ?? '')
+    const ctx = new ToolCallContext()
+    ctx.toolName = name
+    ctx.argsJson = args
+    ctx.target = 'remote'
+    const policyDecision = PolicyEngine.evaluate(ctx)
     const argsDigest = AuditWriter.digest(args)
-    const level = ToolLevelUtils.level(name)
-    this.emitTool(st.sessionId, st.turn, level, name, argsDigest, '', false)
+    if (policyDecision.kind === 'deny') {
+      this.emitTool(st.sessionId, st.turn, policyDecision.level, name, argsDigest, '安全拦截: ' + policyDecision.reason, true)
+      return
+    }
+    this.emitTool(st.sessionId, st.turn, policyDecision.level, name, argsDigest, '', false)
   }
 
   private onToolResultEvent(st: HmhSessionState, obj: Record<string, Object>): void {
@@ -385,8 +393,12 @@ export class HmhAdapter implements AgentProvider {
     const isError = obj['isError'] === true
     const preview = typeof obj['preview'] === 'string' ? obj['preview'] as string : ''
     const full = typeof obj['full'] === 'string' ? obj['full'] as string : preview
-    const level = ToolLevelUtils.level(name)
-    this.emitTool(st.sessionId, st.turn, level, name, '', full, isError)
+    const ctx = new ToolCallContext()
+    ctx.toolName = name
+    ctx.argsJson = ''
+    ctx.target = 'remote'
+    const policyDecision = PolicyEngine.evaluate(ctx)
+    this.emitTool(st.sessionId, st.turn, policyDecision.level, name, '', full, isError)
   }
 
   private onApprovalReq(st: HmhSessionState, obj: Record<string, Object>): void {
@@ -403,13 +415,12 @@ export class HmhAdapter implements AgentProvider {
       this.postApprove(st, false)
       return
     }
-    const level = ToolLevelUtils.level(name)
     const view = new ApprovalView()
     view.requestId = 'h' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)
     view.sessionId = st.sessionId
     view.toolName = name
     view.argsDigest = argsDigest
-    view.level = level
+    view.level = policyDecision.level
     st.pendingApprovalRequestId = view.requestId
     const settings: AgentSettings = AgentSettingsStore.read(this.filesDir)
     const policy: ApprovalPolicyKind = settings.security.approvalPolicy
@@ -459,7 +470,7 @@ export class HmhAdapter implements AgentProvider {
       readTimeout: HTTP_READ_TIMEOUT_MS
     }, (err: Error, resp: http.HttpResponse) => {
       if (err !== undefined && err !== null && err.message !== '') {
-        hilog.error(DOMAIN, TAG, 'approve POST fail %{public}s', JSON.stringify(err).substring(0, 120))
+        hilog.error(DOMAIN, TAG, 'approve POST fail %{public}s', err instanceof Error ? err.message : String(err))
         return
       }
       if (resp.responseCode !== 200) {
@@ -481,7 +492,7 @@ export class HmhAdapter implements AgentProvider {
       readTimeout: HTTP_READ_TIMEOUT_MS
     }, (err: Error, resp: http.HttpResponse) => {
       if (err !== undefined && err !== null && err.message !== '') {
-        hilog.error(DOMAIN, TAG, 'interrupt POST fail %{public}s', JSON.stringify(err).substring(0, 120))
+        hilog.error(DOMAIN, TAG, 'interrupt POST fail %{public}s', err instanceof Error ? err.message : String(err))
         return
       }
       hilog.info(DOMAIN, TAG, 'interrupt POST code=%{public}d', resp.responseCode)

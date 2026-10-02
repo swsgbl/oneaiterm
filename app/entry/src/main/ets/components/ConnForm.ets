@@ -6,6 +6,7 @@
 import { ConnRec, GroupRec } from '../store/ConnStore';
 import { IdentityRec } from '../store/IdentityStore';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
 
 const AUTH_TYPES: string[] = ['password', 'key', 'keyText', 'identity'];
 const ENCODINGS: string[] = ['utf-8', 'gbk'];
@@ -285,13 +286,13 @@ export struct ConnForm {
   build() {
     Column({ space: 10 }) {
       Text(this.editId.length > 0 ? '编辑主机' : '新增主机')
-        .fontSize(18)
+        .fontSize(DesignTokens.FONT_DISPLAY)
         .fontWeight(FontWeight.Bold)
 
       // M5 parity: protocol type selector
       Row({ space: 8 }) {
         Text('协议')
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().inkSubtle)
           .width(48)
         Select(this.typeOptions())
@@ -300,7 +301,7 @@ export struct ConnForm {
           .fontColor(this.th().ink)
           .font({ size: 12 })
           .backgroundColor(this.th().inputBg)
-          .borderRadius(6)
+          .borderRadius(DesignTokens.RADIUS_MD)
           .layoutWeight(1)
           .onSelect((idx: number) => {
             this.fTypeIdx = idx;
@@ -339,7 +340,7 @@ export struct ConnForm {
       .width('100%')
 
       Row() {
-        Text('认证方式').fontSize(14).width(70)
+        Text('认证方式').fontSize(DesignTokens.FONT_HEADING).width(70)
         Select(this.authOptions())
           .selected(this.fAuthIdx)
           .value(this.fAuth)
@@ -383,11 +384,11 @@ export struct ConnForm {
       if (this.fAuth === 'identity') {
         if (this.identities.length === 0) {
           Text('(尚无身份:先在主页"身份"里创建)')
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().warn)
         } else {
           Row() {
-            Text('引用身份').fontSize(14).width(70)
+            Text('引用身份').fontSize(DesignTokens.FONT_HEADING).width(70)
             Select(this.identOptions())
               .selected(this.fIdentIdx)
               .value(this.identLabel())
@@ -401,7 +402,7 @@ export struct ConnForm {
       }
 
       Row() {
-        Text('所属分组').fontSize(14).width(70)
+        Text('所属分组').fontSize(DesignTokens.FONT_HEADING).width(70)
         Select(this.groupOptions())
           .selected(this.fGroupIdx)
           .value(this.groupLabel())
@@ -413,7 +414,7 @@ export struct ConnForm {
       .width('100%')
 
       Row() {
-        Text('编码').fontSize(14).width(70)
+        Text('编码').fontSize(DesignTokens.FONT_HEADING).width(70)
         Select(this.encOptions())
           .selected(this.fEncIdx)
           .value(ENCODINGS[this.fEncIdx] ?? 'utf-8')
@@ -425,7 +426,7 @@ export struct ConnForm {
       .width('100%')
 
       Row() {
-        Text('退格键').fontSize(14).width(70)
+        Text('退格键').fontSize(DesignTokens.FONT_HEADING).width(70)
         Select(this.backspaceOptions())
           .selected(this.fBkIdx)
           .value(this.bkLabel())
@@ -437,7 +438,7 @@ export struct ConnForm {
       .width('100%')
 
       Row() {
-        Text('保活(秒)').fontSize(14).width(70)
+        Text('保活(秒)').fontSize(DesignTokens.FONT_HEADING).width(70)
         TextInput({ placeholder: '30', text: this.fKeepalive })
           .type(InputType.Number)
           .layoutWeight(1)
@@ -453,7 +454,7 @@ export struct ConnForm {
         })
 
       if (this.err.length > 0) {
-        Text(this.err).fontSize(13).fontColor(this.th().danger)
+        Text(this.err).fontSize(DesignTokens.FONT_BODY).fontColor(this.th().danger)
       }
 
       Row({ space: 12 }) {
@@ -479,8 +480,8 @@ export struct ConnForm {
       .width('100%')
     }
     .width('88%')
-    .padding(16)
+    .padding(DesignTokens.SPACE_LG)
     .backgroundColor(this.th().surfaceRaised)
-    .borderRadius(12)
+    .borderRadius(DesignTokens.RADIUS_LG)
   }
 }

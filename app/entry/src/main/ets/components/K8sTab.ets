@@ -1,6 +1,7 @@
 // K8s 标签页(官方 K8sTab 子集):API server + Token → 资源列表
 import { K8sService } from '../service/K8sService';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
 
 @Component
 export struct K8sTab {
@@ -57,45 +58,45 @@ export struct K8sTab {
   build() {
     Column({ space: 10 }) {
       Text('Kubernetes')
-        .fontSize(15)
+        .fontSize(DesignTokens.FONT_HEADING)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.th().ink)
         .alignSelf(ItemAlign.Start)
       if (!this.configured) {
         TextInput({ placeholder: 'API server(https://host:6443)', text: this.server })
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().ink)
           .backgroundColor(this.th().inputBg)
-          .borderRadius(6)
+          .borderRadius(DesignTokens.RADIUS_MD)
           .onChange((v: string) => {
             this.server = v
           })
         TextInput({ placeholder: 'ServiceAccount Token', text: this.token })
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().ink)
           .backgroundColor(this.th().inputBg)
-          .borderRadius(6)
+          .borderRadius(DesignTokens.RADIUS_MD)
           .type(InputType.Password)
           .onChange((v: string) => {
             this.token = v
           })
         Text('连接')
-          .fontSize(12)
-          .fontColor(0xffffff)
+          .fontSize(DesignTokens.FONT_BODY)
+          .fontColor(this.th().onBrand)
           .padding({ left: 16, right: 16, top: 8, bottom: 8 })
           .backgroundColor(this.th().brand)
-          .borderRadius(6)
+          .borderRadius(DesignTokens.RADIUS_MD)
           .alignSelf(ItemAlign.Start)
           .onClick(() => this.doConfigure())
       } else {
         Row({ space: 6 }) {
           ForEach(['pods', 'deployments', 'services', 'namespaces', 'nodes'], (r: string) => {
             Text(r)
-              .fontSize(10)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.resource === r ? this.th().brand : this.th().inkSubtle)
               .padding({ left: 8, right: 8, top: 4, bottom: 4 })
               .backgroundColor(this.resource === r ? this.th().hover : this.th().inputBg)
-              .borderRadius(4)
+              .borderRadius(DesignTokens.RADIUS_SM)
               .onClick(() => {
                 this.resource = r
                 this.load()
@@ -103,22 +104,22 @@ export struct K8sTab {
           }, (r: string) => r)
           Blank()
           Text('↻')
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().inkSubtle)
-            .padding(4)
+            .padding(DesignTokens.SPACE_XS)
             .onClick(() => this.load())
         }
         .width('100%')
         if (this.resource === 'pods' || this.resource === 'deployments' || this.resource === 'services') {
           Row({ space: 6 }) {
             Text('namespace')
-              .fontSize(11)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().inkSubtle)
             TextInput({ text: this.ns })
-              .fontSize(11)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().ink)
               .backgroundColor(this.th().inputBg)
-              .borderRadius(4)
+              .borderRadius(DesignTokens.RADIUS_SM)
               .layoutWeight(1)
               .onChange((v: string) => {
                 this.ns = v
@@ -129,7 +130,7 @@ export struct K8sTab {
       }
       Scroll() {
         Text(this.out === '' ? ' ' : this.out)
-          .fontSize(11)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().ink)
           .fontFamily('monospace')
           .width('100%')
@@ -138,13 +139,13 @@ export struct K8sTab {
       .layoutWeight(1)
       .width('100%')
       .backgroundColor(this.th().surface)
-      .borderRadius(6)
-      .padding(8)
+      .borderRadius(DesignTokens.RADIUS_MD)
+      .padding(DesignTokens.SPACE_SM)
       .align(Alignment.TopStart)
     }
     .width('100%')
     .height('100%')
-    .padding(14)
+    .padding(DesignTokens.SPACE_LG)
     .backgroundColor(this.th().panel)
     .alignItems(HorizontalAlign.Start)
   }

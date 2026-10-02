@@ -161,7 +161,7 @@ export class CredentialManager {
         fileIo.unlinkSync(this.metaPath);
       }
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'reset unlink fail %{public}s', JSON.stringify(e));
+      hilog.error(DOMAIN, TAG, 'reset unlink fail %{public}s', e instanceof Error ? e.message : String(e));
     }
     this.meta = null;
     this.key = null;

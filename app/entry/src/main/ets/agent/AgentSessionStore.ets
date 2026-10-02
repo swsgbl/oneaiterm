@@ -46,7 +46,7 @@ export class AgentSessionStore {
       }
       return true
     } catch (e) {
-      hilog.warn(DOMAIN, TAG, 'mkdir fail %{public}s', JSON.stringify(e))
+      hilog.warn(DOMAIN, TAG, 'mkdir fail %{public}s', e instanceof Error ? e.message : String(e))
       return false
     }
   }
@@ -74,7 +74,7 @@ export class AgentSessionStore {
       }
       return meta.sessionId
     } catch (e) {
-      hilog.warn(DOMAIN, TAG, 'create fail %{public}s', JSON.stringify(e))
+      hilog.warn(DOMAIN, TAG, 'create fail %{public}s', e instanceof Error ? e.message : String(e))
       if (f !== null) {
         try {
           fs.closeSync(f)
@@ -101,7 +101,7 @@ export class AgentSessionStore {
       const back = AgentSessionStore.read(filesDir, meta.sessionId)
       return back !== null && back.state === meta.state
     } catch (e) {
-      hilog.warn(DOMAIN, TAG, 'update fail %{public}s', JSON.stringify(e))
+      hilog.warn(DOMAIN, TAG, 'update fail %{public}s', e instanceof Error ? e.message : String(e))
       if (f !== null) {
         try {
           fs.closeSync(f)
@@ -162,7 +162,7 @@ export class AgentSessionStore {
         }
       }
     } catch (e) {
-      hilog.warn(DOMAIN, TAG, 'list fail %{public}s', JSON.stringify(e))
+      hilog.warn(DOMAIN, TAG, 'list fail %{public}s', e instanceof Error ? e.message : String(e))
     }
     out.sort((a: AgentSessionMeta, b: AgentSessionMeta): number => b.updatedAt - a.updatedAt)
     return out
@@ -176,7 +176,7 @@ export class AgentSessionStore {
         fs.unlinkSync(p)
       }
     } catch (e) {
-      hilog.warn(DOMAIN, TAG, 'remove fail %{public}s', JSON.stringify(e))
+      hilog.warn(DOMAIN, TAG, 'remove fail %{public}s', e instanceof Error ? e.message : String(e))
     }
   }
 }

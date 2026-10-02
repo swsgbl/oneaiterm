@@ -214,11 +214,11 @@ export class SessionService {
       return id;
     } catch (e) {
       SessionService.sessionId = -1;
-      const msg = (e instanceof Error) ? e.message : JSON.stringify(e);
+      const msg = (e instanceof Error) ? e.message : String(e);
       AppStorage.setOrCreate('ut.term.status', 'error');
       AppStorage.setOrCreate('ut.term.reason', msg);
       hilog.error(DOMAIN, TAG, 'connect FAIL %{public}s err=%{public}s', SessionService.label, msg);
-      const re = e instanceof Error ? e : new Error(JSON.stringify(e));
+      const re = e instanceof Error ? e : new Error(String(e));
       throw re;
     }
   }
@@ -396,7 +396,7 @@ function readKeyFile(path: string): string {
   try {
     return fileIo.readTextSync(path, { encoding: 'utf-8' });
   } catch (e) {
-    hilog.warn(DOMAIN, TAG, 'readKeyFile fail %{public}s err=%{public}s', path, JSON.stringify(e));
+    hilog.warn(DOMAIN, TAG, 'readKeyFile fail %{public}s err=%{public}s', path, e instanceof Error ? e.message : String(e));
     return '';
   }
 }

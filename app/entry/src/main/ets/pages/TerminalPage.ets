@@ -24,12 +24,14 @@ import { LocalTerminalService } from '../service/LocalTerminalService';
 import { TermModel, TermLine, lineToSpans, SpanRun, TERM_DEFAULT_FG, TERM_DEFAULT_BG } from '../components/TermModel';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppTheme, themeByName } from '../common/AppTheme';
+import { DesignTokens } from '../common/DesignTokens';
+import { TimingConstants } from '../common/TimingConstants';
 
 const TERM_FONT_SIZE: number = 14;
 const TERM_FONT_FAMILY: string = 'monospace';
 const BODY_PAD: number = 8;
-const WIN_OVERSCAN: number = 90; // rows above tail kept bound -> Column overflows viewport, scrollable
-const POLL_MS: number = 100;
+const WIN_OVERSCAN: number = TimingConstants.TERMINAL_OVERSCAN;
+const POLL_MS: number = TimingConstants.TERMINAL_POLL_MS;
 
 // KeyCode values (api/@ohos.multimodalInput.keyCode.d.ts, API24)
 const KC_DPAD_UP: number = 2012;
@@ -137,7 +139,7 @@ export struct TerminalPage {
         if (c2.postLoginScript !== null && c2.postLoginScript.length > 0) {
           setTimeout(() => {
             TelnetService.write(c2.postLoginScript + '\n');
-          }, 800);
+          }, TimingConstants.TELNET_POST_LOGIN_DELAY);
         }
       }).catch((e: Object) => {
         AppStorage.setOrCreate('ut.term.status', 'error');
@@ -183,7 +185,7 @@ export struct TerminalPage {
           st.markUsed(connId);
         }
       } catch (e) {
-        hilog.warn(0x0110, 'oat.term', 'markUsed failed: %{public}s', JSON.stringify(e));
+        hilog.warn(0x0110, 'oat.term', 'markUsed failed: %{public}s', e instanceof Error ? e.message : String(e));
       }
       // M3-3a: post-login script - send after the banner settles (~1.2s)
       if (postScript !== null && postScript.length > 0) {
@@ -192,14 +194,14 @@ export struct TerminalPage {
             const n = SessionService.write(postScript + '\r');
             hilog.info(0x0110, 'oat.term', 'postLoginScript sent %{public}d bytes', n);
           } catch (e2) {
-            hilog.warn(0x0110, 'oat.term', 'postLoginScript failed: %{public}s', JSON.stringify(e2));
+            hilog.warn(0x0110, 'oat.term', 'postLoginScript failed: %{public}s', e2 instanceof Error ? e2.message : String(e2));
           }
-        }, 1200);
+        }, TimingConstants.POST_LOGIN_SCRIPT_DELAY);
       }
     }).catch((e: Object) => {
       // M3 relay-2d: connect() throws for missing identities / bad args BEFORE
       // publishing status - surface the reason here or the user sees nothing.
-      const msg = e instanceof Error ? e.message : JSON.stringify(e);
+      const msg = e instanceof Error ? e.message : String(e);
       AppStorage.setOrCreate('ut.term.status', 'error');
       AppStorage.setOrCreate('ut.term.reason', msg);
       hilog.error(0x0110, 'oat.term', 'connect rejected: %{public}s', msg);
@@ -240,7 +242,7 @@ export struct TerminalPage {
         // 吞掉日志并向上传播)。安全降级为 String()。
         let msg: string = '';
         try {
-          msg = JSON.stringify(e);
+          msg = String(e);
         } catch (e2) {
           msg = 'unserializable';
         }
@@ -301,7 +303,7 @@ export struct TerminalPage {
       try {
         chunk = LocalTerminalService.poll()
       } catch (e) {
-        hilog.error(0x0110, 'oat.r6', 'poll threw: %{public}s', JSON.stringify(e))
+        hilog.error(0x0110, 'oat.r6', 'poll threw: %{public}s', e instanceof Error ? e.message : String(e))
       }
       const clen = chunk === undefined || chunk === null ? -1 : chunk.length
       if (clen > 0) {
@@ -616,10 +618,10 @@ export struct TerminalPage {
   @Builder
   StatusBadge() {
     Text(this.badgeText())
-      .fontSize(12)
+      .fontSize(DesignTokens.FONT_BODY)
       .fontColor(this.th().surfaceRaised)
       .backgroundColor(this.badgeColor())
-      .borderRadius(8)
+      .borderRadius(DesignTokens.RADIUS_MD)
       .padding({ left: 8, right: 8, top: 3, bottom: 3 })
   }
 
@@ -694,13 +696,13 @@ export struct TerminalPage {
         Row({ space: 8 }) {
           Column() {
             Text(this.title)
-              .fontSize(17)
+              .fontSize(DesignTokens.FONT_DISPLAY)
               .fontWeight(FontWeight.Bold)
               .fontColor(this.th().surfaceRaised)
               .maxLines(1)
             Text(this.cols.toString() + 'x' + this.rows.toString() + '  ' + this.measureNote
               + (this.focused ? '  [key-passthrough]' : ''))
-              .fontSize(11)
+              .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().inkSubtle)
               .maxLines(1)
           }
@@ -710,14 +712,14 @@ export struct TerminalPage {
           this.StatusBadge()
 
           Button('SFTP')
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .backgroundColor(this.th().brand)
             .enabled(this.storageStatus === 'connected')
             .onClick(() => {
               AppStorage.setOrCreate('ut.openSftp', this.connId);
             })
           Button('close')
-            .fontSize(13)
+            .fontSize(DesignTokens.FONT_BODY)
             .backgroundColor(this.th().danger)
             .onClick(() => {
               if (TelnetService.active()) {
@@ -731,14 +733,14 @@ export struct TerminalPage {
         .padding({ left: 12, right: 12, top: 8, bottom: 8 })
 
         Text(this.statText)
-          .fontSize(11)
+          .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().inkSubtle)
           .width('100%')
           .padding({ left: 12, right: 12, bottom: 4 })
 
         if (this.storageStatus === 'error' && this.storageReason.length > 0) {
           Text('error: ' + this.storageReason)
-            .fontSize(12)
+            .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().danger)
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -790,11 +792,11 @@ export struct TerminalPage {
             this.passthrough = on;
           })
         Text('PT')
-          .fontSize(12)
+          .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.passthrough ? this.th().success : this.th().inkSubtle)
         TextInput({ placeholder: 'input + Enter...', text: this.input })
           .layoutWeight(1)
-          .fontSize(14)
+          .fontSize(DesignTokens.FONT_HEADING)
           .fontFamily(TERM_FONT_FAMILY)
           .backgroundColor(this.th().surface)
           .fontColor(TERM_DEFAULT_FG)
@@ -806,7 +808,7 @@ export struct TerminalPage {
             this.send();
           })
         Button('send')
-          .fontSize(14)
+          .fontSize(DesignTokens.FONT_HEADING)
           .backgroundColor(this.th().success)
           .onClick(() => {
             this.send();

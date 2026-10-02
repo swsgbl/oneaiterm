@@ -76,7 +76,7 @@ export class AuditWriter {
       f = null
       return true
     } catch (e) {
-      hilog.warn(DOMAIN, TAG, 'audit append fail %{public}s', JSON.stringify(e))
+      hilog.warn(DOMAIN, TAG, 'audit append fail %{public}s', e instanceof Error ? e.message : String(e))
       if (f !== null) {
         try {
           fs.closeSync(f)
