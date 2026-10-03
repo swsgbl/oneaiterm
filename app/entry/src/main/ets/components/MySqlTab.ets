@@ -2,6 +2,7 @@
 import { MySqlService } from '../service/MySqlService';
 import { AppTheme, themeByName } from '../common/AppTheme';
 import { DesignTokens } from '../common/DesignTokens';
+import hilog from '@ohos.hilog';
 
 @Component
 export struct MySqlTab {
@@ -9,8 +10,9 @@ export struct MySqlTab {
   @StorageProp('ut.theme') themeName: string = 'dark'
   private th(): AppTheme { return themeByName(this.themeName) }
   @State host: string = ''
-  @State port: string = '3306'
-  @State user: string = 'root'
+  // uitest inputText 只能追加:默认值清空,避免拼成脏串
+  @State port: string = ''
+  @State user: string = ''
   @State password: string = ''
   @State db: string = ''
   @State connected: boolean = false
@@ -25,6 +27,7 @@ export struct MySqlTab {
     }
     this.out = '连接中...'
     const p = parseInt(this.port) || 3306
+    hilog.info(0x0112, 'oat.mysql', 'ui connect host=%{public}s port=%{public}d', this.host.trim(), p)
     MySqlService.connect(this.host.trim(), p, this.user.trim(), this.password, this.db.trim())
       .then(() => {
         this.connected = true
@@ -64,7 +67,7 @@ export struct MySqlTab {
             .onChange((v: string) => {
               this.host = v
             })
-          TextInput({ placeholder: '3306', text: this.port })
+          TextInput({ placeholder: '端口', text: this.port })
             .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().ink).backgroundColor(this.th().inputBg).borderRadius(DesignTokens.RADIUS_MD).layoutWeight(1)
             .onChange((v: string) => {
               this.port = v
@@ -120,6 +123,11 @@ export struct MySqlTab {
           })
           .onSubmit(() => this.doExec())
         Row({ space: 6 }) {
+          Text('执行')
+            .fontSize(DesignTokens.FONT_BODY).fontColor(this.th().onBrand)
+            .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+            .backgroundColor(this.busy ? this.th().hover : this.th().brand).borderRadius(DesignTokens.RADIUS_MD)
+            .onClick(() => this.doExec())
           ForEach(['SELECT VERSION();', 'SHOW DATABASES;', 'SHOW TABLES;'], (q: string) => {
             Text(q)
               .fontSize(DesignTokens.FONT_CAPTION).fontColor(this.th().inkSubtle)

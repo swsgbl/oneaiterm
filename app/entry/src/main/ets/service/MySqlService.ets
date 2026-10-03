@@ -1,7 +1,12 @@
 // MySQL 客户端:wire 协议纯 TS(@ohos.net.socket + cryptoFramework SHA1)
 // 子集:handshake v10 / mysql_native_password / COM_QUERY 文本结果集
+// hilog tag: oat.mysql(域 0x0112)供 E2E 断言
 import socket from '@ohos.net.socket';
 import cryptoFramework from '@ohos.security.cryptoFramework';
+import hilog from '@ohos.hilog';
+
+const TAG: string = 'oat.mysql';
+const DOMAIN: number = 0x0112;
 
 export class MySqlService {
   private static sock: socket.TCPSocket | null = null
@@ -16,6 +21,10 @@ export class MySqlService {
     if (MySqlService.sock !== null) {
       await MySqlService.close()
     }
+    MySqlService.pending = []
+    MySqlService.seq = 0
+    hilog.info(DOMAIN, TAG, 'connect begin host=%{public}s port=%{public}d user=%{public}s db=%{public}s',
+      host, port, user, db)
     const s = socket.constructTCPSocketInstance()
     s.on('message', (info: socket.SocketMessageInfo) => {
       const u8 = new Uint8Array(info.message)
@@ -23,9 +32,14 @@ export class MySqlService {
         MySqlService.pending.push(u8[i])
       }
     })
-    await s.connect({ address: { address: host, port: port }, timeout: 10 })
+    try {
+      await s.connect({ address: { address: host, port: port }, timeout: 10 })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      hilog.error(DOMAIN, TAG, 'tcp connect FAIL %{public}s:%{public}d err=%{public}s', host, port, msg)
+      throw new Error('TCP 连接失败: ' + host + ':' + port.toString() + ' ' + msg)
+    }
     MySqlService.sock = s
-    MySqlService.seq = 0
     // ===== 读 server handshake =====
     const hs = await MySqlService.readPacket()
     if (hs.length === 0 || hs[0] === 0xff) {
@@ -51,8 +65,11 @@ export class MySqlService {
       salt2Len = 12
     }
     const salt2 = MySqlService.sliceBytes(hs, p, salt2Len)
+    hilog.info(DOMAIN, TAG, 'handshake v10 capsUpper=%{public}d authLen=%{public}d', capsUpper, authLen)
     // ===== 客户端认证包 =====
-    const caps = 0x00000001 | 0x00000200 | 0x00008000 | 0x00080000 | (capsUpper << 16)
+    // 只声明最小能力集,不回声服务器高位能力:
+    // LONG_PASSWORD|PROTOCOL_41|SECURE_CONNECTION|PLUGIN_AUTH(+CONNECT_WITH_DB)
+    const caps = 0x00000001 | 0x00000200 | 0x00008000 | 0x00080000 | (db !== '' ? 0x00000008 : 0)
     const authResp = await MySqlService.nativePassword(password, MySqlService.concat(salt1, salt2))
     const body: number[] = []
     MySqlService.pushU32(body, caps)
@@ -78,13 +95,16 @@ export class MySqlService {
         continue
       }
       if (r[0] === 0x00) {
+        hilog.info(DOMAIN, TAG, 'auth OK user=%{public}s db=%{public}s', user, db)
         return // OK
       }
       if (r[0] === 0xff) {
-        throw new Error(MySqlService.parseErr(r))
+        const em = MySqlService.parseErr(r)
+        hilog.error(DOMAIN, TAG, 'auth FAIL %{public}s', em)
+        throw new Error(em)
       }
       if (r[0] === 0xfe) {
-        // AuthSwitchRequest: plugin name CStr + new salt
+        // AuthSwitchRequest: plugin name CStr + new salt(定长读入常带尾部 NUL,剥掉再算 scramble)
         let q = 1
         let plugin = ''
         while (q < r.length && r[q] !== 0) {
@@ -92,7 +112,13 @@ export class MySqlService {
           q++
         }
         q++
-        const newSalt = MySqlService.sliceBytes(r, q, r.length - q)
+        let newSalt = MySqlService.sliceBytes(r, q, r.length - q)
+        let end = newSalt.length - 1
+        while (end >= 0 && newSalt[end] === 0) {
+          end--
+        }
+        newSalt = newSalt.slice(0, end + 1)
+        hilog.info(DOMAIN, TAG, 'authswitch plugin=%{public}s saltLen=%{public}d', plugin, newSalt.length)
         const resp2 = await MySqlService.nativePassword(password, newSalt)
         const b2: number[] = []
         for (let i = 0; i < resp2.length; i++) {
@@ -109,6 +135,11 @@ export class MySqlService {
 
   /** COM_QUERY,渲染文本结果集 */
   static async query(sql: string): Promise<string> {
+    if (MySqlService.sock === null) {
+      throw new Error('未连接')
+    }
+    hilog.info(DOMAIN, TAG, 'query sql=%{public}s', sql)
+    MySqlService.seq = 0 // 每条新命令序号从 0 起
     const body: number[] = [0x03]
     for (let i = 0; i < sql.length; i++) {
       body.push(sql.charCodeAt(i) & 0xff)
@@ -139,14 +170,20 @@ export class MySqlService {
       let q = 0
       for (let f = 0; f < 5; f++) {
         const l = MySqlService.lenenc(def, q)
-        q = l.next
         if (f === 4) {
-          lines.push(MySqlService.bytesText(MySqlService.sliceBytes(def, q - l.value, l.value)))
+          lines.push(MySqlService.bytesText(MySqlService.sliceBytes(def, l.next, l.value)))
         }
+        q = l.next + l.value
       }
+    }
+    // 消费列定义后的 EOF 包(不消费则后续行全乱 → 空结果)
+    const eof1 = await MySqlService.readPacket()
+    if (eof1.length > 0 && eof1[0] === 0xff) {
+      throw new Error(MySqlService.parseErr(eof1))
     }
     lines.push('')
     // 行(直到 EOF 0xfe / ERR 0xff)
+    let nRows = 0
     for (;;) {
       const row = await MySqlService.readPacket()
       if (row.length === 0) {
@@ -156,6 +193,7 @@ export class MySqlService {
         throw new Error(MySqlService.parseErr(row))
       }
       if (row[0] === 0xfe && row.length < 9) {
+        hilog.info(DOMAIN, TAG, 'result cols=%{public}d rows=%{public}d', nCols, nRows)
         return lines.join('\n')
       }
       const vals: string[] = []
@@ -166,11 +204,12 @@ export class MySqlService {
           q++
         } else {
           const l = MySqlService.lenenc(row, q)
-          q = l.next
-          vals.push(MySqlService.bytesText(MySqlService.sliceBytes(row, q - l.value, l.value)))
+          vals.push(MySqlService.bytesText(MySqlService.sliceBytes(row, l.next, l.value)))
+          q = l.next + l.value
         }
       }
       lines.push(vals.join(' | '))
+      nRows++
     }
   }
 
@@ -183,6 +222,7 @@ export class MySqlService {
       } catch (e) {
       }
     }
+    hilog.info(DOMAIN, TAG, 'closed')
   }
 
   // ===== 帧:3字节长度+1字节序号 =====
@@ -191,9 +231,10 @@ export class MySqlService {
       if (MySqlService.pending.length >= 4) {
         const len = MySqlService.pending[0] | MySqlService.pending[1] << 8 | MySqlService.pending[2] << 16
         if (MySqlService.pending.length >= 4 + len) {
+          // 响应帧序号 = 收到的服务器帧序号 + 1(原实现自增导致 off-by-one)
+          MySqlService.seq = (MySqlService.pending[3] + 1) & 0xff
           MySqlService.pending.splice(0, 4)
-          const out = MySqlService.pending.splice(0, len)
-          return out
+          return MySqlService.pending.splice(0, len)
         }
       }
       await MySqlService.sleep(30)
