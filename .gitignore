@@ -1,6 +1,7 @@
 # 构建产物与缓存
 **/build/
 **/oh_modules/
+**/__pycache__/
 **/.hvigor/
 **/.cxx/
 **/.clangd/
@@ -30,3 +31,4 @@ _port.cjs
 # 调试截图与布局 dump
 *.jpeg
 layout_*.json
+/.verify/
