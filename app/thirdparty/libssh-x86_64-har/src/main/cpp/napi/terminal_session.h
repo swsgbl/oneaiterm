@@ -93,6 +93,36 @@ int TerminalResize(TerminalSession *s, int cols, int rows, std::string &err);
 /** Close + join reader. Fires onClosed(reason) when not called from the reader itself. */
 void TerminalClose(TerminalSession *s, const std::string &reason, bool fromReader);
 
+/* ===================================================================== */
+/* M8 relay-3: local port forwarding (-L) on a LIVE terminal session.    */
+/* A tunnel is one ssh_channel opened with ssh_channel_open_forward     */
+/* (direct-tcpip). The tunnel table lives in terminal_napi.cpp; these    */
+/* helpers do the actual libssh calls under the session chanMutex.      */
+/* ===================================================================== */
+struct TunnelCtx {
+    ssh_channel chan = nullptr;
+    TerminalSession *session = nullptr; // owner, for chanMutex + error strings
+    int id = 0;
+    int sessionId = 0;
+};
+
+/** Open a direct-tcpip channel to remoteHost:remotePort on session s.
+ * Returns a new TunnelCtx (caller owns the table entry) or nullptr with
+ * err filled. Blocking network call - run on a worker thread. */
+TunnelCtx *TunnelOpen(TerminalSession *s, const std::string &remoteHost, int remotePort,
+                      std::string &err);
+
+/** Write raw bytes to the tunnel channel. Returns bytes written, -1 on error. */
+int TunnelWrite(TunnelCtx *t, const void *data, size_t len, std::string &err);
+
+/** Non-blocking read from the tunnel. Returns bytes read (0 = no data
+ * right now), SSH_EOF (-127) on remote EOF/closed, SSH_ERROR on error. */
+int TunnelPoll(TunnelCtx *t, void *buf, size_t len, std::string &err);
+
+/** Close + free the tunnel channel (takes the owner session chanMutex).
+ * Safe on nullptr. Does NOT remove the table entry. */
+void TunnelClose(TunnelCtx *t);
+
 } // namespace upstream
 
 #endif // NAPI_TERMINAL_SESSION_H

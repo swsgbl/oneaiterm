@@ -8,7 +8,7 @@ import { TerminalPage } from './TerminalPage';
 import { SftpPanel } from './SftpPanel';
 import { MonitorPanel } from '../components/MonitorPanel';
 import { FileSidebar } from '../components/FileSidebar';
-import { QuickCommandsPanel, HistoryPanel, PersonalizationPanel } from '../components/SidePanels';
+import { QuickCommandsPanel, HistoryPanel, PersonalizationPanel, TunnelPanel } from '../components/SidePanels';
 import { SettingsTab } from '../components/SettingsTab';
 import { RedisTab } from '../components/RedisTab';
 import { K8sTab } from '../components/K8sTab';
@@ -201,6 +201,10 @@ struct Index {
     items.push({
       key: 'cmd.split', icon: AppIcons.CMD_SPLIT, label: '分屏', hint: '当前标签钉到右栏',
       run: () => this.toggleSplit()
+    })
+    items.push({
+      key: 'cmd.tunnel', icon: AppIcons.PANEL_TUNNEL, label: '隧道', hint: '端口转发 -L',
+      run: () => { this.sideView = 3; this.sidebarVisible = true }
     })
     // 连接: 按搜索词过滤
     try {
@@ -1009,6 +1013,10 @@ struct Index {
                     .layoutWeight(1)
                 } else if (this.sideView === 2) {
                   MonitorPanel()
+                    .layoutWeight(1)
+                } else if (this.sideView === 3) {
+                  // M8 relay-3: 隧道面板(-L 端口转发)
+                  TunnelPanel()
                     .layoutWeight(1)
                 } else if (this.sideView === 4) {
                   QuickCommandsPanel()

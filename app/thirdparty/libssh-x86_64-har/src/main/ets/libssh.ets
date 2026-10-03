@@ -151,6 +151,23 @@ export class libssh {
     return this.ssh2Napi.sftpClose(sessionId);
   }
 
+  /* M8 relay-3 -L tunnel on the live session (base64 data boundary). */
+  tunnelOpen(sessionId: number, remoteHost: string, remotePort: number): Promise<number> {
+    return this.ssh2Napi.tunnelOpen(sessionId, remoteHost, remotePort);
+  }
+
+  tunnelWrite(tunnelId: number, base64: string): number {
+    return this.ssh2Napi.tunnelWrite(tunnelId, base64);
+  }
+
+  tunnelPoll(tunnelId: number): Promise<string> {
+    return this.ssh2Napi.tunnelPoll(tunnelId);
+  }
+
+  tunnelClose(tunnelId: number): number {
+    return this.ssh2Napi.tunnelClose(tunnelId);
+  }
+
   keyTypeToString(type: SSH_KEYTYPES): string {
     switch (type) {
       case SSH_KEYTYPES.SSH_KEYTYPE_UNKNOWN:

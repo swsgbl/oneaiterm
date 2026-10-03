@@ -1,6 +1,7 @@
 // 官方侧栏三视图复刻:快捷命令(QuickCommandsPanel)/历史(HistoryPanel)/个性化(Personalization)
 import fs from '@ohos.file.fs';
 import { SessionService } from '../service/SessionService';
+import { TunnelService } from '../service/TunnelService';
 import { AppTheme, themeByName } from '../common/AppTheme';
 import { DesignTokens } from '../common/DesignTokens';
 import { AppIcons } from '../common/AppIcons';
@@ -345,5 +346,110 @@ export struct PersonalizationPanel {
     .padding({ left: 6, right: 6 })
     .backgroundColor(this.th().surface)
     .alignItems(HorizontalAlign.Start)
+  }
+}
+
+// ===== 端口转发 -L(M8 relay-3 TunnelPanel) =====
+@Component
+export struct TunnelPanel {
+  @StorageProp('ut.theme') themeName: string = 'dark'
+  private th(): AppTheme { return themeByName(this.themeName) }
+  @StorageProp('ut.tunnel.status') status: string = 'off'
+  @StorageProp('ut.tunnel.reason') reason: string = ''
+  @StorageProp('ut.tunnel.active') active: number = 0
+  @State localPort: string = '9432'
+  @State remoteHost: string = '127.0.0.1'
+  @State remotePort: string = '22'
+  @State busy: boolean = false
+
+  build() {
+    Column({ space: 6 }) {
+      Row() {
+        Text('隧道')
+          .fontSize(DesignTokens.FONT_BODY)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.th().ink)
+        Blank()
+        Text(this.status === 'running' ? '●' : '○')
+          .fontSize(DesignTokens.FONT_BODY)
+          .fontColor(this.status === 'running' ? this.th().success : this.th().inkSubtle)
+      }
+      .width('100%')
+      .padding({ left: 4, right: 4, top: 10 })
+
+      if (this.status === 'error') {
+        Text(this.reason)
+          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontColor(this.th().danger)
+          .padding(DesignTokens.SPACE_XS)
+      }
+
+      Text('本地端口')
+        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontColor(this.th().inkSubtle)
+        .alignSelf(ItemAlign.Start)
+      TextInput({ text: this.localPort, placeholder: '9432' })
+        .fontSize(DesignTokens.FONT_BODY)
+        .fontColor(this.th().ink)
+        .backgroundColor(this.th().inputBg)
+        .onChange((v: string) => { this.localPort = v })
+      Text('远端主机')
+        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontColor(this.th().inkSubtle)
+        .alignSelf(ItemAlign.Start)
+      TextInput({ text: this.remoteHost, placeholder: '127.0.0.1' })
+        .fontSize(DesignTokens.FONT_BODY)
+        .fontColor(this.th().ink)
+        .backgroundColor(this.th().inputBg)
+        .onChange((v: string) => { this.remoteHost = v })
+      Text('远端端口')
+        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontColor(this.th().inkSubtle)
+        .alignSelf(ItemAlign.Start)
+      TextInput({ text: this.remotePort, placeholder: '22' })
+        .fontSize(DesignTokens.FONT_BODY)
+        .fontColor(this.th().ink)
+        .backgroundColor(this.th().inputBg)
+        .onChange((v: string) => { this.remotePort = v })
+
+      Button(this.status === 'running' ? '停止' : '启动')
+        .width('100%')
+        .backgroundColor(this.status === 'running' ? this.th().danger : this.th().brand)
+        .fontColor(this.th().surface)
+        .enabled(!this.busy)
+        .onClick(() => this.toggle())
+
+      if (this.status === 'running') {
+        Text('活动隧道: ' + this.active.toString() + (this.reason !== '' ? ' · ' + this.reason : ''))
+          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontColor(this.th().inkSubtle)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: 8, right: 8, bottom: 8 })
+  }
+
+  toggle(): void {
+    if (this.busy) {
+      return
+    }
+    if (this.status === 'running') {
+      TunnelService.stop()
+      return
+    }
+    const lp = parseInt(this.localPort)
+    const rp = parseInt(this.remotePort)
+    if (isNaN(lp) || isNaN(rp)) {
+      AppStorage.setOrCreate('ut.tunnel.status', 'error')
+      AppStorage.setOrCreate('ut.tunnel.reason', '端口必须是数字')
+      return
+    }
+    this.busy = true
+    TunnelService.start(lp, this.remoteHost.trim(), rp).then(() => {
+      this.busy = false
+    }).catch((_e: Object) => {
+      this.busy = false
+    })
   }
 }

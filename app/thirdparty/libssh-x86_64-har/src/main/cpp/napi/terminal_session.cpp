@@ -257,4 +257,115 @@ void TerminalClose(TerminalSession *s, const std::string &reason, bool fromReade
     LOGI("TerminalClose done, reason=%s", reason.c_str());
 }
 
+TunnelCtx *TunnelOpen(TerminalSession *s, const std::string &remoteHost, int remotePort,
+                      std::string &err) {
+    err.clear();
+    if (s == nullptr || s->session == nullptr) {
+        err = "session or ssh_session is null";
+        return nullptr;
+    }
+    if (remoteHost.empty() || remotePort < 1 || remotePort > 65535) {
+        err = "invalid args: host/port out of range";
+        return nullptr;
+    }
+    if (s->closing.load()) {
+        err = "session is closing";
+        return nullptr;
+    }
+    ssh_channel chan = ssh_channel_new(s->session);
+    if (chan == nullptr) {
+        err = ssh_get_error(s->session);
+        return nullptr;
+    }
+    {
+        std::lock_guard<std::mutex> lock(s->chanMutex);
+        // vendored libssh exports ONLY the new name (remote args first)
+        if (ssh_channel_open_forward(chan, remoteHost.c_str(), remotePort, "127.0.0.1", 0) !=
+            SSH_OK) {
+            err = ssh_get_error(s->session);
+            ssh_channel_free(chan);
+            return nullptr;
+        }
+    }
+    TunnelCtx *t = new (std::nothrow) TunnelCtx();
+    if (t == nullptr) {
+        err = "oom: alloc TunnelCtx failed";
+        ssh_channel_free(chan);
+        return nullptr;
+    }
+    t->chan = chan;
+    t->session = s;
+    t->sessionId = s->id;
+    LOGI("TunnelOpen chan=%p remote=%s:%d on session id=%d", (void *)chan, remoteHost.c_str(),
+         remotePort, s->id);
+    return t;
+}
+
+int TunnelWrite(TunnelCtx *t, const void *data, size_t len, std::string &err) {
+    err.clear();
+    if (t == nullptr || t->chan == nullptr || t->session == nullptr) {
+        err = "tunnel is null";
+        return -1;
+    }
+    TerminalSession *s = t->session;
+    std::lock_guard<std::mutex> lock(s->chanMutex);
+    if (t->chan == nullptr) { // closed under us
+        err = "tunnel channel is closed";
+        return -1;
+    }
+    int n = ssh_channel_write(t->chan, data, len);
+    if (n < 0) {
+        err = ssh_get_error(s->session);
+        return -1;
+    }
+    return n;
+}
+
+int TunnelPoll(TunnelCtx *t, void *buf, size_t len, std::string &err) {
+    err.clear();
+    if (t == nullptr || t->chan == nullptr || t->session == nullptr) {
+        err = "tunnel is null";
+        return -1;
+    }
+    TerminalSession *s = t->session;
+    std::lock_guard<std::mutex> lock(s->chanMutex);
+    if (t->chan == nullptr) { // closed under us
+        err = "tunnel channel is closed";
+        return -1;
+    }
+    /* Read FIRST so buffered data still flows after a remote EOF; only
+     * when nothing is buffered do we distinguish idle (0) from dead
+     * channel (mapped to SSH_ERROR so the JS pump drops the conn). */
+    int n = ssh_channel_read_nonblocking(t->chan, buf, len, 0);
+    if (n > 0) {
+        return n;
+    }
+    if (n == SSH_ERROR) {
+        err = ssh_get_error(s->session);
+        return SSH_ERROR;
+    }
+    if (ssh_channel_is_open(t->chan) == 0 || ssh_channel_is_eof(t->chan) != 0) {
+        err = "tunnel channel closed or eof";
+        return SSH_ERROR;
+    }
+    return 0; // no data right now (NOT eof - proven M8 fact)
+}
+
+void TunnelClose(TunnelCtx *t) {
+    if (t == nullptr) {
+        return;
+    }
+    TerminalSession *s = t->session;
+    if (s != nullptr && t->chan != nullptr) {
+        std::lock_guard<std::mutex> lock(s->chanMutex);
+        if (t->chan != nullptr) {
+            ssh_channel_close(t->chan);
+            ssh_channel_free(t->chan);
+            t->chan = nullptr;
+        }
+    }
+    delete t;
+    LOGI("TunnelClose done");
+}
+
 } // namespace upstream

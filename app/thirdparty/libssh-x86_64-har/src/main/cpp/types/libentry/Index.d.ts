@@ -53,4 +53,10 @@ export declare class SSH2Napi {
   sftpDownload: (sessionId: number, remotePath: string, localPath: string) => Promise<number>;
   sftpUpload: (sessionId: number, localPath: string, remotePath: string) => Promise<number>;
   sftpClose: (sessionId: number) => number;
+  /* M8 relay-3 -L tunnel. Data crosses the boundary base64-encoded;
+   * tunnelPoll resolves "n:<b64>" (data), "n:" (none), or "closed". */
+  tunnelOpen: (sessionId: number, remoteHost: string, remotePort: number) => Promise<number>;
+  tunnelWrite: (tunnelId: number, base64: string) => number;
+  tunnelPoll: (tunnelId: number) => Promise<string>;
+  tunnelClose: (tunnelId: number) => number;
 }

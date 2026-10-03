@@ -44,6 +44,14 @@ public:
     static napi_value SftpDownload(napi_env env, napi_callback_info info);
     static napi_value SftpUpload(napi_env env, napi_callback_info info);
     static napi_value SftpClose(napi_env env, napi_callback_info info);
+    /* M8 relay-3 -L tunnels on the LIVE terminal session. Data crosses the
+     * boundary as base64 (UTF-8 string boundary); tunnelOpen is an async
+     * promise, tunnelWrite/tunnelClose are synchronous, tunnelPoll is an
+     * async promise returning "n:<b64>" / "n:" (none) / "closed". */
+    static napi_value TunnelOpenBinding(napi_env env, napi_callback_info info);
+    static napi_value TunnelWriteBinding(napi_env env, napi_callback_info info);
+    static napi_value TunnelPollBinding(napi_env env, napi_callback_info info);
+    static napi_value TunnelCloseBinding(napi_env env, napi_callback_info info);
 };
 
 #endif // NAPI_TERMINAL_NAPI_H

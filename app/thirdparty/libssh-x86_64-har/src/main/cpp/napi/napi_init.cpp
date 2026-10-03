@@ -49,6 +49,10 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"sftpDownload", nullptr, TerminalNapi::SftpDownload, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"sftpUpload", nullptr, TerminalNapi::SftpUpload, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"sftpClose", nullptr, TerminalNapi::SftpClose, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"tunnelOpen", nullptr, TerminalNapi::TunnelOpenBinding, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"tunnelWrite", nullptr, TerminalNapi::TunnelWriteBinding, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"tunnelPoll", nullptr, TerminalNapi::TunnelPollBinding, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"tunnelClose", nullptr, TerminalNapi::TunnelCloseBinding, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
      napi_value ssh2Napi = nullptr;
     const char *classBindName = "SSH2Napi";

@@ -410,6 +410,77 @@ SftpTable &SftpTab() {
     return *t;
 }
 
+/* ---- M8 relay-3: -L tunnel table. Lock order is ALWAYS
+ * Table -> TunnelTab -> chanMutex (leaf). TunnelAcquire validates the
+ * owner session under the Table lock (like SftpAcquire) so a concurrent
+ * CloseSession can never free the session under an in-flight tunnel op. ---- */
+constexpr size_t kTunnelPollMax = 32768; // single tunnelPoll chunk cap (32KB)
+
+struct TunnelTable {
+    std::mutex mutex;
+    int nextId = 1;
+    std::map<int, upstream::TunnelCtx *> map;
+};
+TunnelTable &TunnelTab() {
+    static TunnelTable *t = new TunnelTable();
+    return *t;
+}
+
+struct TunnelRef {
+    upstream::TunnelCtx *t;
+    bool ok;
+    std::string err;
+};
+
+/* Bumps s->sftpOps (the generic in-flight op counter CloseSession drains)
+ * under the Table lock, so it cannot race with session teardown. MUST be
+ * paired with TunnelRelease. */
+TunnelRef TunnelAcquire(int id) {
+    TunnelRef r;
+    r.t = nullptr;
+    r.ok = false;
+    std::lock_guard<std::mutex> lock(Table().mutex);
+    std::lock_guard<std::mutex> lock2(TunnelTab().mutex);
+    auto it = TunnelTab().map.find(id);
+    if (it == TunnelTab().map.end()) {
+        r.err = "tunnel not found: " + std::to_string(id);
+        return r;
+    }
+    upstream::TunnelCtx *t = it->second;
+    auto sit = Table().map.find(t->sessionId);
+    if (sit == Table().map.end() || sit->second != t->session) {
+        r.err = "tunnel owner session gone";
+        return r;
+    }
+    r.t = t;
+    r.ok = true;
+    t->session->sftpOps.fetch_add(1);
+    return r;
+}
+
+void TunnelRelease(TunnelRef &r) {
+    if (r.t != nullptr && r.t->session != nullptr) {
+        r.t->session->sftpOps.fetch_sub(1);
+    }
+}
+
+/* Remove + close a tunnel by id (idempotent). Returns 0 when the entry
+ * existed, -1 when not found. */
+int TunnelCloseById(int id) {
+    upstream::TunnelCtx *t = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(TunnelTab().mutex);
+        auto it = TunnelTab().map.find(id);
+        if (it == TunnelTab().map.end()) {
+            return -1;
+        }
+        t = it->second;
+        TunnelTab().map.erase(it);
+    }
+    upstream::TunnelClose(t);
+    return 0;
+}
+
 /* Raw-pointer acquire: bumps s->sftpOps so CloseSession waits for us.
  * MUST be paired with SftpRelease. Table/SftpTab lock order is leaf-safe
  * (Table -> chanMutex -> SftpTab everywhere; SftpTab is always last). */
@@ -1128,10 +1199,31 @@ napi_value TerminalNapi::CloseSession(napi_env env, napi_callback_info info) {
         return result;
     }
     s->running.store(false);
-    // M3 relay-3b: wait for in-flight SFTP ops (they hold raw pointers into
-    // this session), then free the sftp channel under chanMutex.
+    // M3 relay-3b: wait for in-flight SFTP/tunnel ops (they hold raw
+    // pointers into this session via the sftpOps counter), then free the
+    // sftp channel under chanMutex.
     for (int i = 0; i < 10000 && s->sftpOps.load() > 0; i++) {
         usleep(1000);
+    }
+    // M8 relay-3: now that no tunnel op can be in flight (new acquires
+    // fail: the session is gone from the table), close every -L tunnel
+    // owned by this session. TunnelCloseById takes TunnelTab + chanMutex.
+    {
+        std::vector<int> tids;
+        {
+            std::lock_guard<std::mutex> tl(TunnelTab().mutex);
+            for (auto &kv : TunnelTab().map) {
+                if (kv.second->sessionId == id) {
+                    tids.push_back(kv.first);
+                }
+            }
+        }
+        for (int tid : tids) {
+            TunnelCloseById(tid);
+        }
+        if (!tids.empty()) {
+            LOGI("%s closed %d tunnel(s) on session close id=%d", kTag, (int)tids.size(), id);
+        }
     }
     {
         std::lock_guard<std::mutex> sftpLock(SftpTab().mutex);
@@ -1650,6 +1742,210 @@ napi_value TerminalNapi::SftpClose(napi_env env, napi_callback_info info) {
             rc = 0;
         }
     }
+    napi_value result;
+    napi_create_int32(env, rc, &result);
+    return result;
+}
+
+/* ===================================================================== */
+/* M8 relay-3: -L bindings. Data crosses the napi boundary as base64    */
+/* (the boundary is UTF-8 strings; raw binary is not opaque-safe).      */
+/* ===================================================================== */
+
+/* tunnelOpen(sessionId, remoteHost, remotePort) -> Promise<number tunnelId> */
+napi_value TerminalNapi::TunnelOpenBinding(napi_env env, napi_callback_info info) {
+    size_t argc = 3;
+    napi_value args[3] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 3) {
+        napi_throw_type_error(env, nullptr, "expected (sessionId, remoteHost, remotePort)");
+        return nullptr;
+    }
+    int32_t sessionId = 0, remotePort = 0;
+    napi_get_value_int32(env, args[0], &sessionId);
+    std::string remoteHost;
+    JsToString(env, args[1], remoteHost);
+    napi_get_value_int32(env, args[2], &remotePort);
+
+    napi_deferred deferred;
+    napi_value promise;
+    napi_create_promise(env, &deferred, &promise);
+    struct Ctx {
+        napi_deferred deferred;
+        napi_async_work work;
+        int sessionId;
+        std::string remoteHost;
+        int remotePort;
+        int tunnelId;
+        std::string err;
+    };
+    Ctx *ctx = new Ctx{deferred, nullptr, sessionId, remoteHost, remotePort, -1, ""};
+    napi_value rn;
+    napi_create_string_utf8(env, "TunnelOpenBinding", NAPI_AUTO_LENGTH, &rn);
+    napi_create_async_work(
+        env, nullptr, rn,
+        [](napi_env, void *data) {
+            Ctx *c = static_cast<Ctx *>(data);
+            upstream::TerminalSession *s = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(Table().mutex);
+                auto it = Table().map.find(c->sessionId);
+                if (it == Table().map.end()) {
+                    c->err = "session not found: " + std::to_string(c->sessionId);
+                    return;
+                }
+                s = it->second;
+            }
+            upstream::TunnelCtx *t = upstream::TunnelOpen(s, c->remoteHost, c->remotePort, c->err);
+            if (t == nullptr) {
+                return;
+            }
+            int id;
+            {
+                std::lock_guard<std::mutex> lock(TunnelTab().mutex);
+                id = TunnelTab().nextId++;
+                TunnelTab().map[id] = t;
+            }
+            t->id = id;
+            c->tunnelId = id;
+            LOGI("%s tunnel open id=%d session=%d remote=%s:%d", kTag, id, c->sessionId,
+                 c->remoteHost.c_str(), c->remotePort);
+        },
+        [](napi_env env, napi_status, void *data) {
+            Ctx *c = static_cast<Ctx *>(data);
+            if (c->tunnelId < 0) {
+                napi_value msg;
+                napi_create_string_utf8(env, c->err.c_str(), NAPI_AUTO_LENGTH, &msg);
+                napi_value errObj;
+                napi_create_error(env, nullptr, msg, &errObj);
+                napi_reject_deferred(env, c->deferred, errObj);
+            } else {
+                napi_value v;
+                napi_create_int32(env, c->tunnelId, &v);
+                napi_resolve_deferred(env, c->deferred, v);
+            }
+            napi_delete_async_work(env, c->work);
+            delete c;
+        },
+        ctx, &ctx->work);
+    napi_queue_async_work(env, ctx->work);
+    return promise;
+}
+
+/* tunnelWrite(tunnelId, base64) -> number (bytes written, -1 fail; a fail
+ * also closes + removes the tunnel on the native side) */
+napi_value TerminalNapi::TunnelWriteBinding(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 2) {
+        napi_throw_type_error(env, nullptr, "expected (tunnelId, base64)");
+        return nullptr;
+    }
+    int32_t tid = 0;
+    napi_get_value_int32(env, args[0], &tid);
+    std::string b64;
+    JsToString(env, args[1], b64);
+    std::vector<uint8_t> bin;
+    if (!b64.empty() && !B64Decode(b64, bin)) {
+        napi_throw_type_error(env, nullptr, "bad base64");
+        return nullptr;
+    }
+    int written = -1;
+    std::string err;
+    TunnelRef r = TunnelAcquire(tid);
+    if (!r.ok) {
+        LOGW("%s tunnel write id=%d: %s", kTag, tid, r.err.c_str());
+    } else {
+        written = upstream::TunnelWrite(r.t, bin.data(), bin.size(), err);
+        TunnelRelease(r);
+        if (written < 0) {
+            LOGE("%s tunnel write id=%d failed: %s", kTag, tid, err.c_str());
+            TunnelCloseById(tid);
+        }
+    }
+    napi_value result;
+    napi_create_int32(env, written, &result);
+    return result;
+}
+
+/* tunnelPoll(tunnelId) -> Promise<string>: "n:<b64>" data chunk ("n:" =
+ * none this tick), or "closed" when the tunnel is gone/eof/errored (the
+ * tunnel is closed + removed on the native side before resolving). */
+napi_value TerminalNapi::TunnelPollBinding(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 1) {
+        napi_throw_type_error(env, nullptr, "expected (tunnelId)");
+        return nullptr;
+    }
+    int32_t tid = 0;
+    napi_get_value_int32(env, args[0], &tid);
+
+    napi_deferred deferred;
+    napi_value promise;
+    napi_create_promise(env, &deferred, &promise);
+    struct Ctx {
+        napi_deferred deferred;
+        napi_async_work work;
+        int tid;
+        std::string result;
+    };
+    Ctx *ctx = new Ctx{deferred, nullptr, tid, ""};
+    napi_value rn;
+    napi_create_string_utf8(env, "TunnelPollBinding", NAPI_AUTO_LENGTH, &rn);
+    napi_create_async_work(
+        env, nullptr, rn,
+        [](napi_env, void *data) {
+            Ctx *c = static_cast<Ctx *>(data);
+            TunnelRef r = TunnelAcquire(c->tid);
+            if (!r.ok) {
+                c->result = "closed";
+                return;
+            }
+            char buf[kTunnelPollMax];
+            std::string err;
+            int n = upstream::TunnelPoll(r.t, buf, sizeof(buf), err);
+            if (n > 0) {
+                c->result = "n:" + B64Encode(reinterpret_cast<const uint8_t *>(buf), (size_t)n);
+                TunnelRelease(r);
+            } else if (n == 0) {
+                c->result = "n:"; // no data right now (NOT eof - proven M8 fact)
+                TunnelRelease(r);
+            } else {
+                LOGI("%s tunnel poll id=%d closed: %s", kTag, c->tid, err.c_str());
+                TunnelRelease(r);
+                TunnelCloseById(c->tid);
+                c->result = "closed";
+            }
+        },
+        [](napi_env env, napi_status, void *data) {
+            Ctx *c = static_cast<Ctx *>(data);
+            napi_value v;
+            napi_create_string_utf8(env, c->result.c_str(), c->result.size(), &v);
+            napi_resolve_deferred(env, c->deferred, v);
+            napi_delete_async_work(env, c->work);
+            delete c;
+        },
+        ctx, &ctx->work);
+    napi_queue_async_work(env, ctx->work);
+    return promise;
+}
+
+/* tunnelClose(tunnelId) -> number (0 ok, -1 not found) */
+napi_value TerminalNapi::TunnelCloseBinding(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 1) {
+        napi_throw_type_error(env, nullptr, "expected (tunnelId)");
+        return nullptr;
+    }
+    int32_t tid = 0;
+    napi_get_value_int32(env, args[0], &tid);
+    int rc = TunnelCloseById(tid);
+    LOGI("%s tunnel close id=%d rc=%d", kTag, tid, rc);
     napi_value result;
     napi_create_int32(env, rc, &result);
     return result;
