@@ -23,6 +23,11 @@ export class LocalTerminalService {
         SessionService.feedExternal(text)
       })
       LocalTerminalService.opened = true
+      // M8 relay2: bridge into SessionService so agent term_write/term_read
+      // reach this PTY (hasSession()/write() previously ignored local PTY).
+      SessionService.attachLocalPty((t: string): void => {
+        LocalTerminalService.write(t)
+      })
       return true
     } catch (e) {
       return false
@@ -56,6 +61,9 @@ export class LocalTerminalService {
     if (LocalTerminalService.opened) {
       ptyClose()
       LocalTerminalService.opened = false
+      // M8 relay2: detach the bridge so hasSession() reflects reality.
+      SessionService.attachLocalPty(null)
+      AppStorage.setOrCreate('ut.term.status', 'disconnected')
     }
   }
 }

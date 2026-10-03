@@ -72,6 +72,21 @@ export class SessionService {
   /** M3 relay-2: shared identity store for materializing identity connections. */
   private static identities: IdentityStore | null = null;
 
+  /** M8 relay2: register the local PTY writer so SessionService.write() and
+   * hasSession() cover the local terminal (agent tools work on local PTY).
+   * Called by LocalTerminalService.open(); cleared by close(). */
+  public static attachLocalPty(writer: ((t: string) => void) | null): void {
+    SessionService.localWriter = writer;
+    if (writer !== null) {
+      AppStorage.setOrCreate('ut.term.status', 'connected');
+    }
+  }
+  /** M8 relay2: local PTY bridge — set by LocalTerminalService.open() so agent
+   * tools (term_write/term_read) work on the local terminal too. hasSession()
+   * previously only reflected the SSH session, so the agent always saw
+   * "无活动终端会话" while a local terminal was live. */
+  private static localWriter: ((t: string) => void) | null = null;
+
   /** Register the process-wide identity store (called by ConnList on load). */
   public static setIdentities(ids: IdentityStore | null): void {
     SessionService.identities = ids;
@@ -228,18 +243,25 @@ export class SessionService {
    * Marks the perf probe window (write -> first data chunk).
    */
   public static write(text: string): number {
-    if (SessionService.ssh === null || SessionService.sessionId < 0) {
-      hilog.warn(DOMAIN, TAG, 'write ignored: no session');
-      return -1;
+    if (SessionService.ssh !== null && SessionService.sessionId >= 0) {
+      const wire = SessionService.applyBackspaceKey(text);
+      const n = SessionService.ssh.writeStdin(SessionService.sessionId, wire);
+      if (n >= 0) {
+        SessionService.writeMs = nowMs();
+        SessionService.firstDataMs = -1;
+      }
+      hilog.info(DOMAIN, TAG, 'write bytes=%{public}d asked=%{public}d', n, text.length);
+      return n;
     }
-    const wire = SessionService.applyBackspaceKey(text);
-    const n = SessionService.ssh.writeStdin(SessionService.sessionId, wire);
-    if (n >= 0) {
+    // M8 relay2: local PTY session — route through the localpty writer.
+    if (SessionService.localWriter !== null) {
+      SessionService.localWriter(text);
       SessionService.writeMs = nowMs();
       SessionService.firstDataMs = -1;
+      return text.length;
     }
-    hilog.info(DOMAIN, TAG, 'write bytes=%{public}d asked=%{public}d', n, text.length);
-    return n;
+    hilog.warn(DOMAIN, TAG, 'write ignored: no session');
+    return -1;
   }
 
   /**
@@ -305,7 +327,8 @@ export class SessionService {
 
   /** AI Agent 用:是否有活动 SSH 会话。 */
   public static hasSession(): boolean {
-    return SessionService.ssh !== null && SessionService.sessionId >= 0;
+    return (SessionService.ssh !== null && SessionService.sessionId >= 0) ||
+      SessionService.localWriter !== null;
   }
 
   /** AI Agent 用:终端屏幕文本(供模型阅读)。 */

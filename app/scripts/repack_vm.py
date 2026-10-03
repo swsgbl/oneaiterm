@@ -15,6 +15,13 @@ REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 SO_DIR = os.path.join(REPO, "app", "thirdparty", "libssh-x86_64-har", "libs", "x86_64")
 PREFIX = "libs/x86_64/"
 
+# Repo-prebuilt native libs (NAPI: liblocalpty.so / librdpproxy.so). The VM
+# toolchain chain never packs cmake outputs (hvigor PackageHap fails, the C++
+# fallback packer ships zero own .so), so the hap would boot to
+# "localpty load failed" without these. Inject from app/entry/libs/x86_64.
+OWN_LIBS_DIR = os.path.join(REPO, "app", "entry", "libs", "x86_64")
+OWN_LIBS = ["liblocalpty.so", "librdpproxy.so"]
+
 
 def main() -> int:
     if len(sys.argv) != 3:
@@ -25,11 +32,20 @@ def main() -> int:
     if not sos:
         print("FAIL: no .so under", SO_DIR)
         return 1
+    own = {}
+    for name in OWN_LIBS:
+        path = os.path.join(OWN_LIBS_DIR, name)
+        if not os.path.isfile(path):
+            print("FAIL: prebuilt native lib missing:", path)
+            return 1
+        own[name] = open(path, "rb").read()
     tmp = out + ".tmp"
     with zipfile.ZipFile(src, "r") as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
             if item.filename.startswith(PREFIX) and item.filename[len(PREFIX):] in sos:
                 continue  # drop stale copies; re-add from repo HAR below
+            if item.filename in (PREFIX + n for n in own):
+                continue  # drop VM copies (if any); re-add prebuilt below
             zout.writestr(item, zin.read(item.filename))
         for s in sos:
             tgt = PREFIX + s
@@ -37,10 +53,14 @@ def main() -> int:
                 data = f.read()
             zout.writestr(tgt, data)
             print("injected %s (%d bytes)" % (tgt, len(data)))
+        for name, data in own.items():
+            zout.writestr(PREFIX + name, data)
+            print("injected prebuilt %s%s (%d bytes)" % (PREFIX, name, len(data)))
     shutil.move(tmp, out)
     with zipfile.ZipFile(out) as z:
         names = set(z.namelist())
     missing = [s for s in sos if PREFIX + s not in names]
+    missing += [n for n in own if PREFIX + n not in names]
     if missing:
         print("FAIL: missing after repack:", missing)
         return 1
