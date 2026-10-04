@@ -19,6 +19,7 @@ import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { ConnRec, ConnectionStore, getSharedStore } from '../store/ConnStore';
 import { SessionService, TermStats, TermView } from '../service/SessionService';
+import { ZmodemService } from '../service/ZmodemService';
 import { TelnetService, TelKind } from '../service/TelnetService';
 import { LocalTerminalService } from '../service/LocalTerminalService';
 import { TermModel, TermLine, lineToSpans, SpanRun, TERM_DEFAULT_FG, TERM_DEFAULT_BG } from '../components/TermModel';
@@ -102,6 +103,8 @@ export struct TerminalPage {
       }
     }
     const ctx = getContext(this) as common.UIAbilityContext;
+    // M8 relay-5: Zmodem rx target dir (filesDir/zmodem)
+    ZmodemService.setFilesDir(ctx.filesDir);
     // M3: use the SHARED store (has the unlocked CredentialManager attached,
     // so keyContent/password are decrypted in memory). Do NOT re-load() here:
     // the disk copy holds enc:v1 ciphertext which would overwrite the
@@ -711,6 +714,14 @@ export struct TerminalPage {
 
           this.StatusBadge()
 
+          Button('ZM')
+            .fontSize(DesignTokens.FONT_BODY)
+            .backgroundColor(this.th().brand)
+            .onClick(() => {
+              // M8 relay-5: trigger rz on the remote -> peer ZRINIT marker
+              // -> ZmodemService.begin('tx') sends the newest zmodem file
+              ZmodemService.startTxManually();
+            })
           Button('SFTP')
             .fontSize(DesignTokens.FONT_BODY)
             .backgroundColor(this.th().brand)

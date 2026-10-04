@@ -59,4 +59,9 @@ export declare class SSH2Napi {
   tunnelWrite: (tunnelId: number, base64: string) => number;
   tunnelPoll: (tunnelId: number) => Promise<string>;
   tunnelClose: (tunnelId: number) => number;
+  /* M8 relay-5 Zmodem: zmSetRaw toggles the reader between text chunks
+   * ("data") and raw base64 chunks ("zmdata"); zmWriteBinary writes raw
+   * (base64-decoded) bytes to the channel stdin. */
+  zmSetRaw: (sessionId: number, on: boolean) => number;
+  zmWriteBinary: (sessionId: number, base64: string) => number;
 }

@@ -57,6 +57,12 @@ struct TerminalSession {
     // M3 relay-3b: in-flight SFTP ops holding raw pointers into this
     // session; CloseSession drains it to 0 before freeing (UAF guard).
     std::atomic<int> sftpOps{0};
+    // M8 relay-5: Zmodem raw mode. While set, the reader thread emits the
+    // RAW channel bytes base64-encoded (event type 5 "zmdata") instead of
+    // UTF-8 text chunks, so binary file data survives the napi boundary.
+    std::atomic<bool> zmRaw{false};
+    // M8 relay-5: raw bytes seen in zmRaw mode (hilog counters)
+    std::atomic<uint64_t> zmBytes{0};
 };
 
 /**

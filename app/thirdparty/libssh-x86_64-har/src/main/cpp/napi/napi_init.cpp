@@ -53,6 +53,8 @@ static napi_value Init(napi_env env, napi_value exports) {
         {"tunnelWrite", nullptr, TerminalNapi::TunnelWriteBinding, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"tunnelPoll", nullptr, TerminalNapi::TunnelPollBinding, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"tunnelClose", nullptr, TerminalNapi::TunnelCloseBinding, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"zmSetRaw", nullptr, TerminalNapi::ZmSetRaw, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"zmWriteBinary", nullptr, TerminalNapi::ZmWriteBinary, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
      napi_value ssh2Napi = nullptr;
     const char *classBindName = "SSH2Napi";

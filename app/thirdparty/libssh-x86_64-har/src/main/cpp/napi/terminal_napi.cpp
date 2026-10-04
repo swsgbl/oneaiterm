@@ -105,6 +105,23 @@ struct EventMsg {
  * session flows through it, tagged with the session id. */
 napi_threadsafe_function g_tsfn = nullptr;
 
+/* M8 relay-5: base64 of raw bytes for the zmdata event (moved above the
+ * reader loop; a static forward declaration dead-stripped at link time and
+ * dlopen failed with a missing-symbol error). */
+static std::string B64Encode(const uint8_t *data, size_t len) {
+    BIO *b64 = BIO_new(BIO_f_base64());
+    BIO *mem = BIO_new(BIO_s_mem());
+    b64 = BIO_push(b64, mem);
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+    BIO_write(b64, data, static_cast<int>(len));
+    BIO_flush(b64);
+    BUF_MEM *ptr = nullptr;
+    BIO_get_mem_ptr(b64, &ptr);
+    std::string out(ptr->data, ptr->length);
+    BIO_free_all(b64);
+    return out;
+}
+
 void FreeTsfnMsg(napi_env env, void *data, void *hint) {
     delete static_cast<EventMsg *>(data);
 }
@@ -123,14 +140,16 @@ void CallJs(napi_env env, napi_value jsCallback, void *context, void *data) {
         }
         napi_value obj;
         napi_create_object(env, &obj);
-        const char *typeStr = msg->type == 0 ? "data" : (msg->type == 1 ? "closed" : "error");
+        const char *typeStr = msg->type == 0 ? "data"
+                                   : (msg->type == 1 ? "closed"
+                                   : (msg->type == 5 ? "zmdata" : "error"));
         napi_value t;
         napi_create_string_utf8(env, typeStr, NAPI_AUTO_LENGTH, &t);
         napi_set_named_property(env, obj, "type", t);
         napi_value idV;
         napi_create_int32(env, msg->id, &idV);
         napi_set_named_property(env, obj, "id", idV);
-        if (msg->type == 0) {
+        if (msg->type == 0 || msg->type == 5) {
             napi_value c;
             napi_create_string_utf8(env, msg->payload.c_str(), msg->payload.size(), &c);
             napi_set_named_property(env, obj, "chunk", c);
@@ -156,8 +175,10 @@ void CallJs(napi_env env, napi_value jsCallback, void *context, void *data) {
 
 void InitGlobalTsfn(napi_env env, napi_value jsEventCallback) {
     if (g_tsfn != nullptr) {
+        LOGI("%s InitGlobalTsfn: already installed - reusing", kTag);
         return; // already initialized (first SessionOpen call wins)
     }
+    LOGI("%s InitGlobalTsfn: installing event dispatcher", kTag);
     napi_value resourceName;
     napi_create_string_utf8(env, "upstreamSessionEvents", NAPI_AUTO_LENGTH, &resourceName);
     napi_ref cbRef = nullptr;
@@ -221,6 +242,7 @@ size_t Utf8CompletePrefix(const char *buf, size_t len) {
 void ReaderLoop(upstream::TerminalSession *s) {
     std::string pending; // carries incomplete UTF-8 / GBK lead byte across reads
     char buf[8192];
+    int zmDumps = 0; // M8 relay-5: hexdump only the first N zmdata chunks (log budget)
     const bool gbk = (s->encoding == "gbk");
     // M3-3a keepalive: send an SSH_MSG_IGNORE every keepaliveSec of idle
     // polling. ssh_send_ignore is transport-level (no reply expected) which
@@ -283,6 +305,28 @@ void ReaderLoop(upstream::TerminalSession *s) {
         if (n > 0) {
             s->dataCount.fetch_add((uint64_t)n);
             lastKeepalive = std::chrono::steady_clock::now();
+            // M8 relay-5: Zmodem raw mode - bypass UTF-8/GBK handling and
+            // hand the raw bytes to JS as base64 (binary-safe boundary).
+            if (s->zmRaw.load()) {
+                s->zmBytes.fetch_add((uint64_t)n);
+                if (zmDumps < 4) {
+                    // M8 relay-5: hexdump first bytes of the first chunks so a
+                    // transport-layer mangling (IXON/echo) is visible in hilog.
+                    char hex[65];
+                    int hn = (n < 32) ? (int)n : 32;
+                    for (int i = 0; i < hn; i++) {
+                        snprintf(hex + i * 2, 3, "%02x", (unsigned char)buf[i]);
+                    }
+                    bool emitted = EmitEvent(5, s->id,
+                                             B64Encode(reinterpret_cast<const uint8_t *>(buf), (size_t)n));
+                    LOGI("%s zmdata id=%d n=%d first='%s' emitted=%d total=%llu", kTag, s->id, n,
+                         hex, emitted ? 1 : 0, (unsigned long long)s->zmBytes.load());
+                    zmDumps++;
+                    continue;
+                }
+                EmitEvent(5, s->id, B64Encode(reinterpret_cast<const uint8_t *>(buf), (size_t)n));
+                continue;
+            }
             if (gbk) {
                 // decode GBK -> UTF-8; trailing lead byte held back via pending
                 std::string piece = pending + std::string(buf, (size_t)n);
@@ -788,19 +832,7 @@ static bool HexDecode(const std::string &hex, std::vector<uint8_t> &out) {
     return true;
 }
 
-static std::string B64Encode(const uint8_t *data, size_t len) {
-    BIO *b64 = BIO_new(BIO_f_base64());
-    BIO *mem = BIO_new(BIO_s_mem());
-    b64 = BIO_push(b64, mem);
-    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-    BIO_write(b64, data, static_cast<int>(len));
-    BIO_flush(b64);
-    BUF_MEM *ptr = nullptr;
-    BIO_get_mem_ptr(b64, &ptr);
-    std::string out(ptr->data, ptr->length);
-    BIO_free_all(b64);
-    return out;
-}
+
 
 static bool B64Decode(const std::string &in, std::vector<uint8_t> &out) {
     BIO *b64 = BIO_new(BIO_f_base64());
@@ -1139,6 +1171,75 @@ napi_value TerminalNapi::WriteStdin(napi_env env, napi_callback_info info) {
         err = "session not found: " + std::to_string(id);
     }
     LOGI("%s write id=%d bytes=%d", kTag, id, written);
+    napi_value result;
+    napi_create_int32(env, written, &result);
+    return result;
+}
+
+/* ===================================================================== */
+/* M8 relay-5 Zmodem: zmSetRaw(sessionId, on) -> number (0 ok, -1 fail).  */
+/* Toggles the reader thread between text chunks (type "data") and raw   */
+/* base64 chunks (type "zmdata").                                         */
+/* ===================================================================== */
+napi_value TerminalNapi::ZmSetRaw(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 2) {
+        napi_throw_type_error(env, nullptr, "expected (sessionId, on)");
+        return nullptr;
+    }
+    int32_t id = 0;
+    napi_get_value_int32(env, args[0], &id);
+    bool on = false;
+    napi_get_value_bool(env, args[1], &on);
+    int rc = -1;
+    if (WithSession(id, [&](upstream::TerminalSession *s) {
+        s->zmRaw.store(on);
+        if (!on) {
+            LOGI("%s zmRaw off id=%d rawBytes=%llu", kTag, id,
+                 (unsigned long long)s->zmBytes.load());
+        }
+        rc = 0; })) {
+    } else {
+        LOGE("%s zmSetRaw: session not found id=%d", kTag, id);
+    }
+    napi_value result;
+    napi_create_int32(env, rc, &result);
+    return result;
+}
+
+/* zmWriteBinary(sessionId, base64) -> number (bytes written, -1 fail).
+ * Decodes base64 and writes the RAW bytes to the channel stdin (no GBK
+ * path, no UTF-8 assumptions) - the Zmodem TX direction. */
+napi_value TerminalNapi::ZmWriteBinary(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc < 2) {
+        napi_throw_type_error(env, nullptr, "expected (sessionId, base64)");
+        return nullptr;
+    }
+    int32_t id = 0;
+    napi_get_value_int32(env, args[0], &id);
+    std::string b64;
+    JsToString(env, args[1], b64);
+    std::vector<uint8_t> bin;
+    if (!b64.empty() && !B64Decode(b64, bin)) {
+        napi_throw_type_error(env, nullptr, "bad base64");
+        return nullptr;
+    }
+    std::string err;
+    int written = -1;
+    if (WithSession(id, [&](upstream::TerminalSession *s) {
+        written = upstream::TerminalWrite(s, bin.data(), bin.size(), err); })) {
+        if (written < 0) {
+            LOGE("%s zmWrite id=%d failed: %s", kTag, id, err.c_str());
+        }
+    } else {
+        err = "session not found: " + std::to_string(id);
+    }
+    LOGI("%s zmWrite id=%d bytes=%d", kTag, id, written);
     napi_value result;
     napi_create_int32(env, written, &result);
     return result;

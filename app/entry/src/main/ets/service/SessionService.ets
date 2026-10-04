@@ -23,6 +23,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import type { TermModel } from '../components/TermModel';
 import { libssh } from '@ohos/libssh';
 import { ConnRec } from '../store/ConnStore';
+import { ZmodemService } from './ZmodemService';
 import { IdentityStore, MaterializedCreds } from '../store/IdentityStore';
 
 /** Local mirror of the native event shape (HAR Index only re-exports libssh). */
@@ -110,11 +111,22 @@ export class SessionService {
         ev.type, ev.id, SessionService.sessionId);
       return;
     }
+    if (ev.type === 'zmdata') {
+      // M8 relay-5: raw zmodem bytes (base64) from the native reader
+      let zc = ev.chunk;
+      if (zc === undefined || zc === null) {
+        zc = '';
+      }
+      ZmodemService.onRaw(zc);
+      return;
+    }
     if (ev.type === 'data') {
       let chunk = ev.chunk;
       if (chunk === undefined || chunk === null) {
         chunk = '';
       }
+      // M8 relay-5: sniff ZRQINIT/ZRINIT markers on the text stream
+      ZmodemService.feedText(chunk);
       SessionService.dataChunks++;
       SessionService.dataBytes += chunk.length;
       SessionService.dataLines += countLf(chunk);
@@ -223,6 +235,7 @@ export class SessionService {
         throw new Error('authType=' + conn.authType + ' not supported yet');
       }
       SessionService.sessionId = id;
+      AppStorage.setOrCreate('ut.session.id', id);
       AppStorage.setOrCreate('ut.term.status', 'connected');
       hilog.info(DOMAIN, TAG, 'connect ok id=%{public}d auth=%{public}s %{public}s',
         id, SessionService.lastAuth, SessionService.label);

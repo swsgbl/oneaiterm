@@ -168,6 +168,15 @@ export class libssh {
     return this.ssh2Napi.tunnelClose(tunnelId);
   }
 
+  /* M8 relay-5 Zmodem raw (base64) path on the live session. */
+  zmSetRaw(sessionId: number, on: boolean): number {
+    return this.ssh2Napi.zmSetRaw(sessionId, on);
+  }
+
+  zmWriteBinary(sessionId: number, base64: string): number {
+    return this.ssh2Napi.zmWriteBinary(sessionId, base64);
+  }
+
   keyTypeToString(type: SSH_KEYTYPES): string {
     switch (type) {
       case SSH_KEYTYPES.SSH_KEYTYPE_UNKNOWN:

@@ -52,6 +52,9 @@ public:
     static napi_value TunnelWriteBinding(napi_env env, napi_callback_info info);
     static napi_value TunnelPollBinding(napi_env env, napi_callback_info info);
     static napi_value TunnelCloseBinding(napi_env env, napi_callback_info info);
+    /* M8 relay-5 Zmodem: raw (base64) data path over the live terminal. */
+    static napi_value ZmSetRaw(napi_env env, napi_callback_info info);
+    static napi_value ZmWriteBinary(napi_env env, napi_callback_info info);
 };
 
 #endif // NAPI_TERMINAL_NAPI_H
