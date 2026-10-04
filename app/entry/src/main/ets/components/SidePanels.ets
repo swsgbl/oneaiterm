@@ -357,6 +357,7 @@ export struct TunnelPanel {
   @StorageProp('ut.tunnel.status') status: string = 'off'
   @StorageProp('ut.tunnel.reason') reason: string = ''
   @StorageProp('ut.tunnel.active') active: number = 0
+  @StorageProp('ut.tunnel.conns') conns: number = 0
   @State localPort: string = '9432'
   @State remoteHost: string = '127.0.0.1'
   @State remotePort: string = '22'
@@ -420,7 +421,7 @@ export struct TunnelPanel {
         .onClick(() => this.toggle())
 
       if (this.status === 'running') {
-        Text('活动隧道: ' + this.active.toString() + (this.reason !== '' ? ' · ' + this.reason : ''))
+        Text('监听中 · 已转发 ' + this.conns.toString() + ' 连接' + (this.reason !== '' ? ' · ' + this.reason : ''))
           .fontSize(DesignTokens.FONT_CAPTION)
           .fontColor(this.th().inkSubtle)
       }

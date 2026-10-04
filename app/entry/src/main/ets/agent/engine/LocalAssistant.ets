@@ -462,17 +462,19 @@ export class LocalAssistant implements AgentProvider {
     return await this.waitScreen(before, SCREEN_WAIT_MS)
   }
 
-  /** 轮询屏幕文本直到稳定（等价迁移）。 */
+  /** 轮询屏幕文本直到稳定（等价迁移）。
+   * M8 relay7: 400ms->150ms 采样;stable>=1(连续两次采样一致即认,原 3 次);
+   * 提示符早接受同时看倒数第二行与最后一个非空行(尾随空行场景)。 */
   private async waitScreen(before: string, maxMs: number): Promise<string> {
     const t0 = Date.now()
     let last = ''
     let stable = 0
     while (Date.now() - t0 < maxMs) {
-      await this.sleep(400)
+      await this.sleep(150)
       const cur = SessionService.screenText(SCREEN_READ_LENGTH)
       if (cur !== before && cur === last) {
         stable++
-        if (stable >= 2) {
+        if (stable >= 1) {
           return cur
         }
       } else {
@@ -481,7 +483,18 @@ export class LocalAssistant implements AgentProvider {
       last = cur
       const lines = cur.split('\n')
       const lastLine = lines.length > 0 ? lines[lines.length - 2] : ''
-      if (cur !== before && lastLine !== '' && /[$#❯]\s*$/.test(lastLine)) {
+      let tailLine = lastLine
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[i].trim() !== '') {
+          tailLine = lines[i]
+          break
+        }
+      }
+      const promptRe = /[$#❯%]\s*$/
+      if (cur !== before && lastLine !== '' && promptRe.test(lastLine)) {
+        return cur
+      }
+      if (cur !== before && tailLine !== '' && promptRe.test(tailLine)) {
         return cur
       }
     }

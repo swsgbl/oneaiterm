@@ -15,6 +15,8 @@
  *   ut.tunnel.status  off|running|error
  *   ut.tunnel.reason  last error / info text
  *   ut.tunnel.active  live tunnel count
+ *   ut.tunnel.conns   cumulative forwarded connections (M8 relay7: footer
+ *                     shows listener state + forwarded count separately)
  */
 import { socket } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
@@ -46,6 +48,8 @@ export class TunnelService {
   private static nextKey: number = 1;
   private static b64: util.Base64Helper = new util.Base64Helper();
   private static listenPort: number = -1;
+  /** M8 relay7: cumulative forwarded connections since first start. */
+  private static totalConns: number = 0;
 
   /** Start listening localPort -> remoteHost:remotePort over the live session. */
   public static async start(localPort: number, remoteHost: string, remotePort: number): Promise<void> {
@@ -81,6 +85,7 @@ export class TunnelService {
       TunnelService.fail('监听错误: ' + (err instanceof Error ? err.message : String(err)));
     });
     AppStorage.setOrCreate('ut.tunnel.status', 'running');
+    AppStorage.setOrCreate('ut.tunnel.conns', TunnelService.totalConns);
     AppStorage.setOrCreate('ut.tunnel.reason',
       '127.0.0.1:' + localPort.toString() + ' → ' + remoteHost + ':' + remotePort.toString());
     hilog.info(DOMAIN, TAG, 'listen ok 127.0.0.1:%{public}d -> %{public}s:%{public}d sid=%{public}d',
@@ -93,6 +98,8 @@ export class TunnelService {
     const key = TunnelService.nextKey++;
     const tc = new TunnelConn(conn);
     TunnelService.conns.set(key, tc);
+    TunnelService.totalConns++;
+    AppStorage.setOrCreate('ut.tunnel.conns', TunnelService.totalConns);
     ssh.tunnelOpen(sid, remoteHost, remotePort).then((tid: number) => {
       tc.tid = tid;
       hilog.info(DOMAIN, TAG, 'tunnel open key=%{public}d tid=%{public}d active=%{public}d',
@@ -195,8 +202,7 @@ export class TunnelService {
     TunnelService.listenPort = -1;
     AppStorage.setOrCreate('ut.tunnel.status', 'off');
     AppStorage.setOrCreate('ut.tunnel.active', 0);
-    AppStorage.setOrCreate('ut.tunnel.reason', '已停止 (监听端口随应用退出释放)');
-    hilog.info(DOMAIN, TAG, 'stopped');
+    AppStorage.setOrCreate('ut.tunnel.reason', '已停止 (监听端口随应用退出释放)');    hilog.info(DOMAIN, TAG, 'stopped');
   }
 
   private static fail(msg: string): void {

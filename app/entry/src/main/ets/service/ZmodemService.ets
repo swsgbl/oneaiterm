@@ -87,6 +87,8 @@ export class ZmodemService {
   private static txData: number[] = [];
   private static txName: string = 'zmfile.bin';
   private static txStage: number = 0;
+  /** M8 relay7: payload bytes actually streamed for the current tx (tx-done log). */
+  private static txBytes: number = 0;
   private static filesDir: string = '';
   private static markerWin: string = '';
 
@@ -150,6 +152,7 @@ export class ZmodemService {
     if (mode === 'tx') {
       ZmodemService.txStage = 0;
       ZmodemService.txData = [];
+      ZmodemService.txBytes = 0;
       ZmodemService.loadTxFile();
       // tx is driven by the peer's ZRINIT arriving via onRaw
     }
@@ -669,7 +672,9 @@ export class ZmodemService {
       }
       ZmodemService.send(batch);
     }
-    hilog.info(DOMAIN, TAG, 'tx streamed %{public}d subframes', parts.length - 1);
+    hilog.info(DOMAIN, TAG, 'tx streamed %{public}d subframes bytes=%{public}d',
+      parts.length - 1, ZmodemService.txData.length - pos);
+    ZmodemService.txBytes += ZmodemService.txData.length - pos;
     // ZEOF follows after a short beat (peer needs the data first)
     setTimeout(() => {
       ZmodemService.send(ZmodemService.hexFrame(ZEOF, ZmodemService.le32(ZmodemService.txData.length)));
@@ -737,6 +742,9 @@ export class ZmodemService {
   private static done(status: string): void {
     ZmodemService.gotZfin = true;
     ZmodemService.state = 'idle';
+    // M8 relay7: capture tx mode/bytes before mode reset (tx file[] is empty)
+    const isTx = ZmodemService.mode === 'tx';
+    const txTotal = ZmodemService.txBytes;
     ZmodemService.mode = '';
     ZmodemService.buf = [];
     ZmodemService.markerWin = '';
@@ -745,8 +753,9 @@ export class ZmodemService {
     if (id >= 0 && hd !== null) {
       hd.zmSetRaw(id, false);
     }
-    AppStorage.setOrCreate('ut.zm.status', status);
-    hilog.info(DOMAIN, TAG, 'done %{public}s bytes=%{public}d', status, ZmodemService.file.length);
+    const bytes = isTx ? txTotal : ZmodemService.file.length;
+    AppStorage.setOrCreate('ut.zm.status', status + ' ' + bytes.toString() + 'B');
+    hilog.info(DOMAIN, TAG, 'done %{public}s bytes=%{public}d', status, bytes);
   }
 
   /** Abort (page disappear / user cancel): leave raw mode silently. */
