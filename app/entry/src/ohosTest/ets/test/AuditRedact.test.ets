@@ -5,6 +5,7 @@
  * 覆盖：密码/密钥/口令/token 特征替换、Bearer 头、PEM 私钥块、
  * 连接串口令、digest 300 字符截断（spec 6.3.3 / 4.3.5：审计中不出现凭据）。
  */
+import { describe, it, expect } from '@ohos/hypium';
 
 const DIGEST_MAX: number = 300
 

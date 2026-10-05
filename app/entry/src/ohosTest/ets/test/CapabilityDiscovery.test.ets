@@ -9,6 +9,7 @@
  *   4. isAvailable 未缓存返回 false + 缓存命中返回探测结果
  *   5. reportSummary 格式（yes/no/未探测/多工具拼接）
  */
+import { describe, it, expect } from '@ohos/hypium';
 
 class TProbeDef {
   name: string = ''

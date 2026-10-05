@@ -11,6 +11,7 @@
  *   6. permission 事件 → 审批卡映射
  *   7. toolLevel 五档推断
  */
+import { describe, it, expect } from '@ohos/hypium';
 
 const RPC_VERSION: string = '2.0'
 const ACP_VERSION_V1: string = '1.0'

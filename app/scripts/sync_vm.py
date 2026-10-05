@@ -41,6 +41,9 @@ INCLUDE = [
     ("entry/src/main/ets", [".ets"]),
     ("entry/src/main/resources", None),   # all files
     ("entry/src/main/cpp", None),         # CMakeLists + cpp + d.ts + oh-package
+    # ohosTest module tree (M8-relay8): full tree -- module.json5, ets sources
+    # (testrunner/testability/pages + 10 test files), resources, oh-package
+    ("entry/src/ohosTest", None),
     # AppScope resources: app.json5 alone is NOT enough -- module label refs
     # like $string:app_name live in AppScope/resources/base/element/string.json
     # and CompileResource fails ("ref don't be defined") without them

@@ -9,6 +9,7 @@
  *   3. 目标上下文：local/remote 区分
  *   4. 等价性：存量 AgentKernel.riskOf 'dangerous' 黑名单同一正则（等价迁移）
  */
+import { describe, it, expect } from '@ohos/hypium';
 
 type DecisionKind = 'allow' | 'require_approval' | 'deny'
 

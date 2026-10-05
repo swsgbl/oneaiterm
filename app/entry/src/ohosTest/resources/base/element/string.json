@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "ohosTest module for unit tests"
+    },
+    {
+      "name": "TestAbility_desc",
+      "value": "hypium test ability"
+    },
+    {
+      "name": "TestAbility_label",
+      "value": "TestAbility"
+    }
+  ]
+}

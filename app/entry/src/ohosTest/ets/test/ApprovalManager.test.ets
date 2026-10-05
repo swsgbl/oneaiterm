@@ -11,6 +11,7 @@
  *   6. dispose：批量超时清理
  *   7. resolve 重复/无效 requestId：幂等忽略
  */
+import { describe, it, expect } from '@ohos/hypium';
 
 type ApprovalPolicyKind = 'strict' | 'standard' | 'open'
 type ApprovalDecision = 'approved' | 'denied' | 'timeout_denied'

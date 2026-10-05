@@ -10,6 +10,7 @@
  *   5. approve/deny 决策回传
  * 关键约束：AppTheme 颜色字段为 number 类型，测试中用 number 值断言
  */
+import { describe, it, expect } from '@ohos/hypium';
 
 class TAppTheme {
   surface: number = 0

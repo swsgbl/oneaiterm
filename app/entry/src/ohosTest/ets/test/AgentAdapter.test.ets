@@ -10,6 +10,7 @@
  *   5. prompt 错误码：SESSION_NOT_FOUND / ENGINE_UNAVAILABLE / ENGINE_MISMATCH
  *   6. subscribe 包装：error+AGENT_ENGINE_UNAVAILABLE→hmhAvailable=false
  */
+import { describe, it, expect } from '@ohos/hypium';
 
 type AgentEngineType = 'hmh' | 'acp' | 'local'
 

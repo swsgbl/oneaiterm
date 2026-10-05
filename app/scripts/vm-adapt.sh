@@ -39,4 +39,12 @@ fi
 
 echo "[adapt] A2 module.json5 deviceTypes -> [\"default\"]"
 sed -i 's/"deviceTypes": *\[[^]]*\]/"deviceTypes": [ "default" ]/' "$MOD"
+# A3) same syscap collapse for the ohosTest module (M8-relay8): its
+# module.json5 ships phone/tablet/2in1 in the repo; the OH SDK has no
+# syscap sets for those, rpcid intersection would be empty.
+MODTEST=$APP/entry/src/ohosTest/module.json5
+if [ -f "$MODTEST" ]; then
+  sed -i 's/"deviceTypes": *\[[^]]*\]/"deviceTypes": [ "default" ]/' "$MODTEST"
+  echo "[adapt] A3 ohosTest module.json5 deviceTypes collapsed"
+fi
 echo "[adapt] DONE_VM_ADAPT"

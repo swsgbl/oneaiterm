@@ -5,6 +5,7 @@
  * AgentAdapter.resumeSession 的引擎错配拒绝逻辑（dependency-free）。
  * 覆盖：state 四态合法/非法、engine 三类合法/非法、引擎错配拒绝（spec 6.1.2/6.1.3）。
  */
+import { describe, it, expect } from '@ohos/hypium';
 
 type SessionState = 'active' | 'cancelled' | 'finished' | 'aborted'
 type EngineType = 'hmh' | 'acp' | 'local'
