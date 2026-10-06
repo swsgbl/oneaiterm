@@ -17,6 +17,35 @@
 | 管理 | 分组/收藏/最近 · 配置加密(PBKDF2+AES-256-GCM)· .utm/connections.json 兼容导入导出 |
 | 外观 | 命令栏(Ctrl+K 命令面板)· 可折叠导航坞 · 状态栏 · 深浅双主题 · 中英双语 · 首启引导 |
 
+## 能力与实证状态(V2.1.0,M8 真机化里程碑)
+
+以下按"是否在 KaihongOS 5.0 VM 真机端到端实证"分栏;判据均为可复核的金标读数(证据存 `.verify/m8r*/`)。
+
+### 已实证(VM 真机金判据)
+
+| 能力 | 判据 |
+|---|---|
+| SSH 终端 | 金标 marker 屏显双命中(命令回显+输出行,uterm@10.0.2.2:2222) |
+| SFTP(承继) | 承继实证(V2.0.0 谱系),两轮全量回归随包装载无回归 |
+| 本地终端(PTY) | PTY 125x20 连接成功,Agent 工具经 PTY 执行屏显 |
+| SSH 隧道 -L | nc 9432 回传 `SSH-2.0-OpenSSH` banner;footer 转发计数 0→1 |
+| MySQL 客户端 | mysql:8.4(native_password)查询,屏显 `MYSQL-PARITY-OK` |
+| Zmodem 双向 | 1MiB(1048576B)双向传输,双侧 md5 完全一致(rz/sz) |
+| Agent 本地引擎回路 | 审批卡→允许→终端屏显 3.7s;审计 jsonl 落盘(approval/term_write/run);拒绝路径实证(destructive 拦截) |
+| AI Dock UX | 自然语言→审批卡(档位徽标+超时倒计时)→执行→`task completed` 终态 |
+| 加密配置(承继) | 承继实证(V2.0.0 谱系,PBKDF2+AES-256-GCM) |
+
+> 三引擎架构(V2.0.0)中,HMH/ACP 远端引擎代码已就位但未经真机联调,见后续路线——不与本地引擎实证混列。
+
+### 后续路线
+
+| 项 | 说明 |
+|---|---|
+| arm64 面 | 当前真机实证均在 x86_64 VM;arm64 设备面待铺 |
+| ACP/HMH 远端引擎真机联调 | 适配器代码完整(AcpClient JSON-RPC 2.0 / HmhAdapter SSE),真机回路未跑 |
+| termWrite 屏幕指纹优化 | 3.7s 已达标,等待策略可进一步收紧 |
+| 多会话隧道选择 UI | 当前隧道绑定单一 SSH 会话 |
+
 ## 系统要求
 
 KaihongOS 5.0+(x86_64/arm64),API 14+。
