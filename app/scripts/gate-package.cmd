@@ -1,6 +1,7 @@
 @echo off
 REM gate-package.cmd - 产物清单完整性校验环节（补充任务 S2.8）
 REM 校验 HAP 双 ABI 包、SBOM、许可证据、构建证据、版本号一致性
+REM NOTE (M8-relay10): static check (tripwire) by design for release artifact manifest completeness (file-level) - not an on-device test
 
 setlocal enabledelayedexpansion
 cd /d "%~dp0..\.."

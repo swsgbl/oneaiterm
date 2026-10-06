@@ -1,6 +1,7 @@
 @echo off
 REM gate-license.cmd - 许可一致性校验环节（补充任务 S2.6）
 REM 比对 oh-package.json5 依赖列表与 LICENSE-MATRIX.csv 已登记许可
+REM NOTE (M8-relay10): static check (tripwire) by design for license dependency-matrix consistency (file-level) - not an on-device test
 
 setlocal enabledelayedexpansion
 cd /d "%~dp0..\.."

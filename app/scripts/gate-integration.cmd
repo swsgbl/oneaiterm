@@ -1,78 +1,66 @@
 @echo off
-REM gate-integration.cmd - 集成测试环节（补充任务 S2.3）
-REM 执行六方法契约测试、HMH 事件映射、ACP JSON-RPC 编解码、回落流程等集成测试
+REM gate-integration.cmd -- integration gate: REAL on-device integration
+REM checks (M8-relay10). Replaces the old source-grep shell (which only
+REM grepped method names in Agent*.ets). Now delegates to the
+REM gate_integration_run.cjs driver, which proves the integration
+REM surface on the device itself (127.0.0.1:15566):
+REM   I1  module coexistence: `bm dump -a` lists com.oneaiterm.terminal
+REM       (entry_test too when installed) - no ghost-overwrite.
+REM   I2  full app lifecycle: force-stop + aa start, hilog 15s window
+REM       shows EntryAbility onCreate -> onWindowStageCreate ->
+REM       onForeground, with NO jscrash/cppcrash/appfreeze keywords.
+REM   I3  bundle-dump size sentinel: `bm dump -n com.oneaiterm.terminal`
+REM       output > 5KB (relay6/7 ghost-overwrite auto-sentinel).
+REM Prereq: com.oneaiterm.terminal installed (vm-deploy).
+REM Device absent -> "FAILED: integration - device absent (honest fail)"
+REM exit 1. Override target for fail-closed drills: set HM_GATE_TARGET.
+REM Evidence: %EV%\integration-last.txt (+ integration-bma/hilog/bmn.txt)
+REM Red lines: no git ops; 15566 target only in real runs; no host-built
+REM artifacts; main bundle is never uninstalled.
 
 setlocal enabledelayedexpansion
-cd /d "%~dp0.."
-set APP_DIR=%CD%
-set FAILED=0
+set "SCR=%~dp0"
+set "APP=%SCR%.."
+for %%I in ("%APP%") do set "APP=%%~fI"
+set "REPO=%APP%\.."
+for %%I in ("%REPO%") do set "REPO=%%~fI"
+set "EV=%REPO%\.verify\m8r10"
+set "HDC=C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"
+if not exist "%HDC%" set "HDC=hdc"
+if not defined HM_GATE_TARGET set "HM_GATE_TARGET=127.0.0.1:15566"
+set "T=-t %HM_GATE_TARGET%"
+if not exist "%EV%" mkdir "%EV%"
 
-REM 检查 hdc 设备连接
-hdc list targets 2>nul | findstr /C:"127.0.0.1" >nul
-if !errorlevel! neq 0 (
-    echo FAILED: integration - 设备未连接
-    exit /b 1
-)
+REM ---- device online (honest fail-closed) ----
+"%HDC%" %T% shell "echo online" >"%EV%\integration-online.txt" 2>&1
+findstr /C:"online" "%EV%\integration-online.txt" >nul || goto :fail_nodevice
+echo [integration] device online (%HM_GATE_TARGET%)
 
-REM 1. 六方法契约：AgentProvider 接口完整性
-echo 检查: AgentProvider 六方法接口完整性...
-findstr /C:"createSession" "%APP_DIR%\entry\src\main\ets\agent\AgentProvider.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: integration - AgentProvider createSession 缺失
-    set FAILED=1
-)
-findstr /C:"resumeSession" "%APP_DIR%\entry\src\main\ets\agent\AgentProvider.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: integration - AgentProvider resumeSession 缺失
-    set FAILED=1
-)
+REM ---- app installed prereq (I1 pre-flight; driver re-proves) ----
+"%HDC%" %T% shell "bm dump -a" >"%EV%\integration-bma-preflight.txt" 2>&1
+findstr /C:"com.oneaiterm.terminal" "%EV%\integration-bma-preflight.txt" >nul || goto :fail_notinstalled
+echo [integration] com.oneaiterm.terminal installed
 
-REM 2. HMH 事件映射：12 种 SSE 事件类型
-echo 检查: HMH 12 种 SSE 事件映射...
-findstr /C:"approvalReq" "%APP_DIR%\entry\src\main\ets\agent\engine\HmhAdapter.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: integration - HMH SSE 事件映射不完整
-    set FAILED=1
-)
+REM ---- real run via driver (~2 min: lifecycle window dominates) ----
+echo [integration] running on-device integration driver (I1 coexist + I2 lifecycle + I3 dump-size)...
+node "%SCR%gate_integration_run.cjs" "%EV%"
+if errorlevel 1 goto :fail_run
 
-REM 3. ACP JSON-RPC 编解码：七类方法
-echo 检查: ACP 七类方法映射...
-findstr /C:"session/new" "%APP_DIR%\entry\src\main\ets\agent\engine\AcpClient.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: integration - ACP 七类方法映射不完整
-    set FAILED=1
-)
-
-REM 4. 回落流程：引擎不可达时回落到本地
-echo 检查: 引擎回落编排...
-findstr /C:"AGENT_ENGINE_UNAVAILABLE" "%APP_DIR%\entry\src\main\ets\agent\AgentAdapter.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: integration - 引擎回落编排缺失
-    set FAILED=1
-)
-
-REM 5. 三引擎注册：local + hmh + acp
-echo 检查: 三引擎注册...
-findstr /C:"LocalAssistant" "%APP_DIR%\entry\src\main\ets\agent\AgentAdapter.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: integration - 三引擎注册缺失（LocalAssistant）
-    set FAILED=1
-)
-findstr /C:"HmhAdapter" "%APP_DIR%\entry\src\main\ets\agent\AgentAdapter.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: integration - 三引擎注册缺失（HmhAdapter）
-    set FAILED=1
-)
-findstr /C:"AcpClient" "%APP_DIR%\entry\src\main\ets\agent\AgentAdapter.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: integration - 三引擎注册缺失（AcpClient）
-    set FAILED=1
-)
-
-if !FAILED! equ 1 (
-    echo FAILED: integration - 集成测试检查项未通过
-    exit /b 1
-)
-
-echo PASSED: integration (六方法契约 + HMH 事件映射 + ACP 编解码 + 回落编排 + 三引擎注册)
+echo PASSED: integration ^(on-device: I1 module coexist + I2 full lifecycle no-crash + I3 bundle dump ^> 5KB^)
+echo evidence: %EV%\integration-last.txt
 exit /b 0
+
+:fail_nodevice
+echo FAILED: integration - device absent (honest fail)
+echo evidence: %EV%\integration-online.txt
+exit /b 1
+
+:fail_notinstalled
+echo FAILED: integration - com.oneaiterm.terminal not installed (run app\scripts\vm-deploy.cmd first; honest fail)
+echo evidence: %EV%\integration-bma-preflight.txt
+exit /b 1
+
+:fail_run
+echo FAILED: integration - on-device criteria not met, see %EV%\integration-last.txt
+powershell -NoProfile -Command "Get-Content -Tail 12 '%EV%\integration-last.txt'"
+exit /b 1

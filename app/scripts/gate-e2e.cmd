@@ -1,71 +1,69 @@
 @echo off
-REM gate-e2e.cmd - 端到端验证环节（补充任务 S2.4）
-REM 执行终端内四类 AI 入口、审批卡交互、会话恢复等端到端场景
+REM gate-e2e.cmd -- e2e gate: REAL on-device execution (M8-relay10).
+REM Replaces the old source-grep shell (which grepped "220" in AIDock.ets
+REM and called it a day). Now drives the actual app on the KaihongOS VM
+REM (127.0.0.1:15566) via the gate_e2e_run.cjs driver:
+REM   step 1  force-stop + aa start -> dumpLayout -> dismiss onboarding
+REM           "skip" if present -> main UI text nodes > 50 (E1)
+REM   step 2  SSH gold path: WantParams auto-connect uterm@10.0.2.2:2222
+REM           (pw uterm-pw-735) + postLogin `echo M8-E2E-GATE-OK`,
+REM           marker must be visible on screen (dumpLayout text nodes, E2)
+REM   step 3  hilog connect lines (corroborating detail, non-blocking)
+REM Modes:
+REM   (none)  full run (~4 min: both steps + marker poll window)
+REM   /quick  step 1 only (fast lane: launch + guide-dismiss + node count)
+REM Prereq: com.oneaiterm.terminal installed (vm-deploy). Not installed
+REM         -> honest fail-closed with a "run vm-deploy first" hint.
+REM Device absent -> "FAILED: e2e - device absent (honest fail)" exit 1.
+REM Evidence: %EV%\e2e-last.txt (+ e2e-*.json/.txt dumps, e2e-hilog.txt)
+REM Red lines: no git ops; 15566 target only; no host-built artifacts.
 
 setlocal enabledelayedexpansion
-cd /d "%~dp0.."
-set APP_DIR=%CD%
-set FAILED=0
+set "SCR=%~dp0"
+set "APP=%SCR%.."
+for %%I in ("%APP%") do set "APP=%%~fI"
+set "REPO=%APP%\.."
+for %%I in ("%REPO%") do set "REPO=%%~fI"
+set "EV=%REPO%\.verify\m8r10"
+set "HDC=C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"
+if not exist "%HDC%" set "HDC=hdc"
+if not defined HM_GATE_TARGET set "HM_GATE_TARGET=127.0.0.1:15566"
+set "T=-t %HM_GATE_TARGET%"
+set "MODE=full"
+if /i "%~1"=="/quick" set "MODE=quick"
+if not exist "%EV%" mkdir "%EV%"
 
-REM 检查 hdc 设备连接
-hdc list targets 2>nul | findstr /C:"127.0.0.1" >nul
-if !errorlevel! neq 0 (
-    echo FAILED: E2E - 设备未连接
-    exit /b 1
-)
+REM ---- device online (honest fail-closed) ----
+"%HDC%" %T% shell "echo online" >"%EV%\e2e-online.txt" 2>&1
+findstr /C:"online" "%EV%\e2e-online.txt" >nul || goto :fail_nodevice
+echo [e2e] device online (127.0.0.1:15566), mode=%MODE%
 
-REM 1. 四类 AI 入口模式
-echo 检查: 四类 AI 入口模式...
-findstr /C:"aiMode" "%APP_DIR%\entry\src\main\ets\components\AIDock.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: E2E - 四类 AI 入口模式缺失
-    set FAILED=1
-)
+REM ---- app installed prereq ----
+"%HDC%" %T% shell "bm dump -a" >"%EV%\e2e-bma.txt" 2>&1
+findstr /C:"com.oneaiterm.terminal" "%EV%\e2e-bma.txt" >nul || goto :fail_notinstalled
+echo [e2e] com.oneaiterm.terminal installed
 
-REM 2. 审批卡组件
-echo 检查: 审批卡组件...
-findstr /C:"ApprovalCard" "%APP_DIR%\entry\src\main\ets\components\ApprovalCard.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: E2E - 审批卡组件缺失
-    set FAILED=1
-)
+REM ---- real run via driver ----
+echo [e2e] running on-device E2E driver (full ~4 min / quick ~1 min)...
+node "%SCR%gate_e2e_run.cjs" %MODE% "%EV%"
+if errorlevel 1 goto :fail_run
 
-REM 3. AIDock 220px 展开高度
-echo 检查: AIDock 220px 展开高度...
-findstr /C:"220" "%APP_DIR%\entry\src\main\ets\components\AIDock.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: E2E - AIDock 220px 展开高度配置缺失
-    set FAILED=1
-)
-
-REM 4. 三引擎选择
-echo 检查: 三引擎选择 UI...
-findstr /C:"engineType" "%APP_DIR%\entry\src\main\ets\components\AIDock.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: E2E - 三引擎选择 UI 缺失
-    set FAILED=1
-)
-
-REM 5. 能力探测
-echo 检查: 能力探测组件...
-findstr /C:"CapabilityDiscovery" "%APP_DIR%\entry\src\main\ets\agent\discovery\CapabilityDiscovery.ets" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo FAILED: E2E - 能力探测组件缺失
-    set FAILED=1
-)
-
-REM 6. 应用启动验证
-echo 检查: 应用启动...
-hdc shell "aa start -a EntryAbility -b com.oneaiterm.terminal" 2>&1 | findstr /C:"successfully" >nul
-if !errorlevel! neq 0 (
-    echo FAILED: E2E - 应用启动失败
-    set FAILED=1
-)
-
-if !FAILED! equ 1 (
-    echo FAILED: E2E - 端到端验证项未通过
-    exit /b 1
-)
-
-echo PASSED: E2E (四类入口 + 审批卡 + 220px + 三引擎选择 + 能力探测 + 应用启动)
+echo PASSED: e2e ^(on-device: cold start + onboarding dismiss + main UI nodes ^> 50^)
+if /i "%MODE%"=="full" echo PASSED: e2e ^(SSH gold marker M8-E2E-GATE-OK visible on screen^)
+echo evidence: %EV%\e2e-last.txt
 exit /b 0
+
+:fail_nodevice
+echo FAILED: e2e - device absent (honest fail)
+echo evidence: %EV%\e2e-online.txt
+exit /b 1
+
+:fail_notinstalled
+echo FAILED: e2e - com.oneaiterm.terminal not installed (run app\scripts\vm-deploy.cmd first; honest fail)
+echo evidence: %EV%\e2e-bma.txt
+exit /b 1
+
+:fail_run
+echo FAILED: e2e - on-device criteria not met, see %EV%\e2e-last.txt
+powershell -NoProfile -Command "Get-Content -Tail 12 '%EV%\e2e-last.txt'"
+exit /b 1

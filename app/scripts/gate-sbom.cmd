@@ -1,6 +1,7 @@
 @echo off
 REM gate-sbom.cmd - SBOM 生成与校验环节（补充任务 S2.7）
 REM 校验 SBOM.json 与 license 结果一致性
+REM NOTE (M8-relay10): static check (tripwire) by design for SBOM/license consistency (file-level) - not an on-device test
 
 setlocal enabledelayedexpansion
 cd /d "%~dp0..\.."
