@@ -40,11 +40,14 @@ export class HarnessStream {
   private curData: string = ''
   private lastId: number = -1
   private base: string = ''
+  private token: string = ''
   private cbs: HarnessEventCbs | null = null
   private closed: boolean = false
+  private firstChunkLogged: boolean = false
 
-  constructor(base: string) {
+  constructor(base: string, token: string = '') {
     this.base = base.replace(/\/+$/, '')
+    this.token = token
   }
 
   /** 建立 SSE 长连接(GET /api/events, Accept: text/event-stream)。 */
@@ -52,7 +55,12 @@ export class HarnessStream {
     this.cbs = cbs
     this.closed = false
     this.req = http.createHttp()
+    this.firstChunkLogged = false
     this.req.on('dataReceive', (buf: ArrayBuffer) => {
+      if (!this.firstChunkLogged) {
+        this.firstChunkLogged = true
+        hilog.info(HS_DOMAIN, HS_TAG, 'sse first chunk bytes=%{public}d', buf.byteLength)
+      }
       this.onBytes(buf)
     })
     this.req.on('dataEnd', () => {
@@ -62,13 +70,24 @@ export class HarnessStream {
         this.cbs.onEnd()
       }
     })
+    const header: Record<string, string> = { 'Accept': 'text/event-stream' };
+    // Last-Event-ID 仅在有效(>=0)时携带;-1 属于未收到任何事件,发送负值头无契约依据(M8 relay13 实勘)
+    if (this.lastId >= 0) {
+      header['Last-Event-ID'] = this.lastId.toString();
+    }
+    if (this.token !== '') {
+      header['X-Hmh-Key'] = this.token;
+    }
     const opts: http.HttpRequestOptions = {
       method: http.RequestMethod.GET,
-      header: { 'Accept': 'text/event-stream', 'Last-Event-ID': this.lastId.toString() },
+      header: header,
       connectTimeout: 15000,
       readTimeout: 600000
     }
+    hilog.info(HS_DOMAIN, HS_TAG, 'sse opening %{public}s/api/events', this.base)
     this.req.requestInStream(this.base + '/api/events', opts, (err: Error, code: number) => {
+      hilog.info(HS_DOMAIN, HS_TAG, 'sse cb err=%{public}s code=%{public}d',
+        err === undefined || err === null ? '-' : (err.message === '' ? 'empty-msg' : err.message), code)
       if (err !== undefined && err !== null && err.message !== '') {
         hilog.error(HS_DOMAIN, HS_TAG, 'stream start fail err=%{public}s', err instanceof Error ? err.message : String(err))
         if (this.cbs !== null) {
@@ -172,20 +191,25 @@ export class HarnessStream {
     return out
   }
 
-  /** 发任务: POST /api/task {text,mode,fresh,sessionId}。失败时经 cbs.onError 上抛。 */
+  /** 发任务: POST /api/task {text,mode,fresh,sessionId}。fresh 按 daemon 契约发布尔
+   *  (服务端 `body.fresh === true` 严格判等,字符串 'true' 会被当 false——M8 relay13 实勘)。失败时经 cbs.onError 上抛。 */
   send(task: string, mode: string, sessionId: string, fresh: boolean): void {
-    const bodyObj: Record<string, string> = {}
+    const bodyObj: Record<string, Object> = {}
     bodyObj['text'] = task
     bodyObj['mode'] = mode
-    bodyObj['fresh'] = fresh ? 'true' : 'false'
+    bodyObj['fresh'] = fresh
     if (sessionId !== '') {
       bodyObj['sessionId'] = sessionId
     }
     const p = this.base + '/api/task'
+    const header: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.token !== '') {
+      header['X-Hmh-Key'] = this.token;
+    }
     const r = http.createHttp()
     r.request(p, {
       method: http.RequestMethod.POST,
-      header: { 'Content-Type': 'application/json' },
+      header: header,
       extraData: JSON.stringify(bodyObj),
       connectTimeout: 15000,
       readTimeout: 30000
@@ -235,11 +259,16 @@ export interface HarnessTestResult {
 
 export class HarnessClient {
   /** 连接测试: GET {base}/api/state,断言 200 且 json.model 存在即在线。 */
-  static test(base: string): Promise<HarnessTestResult> {
+  static test(base: string, token: string = ''): Promise<HarnessTestResult> {
     return new Promise<HarnessTestResult>((resolve) => {
       const r = http.createHttp()
+      const header: Record<string, string> = {};
+      if (token !== '') {
+        header['X-Hmh-Key'] = token;
+      }
       r.request(base.replace(/\/+$/, '') + '/api/state', {
         method: http.RequestMethod.GET,
+        header: header,
         connectTimeout: 8000,
         readTimeout: 8000
       }, (err: Error, resp: http.HttpResponse) => {

@@ -116,6 +116,8 @@ export class AgentAdapter implements AgentProvider {
   }
 
   async createSession(config: AgentSessionConfig): Promise<AgentSessionHandle> {
+    // 先注册全部引擎（惰性注册 bug：首个会话直接选 hmh 时 engines map 为空，targetEngine 返回 null → 误回落 local——M8 relay13 实勘修复）。
+    this.ensureLocal()
     if (config.engine === 'local') {
       const la = this.ensureLocal()
       return await la.createSession(config)

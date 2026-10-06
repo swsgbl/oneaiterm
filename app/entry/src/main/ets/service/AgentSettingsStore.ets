@@ -18,6 +18,8 @@ export type ApprovalMode = 'confirm_all' | 'confirm_dangerous' | 'bypass';
 export class HmhEngineConfig {
   /** hmharness 服务地址（原 LlmConfigStore.harnessUrl 迁移目标）。 */
   baseUrl: string = ''
+  /** 远端 daemon 访问令牌（exposure=lan/wan 时必需；X-Hmh-Key 头随行——M8 relay13 实勘 403）。 */
+  token: string = ''
 }
 
 export class AcpAgentConfig {
@@ -121,6 +123,10 @@ export class AgentSettingsStore {
       // 新格式解析
       if (obj.engines.hmh !== undefined) {
         s.engines.hmh.baseUrl = obj.engines.hmh.baseUrl
+        const tk = obj.engines.hmh.token
+        if (typeof tk === 'string') {
+          s.engines.hmh.token = tk
+        }
       }
       if (obj.engines.local !== undefined) {
         s.engines.local.model = obj.engines.local.model

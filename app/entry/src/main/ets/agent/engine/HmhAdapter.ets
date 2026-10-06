@@ -45,6 +45,7 @@ const HTTP_READ_TIMEOUT_MS: number = 10000;
 class HmhSessionState {
   sessionId: string = ''
   baseUrl: string = ''
+  token: string = ''
   stream: HarnessStream | null = null
   lastEventId: number = -1
   turn: number = 0
@@ -126,6 +127,7 @@ export class HmhAdapter implements AgentProvider {
     const st = new HmhSessionState()
     st.sessionId = sid
     st.baseUrl = baseUrl
+    st.token = settings.engines.hmh.token
     st.title = config.title
     this.sessions.set(sid, st)
     const meta = new AgentSessionMeta()
@@ -166,6 +168,7 @@ export class HmhAdapter implements AgentProvider {
     const st = new HmhSessionState()
     st.sessionId = sessionId
     st.baseUrl = settings.engines.hmh.baseUrl
+    st.token = settings.engines.hmh.token
     st.title = meta.title
     st.lastEventId = meta.engineRef !== '' ? Number(meta.engineRef) : -1
     if (isNaN(st.lastEventId)) {
@@ -297,7 +300,7 @@ export class HmhAdapter implements AgentProvider {
         st.connected = false
       }
     }
-    st.stream = new HarnessStream(st.baseUrl)
+    st.stream = new HarnessStream(st.baseUrl, st.token)
     st.stream.connect(cbs)
     st.connected = true
     hilog.info(DOMAIN, TAG, 'connectStream %{public}s base=%{public}s', sid, st.baseUrl)
@@ -462,9 +465,13 @@ export class HmhAdapter implements AgentProvider {
     const r = http.createHttp()
     const bodyObj: Record<string, boolean> = {}
     bodyObj['granted'] = granted
+    const apHeader: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (st.token !== '') {
+      apHeader['X-Hmh-Key'] = st.token;
+    }
     r.request(st.baseUrl.replace(/\/+$/, '') + '/api/approve', {
       method: http.RequestMethod.POST,
-      header: { 'Content-Type': 'application/json' },
+      header: apHeader,
       extraData: JSON.stringify(bodyObj),
       connectTimeout: HTTP_CONNECT_TIMEOUT_MS,
       readTimeout: HTTP_READ_TIMEOUT_MS
@@ -486,8 +493,13 @@ export class HmhAdapter implements AgentProvider {
       return
     }
     const r = http.createHttp()
+    const itHeader: Record<string, string> = {};
+    if (st.token !== '') {
+      itHeader['X-Hmh-Key'] = st.token;
+    }
     r.request(st.baseUrl.replace(/\/+$/, '') + '/api/interrupt', {
       method: http.RequestMethod.POST,
+      header: itHeader,
       connectTimeout: HTTP_CONNECT_TIMEOUT_MS,
       readTimeout: HTTP_READ_TIMEOUT_MS
     }, (err: Error, resp: http.HttpResponse) => {
