@@ -451,7 +451,10 @@ export class HmhAdapter implements AgentProvider {
     const meta = AgentSessionStore.read(this.filesDir, st.sessionId)
     if (meta !== null) {
       meta.state = 'finished'
-      meta.engineRef = st.lastEventId.toString()
+      // 仅在确实收到过事件 id 时落 engineRef(断线续传点);-1 无契约依据
+      if (st.lastEventId >= 0) {
+        meta.engineRef = st.lastEventId.toString()
+      }
       AgentSessionStore.update(this.filesDir, meta)
     }
     this.auditFinal(st, content)
@@ -515,7 +518,9 @@ export class HmhAdapter implements AgentProvider {
   private abortSession(st: HmhSessionState): void {
     this.closeStream(st)
     const meta = AgentSessionStore.read(this.filesDir, st.sessionId)
-    if (meta !== null) {
+    // 已收官(finished/cancelled)的会话不再被后续流关闭/错误路径覆写成 aborted——
+    // M8-relay13 实勘:final 后常驻流随下一会话开启而关闭,旧 state 被误覆写
+    if (meta !== null && meta.state !== 'finished' && meta.state !== 'cancelled') {
       meta.state = 'aborted'
       AgentSessionStore.update(this.filesDir, meta)
     }

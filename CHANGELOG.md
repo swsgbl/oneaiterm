@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## V2.1.1 — 远端引擎真机收官
+
+> 覆盖 M8 尾段 commit 区间 8b36e8d..（relay12/13/14）。三引擎中最后两块远端拼图在 KaihongOS 5.0 VM 真机端到端实证。
+
+### 新能力
+- **HMH 远端引擎真机闭环**：设备→WSL socat 中继→Windows hmharness daemon(7791, --exposure=lan)→GLM-5.3 全链；dock 流式渲染远端会话（hello/line/delta/final + tool 卡含五档徽标）；审计 prompt/final 落档；零回落零崩溃（`.verify/m8r13`）
+- **ACP 引擎对 mock 实证**：ACP v1 JSON-RPC 握手（initialize 1.0/session-new/prompt）+ SSE 订阅一次点火；delta 流式与工具卡渲染、会话档案 engine=acp/finished、审计 final 落档（`.verify/m8r14`）
+- **`--ps agentPrompt/--ps agentEngine` want 直驱通道**：绕过 UI 输入直接驱动任意引擎（并发使用/自动化测试场景；connectNow 同款开发通道先例）
+
+### 修复
+- **SSE 零字节停摆**：`Last-Event-ID: -1` 头（初值）导致 ohos http 栈 dataReceive 停摆、600s 读超时无事件——改为仅在有效 id(≥0) 时携带（M8-relay13 三根因之一）
+- **HMH lan 暴露 403 回落**：X-Hmh-Key 令牌贯通 SSE GET/任务 POST/approve/interrupt；`fresh` 改发真布尔（daemon 严格 `=== true`）
+- **会话 state 生命周期**：final 后不再被后续流关闭路径覆写为 aborted；engineRef 仅在真收到事件 id 时落档
+
+### 工程化
+- **arm64 编译面收官**：tunnel/zmodem native so 重编，105 导出符号与 x86_64 完全对齐（旧产物缺 23 符号+旧命名空间）；A1-A4 编译面金判据 + verify-arm64.sh（运行时待 arm64 真机，如实标注）
+- **协议实勘入库**：hmharness `/api/events` 为全广播（事件自带 sessionId，无需 ?sid= 订阅）；ohos requestInStream 完成回调在流式响应上恒不触发（数据走 dataReceive 正常）——均已写入文档
+
+---
+
 ## V2.1.0 — M8 真机化里程碑
 
 > 基线：V2.0.0（a024cf0 谱系）；本版覆盖 M8 真机化接力 commit 区间 1695d1f..d210e49。以下能力均在 KaihongOS 5.0 VM 真机端到端实证。

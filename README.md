@@ -32,17 +32,18 @@
 | MySQL 客户端 | mysql:8.4(native_password)查询,屏显 `MYSQL-PARITY-OK` |
 | Zmodem 双向 | 1MiB(1048576B)双向传输,双侧 md5 完全一致(rz/sz) |
 | Agent 本地引擎回路 | 审批卡→允许→终端屏显 3.7s;审计 jsonl 落盘(approval/term_write/run);拒绝路径实证(destructive 拦截) |
+| **HMH 远端引擎** | 设备→WSL socat→Windows daemon(7791)→GLM-5.3 真链路;dock 流式渲染(hello/line/delta/final/tool 卡+档位徽标);审计 prompt+final 落档;零回落零崩溃(`.verify/m8r13`) |
+| **ACP 引擎(mock)** | ACP v1 JSON-RPC 握手(initialize 1.0/session-new/prompt)+SSE 订阅一次点火;双 delta 流式+tool 卡渲染;会话 engine=acp finished、审计 final 落档(`.verify/m8r14`) |
 | AI Dock UX | 自然语言→审批卡(档位徽标+超时倒计时)→执行→`task completed` 终态 |
+| want 直驱开发通道 | `--ps agentPrompt/--ps agentEngine` 绕过 UI 输入直接驱动任意引擎(并发使用/自动化场景) |
 | 加密配置(承继) | 承继实证(V2.0.0 谱系,PBKDF2+AES-256-GCM) |
-
-> 三引擎架构(V2.0.0)中,HMH/ACP 远端引擎代码已就位但未经真机联调,见后续路线——不与本地引擎实证混列。
 
 ### 后续路线
 
 | 项 | 说明 |
 |---|---|
-| arm64 面 | 当前真机实证均在 x86_64 VM;arm64 设备面待铺 |
-| ACP/HMH 远端引擎真机联调 | 适配器代码完整(AcpClient JSON-RPC 2.0 / HmhAdapter SSE),真机回路未跑 |
+| arm64 运行时 | 编译面已实证(relay12:符号集/SONAME/NEEDED 与 x86_64 完全对齐);arm64 真机运行时待铺 |
+| ACP 真实服务联调 | 引擎协议面已对 mock 实证;接真实 ACP Agent 服务待排期 |
 | termWrite 屏幕指纹优化 | 3.7s 已达标,等待策略可进一步收紧 |
 | 多会话隧道选择 UI | 当前隧道绑定单一 SSH 会话 |
 
