@@ -112,4 +112,30 @@ export class WantParams {
     }
     return '';
   }
+
+  /** M8-relay14 dev channel: --ps agentPrompt <text> - open AI dock and auto-send. */
+  static getAgentPrompt(): string {
+    const w = WantParams.want;
+    if (w === null || w.parameters === undefined || w.parameters === null) {
+      return '';
+    }
+    const v = w.parameters['agentPrompt'];
+    if (typeof v === 'string') {
+      return v;
+    }
+    return '';
+  }
+
+  /** M8-relay14 dev channel: --ps agentEngine <local|hmh|acp> - engine pill preselect. */
+  static getAgentEngine(): string {
+    const w = WantParams.want;
+    if (w === null || w.parameters === undefined || w.parameters === null) {
+      return '';
+    }
+    const v = w.parameters['agentEngine'];
+    if (typeof v === 'string') {
+      return v;
+    }
+    return '';
+  }
 }

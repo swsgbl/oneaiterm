@@ -19,6 +19,7 @@ import { RdpTab } from '../components/RdpTab';
 import { SpiceTab } from '../components/SpiceTab';
 import { themeByName, AppTheme } from '../common/AppTheme';
 import { AIDock } from '../components/AIDock';
+import { WantParams } from '../common/WantParams';
 import { GuideOverlay } from '../components/GuideOverlay';
 import { common } from '@kit.AbilityKit';
 import { fileIo } from '@kit.CoreFileKit';
@@ -94,6 +95,10 @@ struct Index {
       }
     } catch (e) {
       this.guideShow = true // 拿不到路径宁可弹(有跳过钮)
+    }
+    // M8-relay14 dev channel: --ps agentPrompt/--ps agentEngine
+    if (WantParams.getAgentPrompt() !== '') {
+      this.aiDockOpen = true
     }
   }
 
@@ -1159,7 +1164,10 @@ struct Index {
 
       // ===== M6 relay3: AI 智能体 Dock(主体与状态栏之间, 横跨全宽) =====
       if (this.aiDockOpen) {
-        AIDock()
+        AIDock({
+          autoPrompt: WantParams.getAgentPrompt(),
+          autoEngine: WantParams.getAgentEngine()
+        })
       }
 
       // ===== 底部状态栏(24px) =====

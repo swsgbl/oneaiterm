@@ -43,6 +43,9 @@ class DockMsg {
 
 @Component
 export struct AIDock {
+  /** M8-relay14 dev channel: want 直驱任务（--ps agentPrompt + agentEngine），绕过 UI 输入。 */
+  autoPrompt: string = ''
+  autoEngine: string = ''
   @StorageProp('ut.theme') themeName: string = 'dark'
   @State open: boolean = false
   @State input: string = ''
@@ -107,6 +110,17 @@ export struct AIDock {
     this.filesDir = ctx.filesDir
     const s: AgentSettings = AgentSettingsStore.read(this.filesDir)
     this.policy = s.security.approvalPolicy
+    if (this.autoEngine === 'local' || this.autoEngine === 'hmh' || this.autoEngine === 'acp') {
+      this.engineType = this.autoEngine
+    }
+    if (this.autoPrompt !== '') {
+      this.open = true
+      const t = this.autoPrompt
+      setTimeout(() => {
+        this.input = t
+        this.send()
+      }, 600)
+    }
   }
 
   aboutToDisappear(): void {
