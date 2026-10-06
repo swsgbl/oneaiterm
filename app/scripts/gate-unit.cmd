@@ -59,7 +59,7 @@ if !SUITES! lss 10 (
 echo check: !SUITES!/10 ohosTest suite files present
 
 if /i "%MODE%"=="u2"    goto :u2
-if /i "%MODE%"=="build" goto :device
+if /i "%MODE%"=="build" goto :build
 goto :device
 
 REM ===================== build mode: full provision =====================
