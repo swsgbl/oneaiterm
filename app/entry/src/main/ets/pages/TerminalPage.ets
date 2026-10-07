@@ -74,6 +74,7 @@ export struct TerminalPage {
   @State measureNote: string = '';
   @State statText: string = '';
   @State passthrough: boolean = true;
+  @State capture: string = '';
   @State focused: boolean = false;
   @State winTop: number = 0; // first bound scrollback row index
   @State winSize: number = 60; // number of bound rows
@@ -523,6 +524,16 @@ export struct TerminalPage {
 
   private send(): void {
     const text = this.input + '\r';
+    this.writeTerm(text);
+    this.input = '';
+    this.kickPoll(); // r6e: timer 链会被渲染期异常杀死,交互驱动同步排空兜底
+  }
+
+  /** 统一写入口(本地PTY/SSH/Telnet 择一),首屏/回显由各自通道负责。 */
+  private writeTerm(text: string): void {
+    if (text.length === 0) {
+      return;
+    }
     if (TelnetService.active()) {
       TelnetService.write(text);
     } else if (LocalTerminalService.active()) {
@@ -530,8 +541,25 @@ export struct TerminalPage {
     } else {
       SessionService.write(text);
     }
-    this.input = '';
-    this.kickPoll(); // r6e: timer 链会被渲染期异常杀死,交互驱动同步排空兜底
+  }
+
+  /**
+   * 原生直输捕获框(2026-10-07): 2px 隐形 TextInput 常驻聚焦,软键盘/IME
+   * 输入流直达 PTY(系统终端同款手感);硬件键走终端体 onKeyEvent 不受影响。
+   * 每次变更即写即清(组合期拼音会逐段进入——终端场景 ASCII 为主,V1 已知限制)。
+   */
+  private captureResetting: boolean = false
+  private onCaptureChange(v: string): void {
+    if (this.captureResetting) {
+      this.captureResetting = false
+      return
+    }
+    if (v !== '') {
+      this.writeTerm(v)
+      this.kickPoll()
+      this.captureResetting = true
+      this.capture = ''
+    }
   }
 
   /** Hardware-key -> terminal byte mapping. Returns the string to write. */
@@ -782,7 +810,6 @@ export struct TerminalPage {
       .edgeEffect(EdgeEffect.None)
       .focusable(true)
       .focusOnTouch(true)
-      .defaultFocus(true)
       .onClick(() => {
         this.focused = true;
         this.tick++;
@@ -795,6 +822,33 @@ export struct TerminalPage {
         const h = newArea.height as number;
         this.onBodyArea(w, h);
       })
+
+      // 原生直输捕获框: 2px 隐形常驻(defaultFocus——开终端即软键盘就绪,
+      // 打字直达 PTY,系统终端同款手感);硬件特殊键(方向/回车/Ctrl)经
+      // onKeyEvent 走 mapKey 同款映射;点终端体切硬件键焦点(focusOnTouch)。
+      TextInput({ text: this.capture })
+        .id('termCaptureInput')
+        .width('100%')
+        .height(2)
+        .fontSize(2)
+        .padding(0)
+        .opacity(0.03)
+        .backgroundColor(Color.Transparent)
+        .caretColor(Color.Transparent)
+        .focusable(true)
+        .focusOnTouch(true)
+        .defaultFocus(true)
+        .hitTestBehavior(HitTestMode.None)
+        .onChange((v: string) => {
+          this.onCaptureChange(v);
+        })
+        .onSubmit(() => {
+          this.writeTerm('\r');
+          this.kickPoll();
+        })
+        .onKeyEvent((ev: KeyEvent) => {
+          return this.onTermKey(ev);
+        })
 
       // footer: IME fallback input line + passthrough toggle
       Row({ space: 8 }) {

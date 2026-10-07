@@ -14,7 +14,7 @@ REM ASCII-only comments per repo convention.
 
 setlocal
 set HDC=hdc -t 127.0.0.1:15566
-set APPF=/data/app/el2/100/base/com.oneaiterm.terminal/files
+set APPF=/data/app/el2/100/base/com.oneaiterm.terminal/haps/entry/files
 
 echo [tools] 1/4 create dirs
 %HDC% shell "mkdir -p %APPF%/tools/bin %APPF%/tools/lib %APPF%/tools/home" || goto :fail

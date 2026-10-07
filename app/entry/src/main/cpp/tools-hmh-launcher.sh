@@ -1,8 +1,9 @@
 #!/system/bin/sh
 # OneAITerm in-sandbox hmh launcher (app-namespace paths only).
+# NOTE: ctx.filesDir = /data/storage/el2/base/haps/entry/files (haps/entry segment!)
 # Forced jitless: app sandbox uids forbid RWX; V8 JIT would SIGTRAP
 # (same reason the board's .ohos node wrapper defaults to --jitless).
-T=/data/storage/el2/base/files/tools
+T=/data/storage/el2/base/haps/entry/files/tools
 export HOME="$T/home"
 [ -z "${HMH_HOME:-}" ] && export HMH_HOME="$HOME/hmh-home"
 # node.bin NEEDS libc++_shared.so - absent from sandbox /lib; bundled beside

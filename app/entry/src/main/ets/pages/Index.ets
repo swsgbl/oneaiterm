@@ -20,6 +20,7 @@ import { SpiceTab } from '../components/SpiceTab';
 import { themeByName, AppTheme } from '../common/AppTheme';
 import { AIDock } from '../components/AIDock';
 import { WantParams } from '../common/WantParams';
+import { ToolsInstaller } from '../service/ToolsInstaller';
 import { GuideOverlay } from '../components/GuideOverlay';
 import { common } from '@kit.AbilityKit';
 import { fileIo } from '@kit.CoreFileKit';
@@ -325,6 +326,13 @@ struct Index {
   // type=local 连接(共享实例,防解密态被磁盘密文覆盖)后开终端标签。
   openLocalTerminal(): void {
     const ctx = getContext(this) as common.UIAbilityContext
+    // M8 工具箱: 首开本地终端自动装配(rawfile/tools.zip → files/tools,后台解压
+    // 不阻塞开终端;完成前 PATH 已含工具箱目录,下次会话或解压完成即生效)
+    ToolsInstaller.ensure(ctx).then((err: string): void => {
+      if (err !== '' && err !== 'busy') {
+        hilog.warn(0x0110, 'oat.tools', 'auto-provision skip: %{public}s', err)
+      }
+    })
     const store = getSharedStore()
     if (store === null) {
       return

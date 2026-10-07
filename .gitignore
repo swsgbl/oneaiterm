@@ -32,3 +32,6 @@ _port.cjs
 *.jpeg
 layout_*.json
 /.verify/
+
+# local terminal toolbox payload (38MB binary, regenerate via app/scripts/package-tools.cmd)
+app/entry/src/main/resources/rawfile/tools.zip

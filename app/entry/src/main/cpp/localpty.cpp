@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include <errno.h>
 
 // r5 插桩:OH_LOG_Print 可视化 pty 三环节(open/write/poll),0xFF 域;%{public} 防打码
@@ -127,16 +129,17 @@ static napi_value PtyOpen(napi_env env, napi_callback_info info) {
     // r6f 基线 + 应用内工具箱优先(2026-10-07 设计定稿):
     // 三方应用沙箱命名空间不含 /data/local(板端 hmh/node 所在区,挂载表实勘),
     // 系统级"继承"不可能;应用自有沙箱内 exec 已实证可行 → 工具箱路线:
-    // install-board-tools.cmd 把 node/hmh 等装进 files/tools,PATH 首位直取。
-    // /data/local/home/.local/bin 保留兜底(在可见该路径的上下文里自然生效)。
+    // ToolsInstaller 首开自动解压 rawfile/tools.zip 到 ctx.filesDir——注意
+    // filesDir=/data/storage/el2/base/haps/entry/files(含 haps/entry 段,
+    // 漏写此段=死路径,PATH 解析跳过→/bin/hmh 抢跑,实测踩过)。
     setenv("PATH",
-      "/data/storage/el2/base/files/tools/bin"
+      "/data/storage/el2/base/haps/entry/files/tools/bin"
       ":/bin:/system/bin:/data/local/home/.local/bin", 1);
     // HOME 起始目录:沙箱工具箱 home 优先(应用沙箱内唯一稳定可写),板端路径兜底
     // (仅在可见该路径的非沙箱上下文生效;沙箱内 /data/local 不存在,静默跳过)
-    if (access("/data/storage/el2/base/files/tools/home", F_OK) == 0) {
-      setenv("HOME", "/data/storage/el2/base/files/tools/home", 1);
-      chdir("/data/storage/el2/base/files/tools/home");
+    if (access("/data/storage/el2/base/haps/entry/files/tools/home", F_OK) == 0) {
+      setenv("HOME", "/data/storage/el2/base/haps/entry/files/tools/home", 1);
+      chdir("/data/storage/el2/base/haps/entry/files/tools/home");
     } else {
       setenv("HOME", "/data/local/home", 1);
       chdir("/data/local/home");
@@ -267,6 +270,79 @@ static napi_value PtyResize(napi_env env, napi_callback_info info) {
   return undef;
 }
 
+// M8 工具箱: chmod 0755——ohos fs API 无 chmod,zip 解压若丢执行位由此兜底。
+static napi_value ToolsChmod(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1];
+  napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+  if (argc < 1) {
+    napi_throw_error(env, NULL, "need (path)");
+    return NULL;
+  }
+  size_t len = 0;
+  napi_get_value_string_utf8(env, args[0], NULL, 0, &len);
+  char* p = (char*)malloc(len + 1);
+  napi_get_value_string_utf8(env, args[0], p, len + 1, &len);
+  int r = chmod(p, 0755);
+  LPLOG("toolsChmod %s r=%d", p, r);
+  free(p);
+  napi_value out;
+  napi_create_int32(env, r, &out);
+  return out;
+}
+
+// M8 工具箱: 递归 chmod(目录+文件统一 0755)——zip 解压的目录可能无 x 位导致
+// PATH 遍历失败(command -v 直接跳过该目录);沙箱内私有树,统一可执行无风险。
+static void chmodTree(const char* path, int depth, int* count) {
+  if (depth > 12 || *count > 5000) {
+    return;
+  }
+  chmod(path, 0755);
+  (*count)++;
+  DIR* d = opendir(path);
+  if (d == NULL) {
+    return;
+  }
+  struct dirent* e;
+  while ((e = readdir(d)) != NULL) {
+    if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) {
+      continue;
+    }
+    char sub[4096];
+    if (snprintf(sub, sizeof(sub), "%s/%s", path, e->d_name) >= (int)sizeof(sub)) {
+      continue;
+    }
+    if (e->d_type == DT_DIR) {
+      chmodTree(sub, depth + 1, count);
+    } else {
+      chmod(sub, 0755);
+      (*count)++;
+    }
+  }
+  closedir(d);
+}
+
+static napi_value ToolsChmodTree(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value args[1];
+  napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+  if (argc < 1) {
+    napi_throw_error(env, NULL, "need (path)");
+    return NULL;
+  }
+  size_t len = 0;
+  napi_get_value_string_utf8(env, args[0], NULL, 0, &len);
+  char* p = (char*)malloc(len + 1);
+  napi_get_value_string_utf8(env, args[0], p, len + 1, &len);
+  int count = 0;
+  chmodTree(p, 0, &count);
+  LPLOG("toolsChmodTree %s entries=%d", p, count);
+  free(p);
+  napi_value out;
+  napi_create_int32(env, count, &out);
+  return out;
+}
+
 EXTERN_C_START
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor desc[] = {
@@ -275,6 +351,8 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "ptyClose", NULL, PtyClose, NULL, NULL, NULL, napi_default, NULL },
     { "ptyResize", NULL, PtyResize, NULL, NULL, NULL, napi_default, NULL },
     { "ptyPoll", NULL, PtyPoll, NULL, NULL, NULL, napi_default, NULL },
+    { "toolsChmod", NULL, ToolsChmod, NULL, NULL, NULL, napi_default, NULL },
+    { "toolsChmodTree", NULL, ToolsChmodTree, NULL, NULL, NULL, napi_default, NULL },
   };
   napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
   return exports;
