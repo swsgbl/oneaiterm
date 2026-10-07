@@ -24,7 +24,12 @@ const PID_RE = /^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\s+(\d+)\s+\d+/;
 function ts(line) {
   const m = line.match(/^(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
   if (!m) return null;
-  return { h: +m[3], m: +m[4], s: +m[5], ms: +m[6], sec: (+m[3]) * 3600 + (+m[4]) * 60 + (+m[5]) + (+m[6]) / 1000 };
+  // date-aware seconds: month-day folded in, else a pre-midnight buffer line
+  // looks "newer" than a post-midnight marker and inflates age by a day
+  // (M8 closeout: age=47557s false STALE right after midnight)
+  const day = (+m[1]) * 31 + (+m[2]);
+  return { h: +m[3], m: +m[4], s: +m[5], ms: +m[6],
+    sec: day * 86400 + (+m[3]) * 3600 + (+m[4]) * 60 + (+m[5]) + (+m[6]) / 1000 };
 }
 
 const lines = fs.readFileSync(process.argv[2], "utf8").split("\n");

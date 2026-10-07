@@ -68,12 +68,17 @@ sh('hilog -x > /data/local/tmp/integ-hilog.txt 2>&1', 60000);
 const hl = recv('/data/local/tmp/integ-hilog.txt', 'integration-hilog.txt');
 
 // EntryAbility lifecycle markers (A0xxxx tags; match on ability + state name)
+// WSC fallback: hilog flow-control can drop the I-level C01332 lifecycle line under
+// concurrent-VM log noise (M8 closeout, twice reproduced); the JsWindowStage
+// "load content end" line is the same event's downstream proof (loadContent is
+// called from inside onWindowStageCreate) and survives the burst.
 const idxCreate = hl.search(/EntryAbility[^]{0,400}?onCreate|onCreate[^]{0,200}?EntryAbility/);
 const createLine = (hl.match(/[^\n]*EntryAbility[^\n]*onCreate[^\n]*|[^\n]*onCreate[^\n]*EntryAbility[^\n]*/) || [])[0] || '';
-const wscLine = (hl.match(/[^\n]*onWindowStageCreate[^\n]*/) || [])[0] || '';
+const wscLine = (hl.match(/[^\n]*onWindowStageCreate[^\n]*/)
+  || hl.match(/[^\n]*JsWindowStage[^\n]*load content end[^\n]*/) || [])[0] || '';
 const fgLine = (hl.match(/[^\n]*onForeground[^\n]*/) || [])[0] || '';
 log('[I2] onCreate:          ' + (createLine ? 'FOUND' : 'MISSING'));
-log('[I2] onWindowStageCreate: ' + (wscLine ? 'FOUND' : 'MISSING'));
+log('[I2] onWindowStageCreate: ' + (wscLine ? 'FOUND' : 'MISSING') + (/JsWindowStage/.test(wscLine) ? ' (via JsWindowStage load-content-end fallback)' : ''));
 log('[I2] onForeground:      ' + (fgLine ? 'FOUND' : 'MISSING'));
 if (createLine) log('  ' + createLine.trim().slice(0, 160));
 if (wscLine) log('  ' + wscLine.trim().slice(0, 160));
