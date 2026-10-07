@@ -68,7 +68,6 @@ export struct TerminalPage {
   @StorageProp('ut.term.reason') storageReason: string = '';
   @Prop connIdIn: string = '';
   @State title: string = '';
-  @State input: string = '';
   @State cols: number = 80;
   @State rows: number = 24;
   @State measureNote: string = '';
@@ -522,13 +521,6 @@ export struct TerminalPage {
     }
   }
 
-  private send(): void {
-    const text = this.input + '\r';
-    this.writeTerm(text);
-    this.input = '';
-    this.kickPoll(); // r6e: timer 链会被渲染期异常杀死,交互驱动同步排空兜底
-  }
-
   /** 统一写入口(本地PTY/SSH/Telnet 择一),首屏/回显由各自通道负责。 */
   private writeTerm(text: string): void {
     if (text.length === 0) {
@@ -849,39 +841,6 @@ export struct TerminalPage {
         .onKeyEvent((ev: KeyEvent) => {
           return this.onTermKey(ev);
         })
-
-      // footer: IME fallback input line + passthrough toggle
-      Row({ space: 8 }) {
-        Toggle({ type: ToggleType.Switch, isOn: this.passthrough })
-          .onChange((on: boolean) => {
-            this.passthrough = on;
-          })
-        Text('PT')
-          .fontSize(DesignTokens.FONT_BODY)
-          .fontColor(this.passthrough ? this.th().success : this.th().inkSubtle)
-        TextInput({ placeholder: 'input + Enter...', text: this.input })
-          .layoutWeight(1)
-          .fontSize(DesignTokens.FONT_HEADING)
-          .fontFamily(TERM_FONT_FAMILY)
-          .backgroundColor(this.th().surface)
-          .fontColor(TERM_DEFAULT_FG)
-          .placeholderColor(this.th().inkSubtle)
-          .onChange((v: string) => {
-            this.input = v;
-          })
-          .onSubmit(() => {
-            this.send();
-          })
-        Button('send')
-          .fontSize(DesignTokens.FONT_HEADING)
-          .backgroundColor(this.th().success)
-          .onClick(() => {
-            this.send();
-          })
-      }
-      .width('100%')
-      .padding({ left: 10, right: 10, top: 8, bottom: 10 })
-      .backgroundColor(this.th().panel)
     }
     .width('100%')
     .height('100%')

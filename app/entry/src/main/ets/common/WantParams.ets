@@ -126,6 +126,19 @@ export class WantParams {
     return '';
   }
 
+  /** M8 native-input dev channel: --ps termCmd <cmd> - write a command into the local PTY (terminal has no visible input row). */
+  static getTermCmd(): string {
+    const w = WantParams.want;
+    if (w === null || w.parameters === undefined || w.parameters === null) {
+      return '';
+    }
+    const v = w.parameters['termCmd'];
+    if (typeof v === 'string') {
+      return v;
+    }
+    return '';
+  }
+
   /** M8-relay14 dev channel: --ps agentEngine <local|hmh|acp> - engine pill preselect. */
   static getAgentEngine(): string {
     const w = WantParams.want;

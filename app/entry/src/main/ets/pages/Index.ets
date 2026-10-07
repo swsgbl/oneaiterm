@@ -21,6 +21,7 @@ import { themeByName, AppTheme } from '../common/AppTheme';
 import { AIDock } from '../components/AIDock';
 import { WantParams } from '../common/WantParams';
 import { ToolsInstaller } from '../service/ToolsInstaller';
+import { LocalTerminalService } from '../service/LocalTerminalService';
 import { GuideOverlay } from '../components/GuideOverlay';
 import { common } from '@kit.AbilityKit';
 import { fileIo } from '@kit.CoreFileKit';
@@ -100,6 +101,13 @@ struct Index {
     // M8-relay14 dev channel: --ps agentPrompt/--ps agentEngine
     if (WantParams.getAgentPrompt() !== '') {
       this.aiDockOpen = true
+    }
+    // --ps termCmd '<cmd>': 自动打开本地终端并注入命令(openLocalTerminal 内写 PTY)。
+    // 延迟触发:aboutToAppear 时共享 store 尚未初始化,直接调用会早退(实测)。
+    if (WantParams.getTermCmd() !== '') {
+      setTimeout(() => {
+        this.openLocalTerminal()
+      }, 1500)
     }
   }
 
@@ -348,6 +356,28 @@ struct Index {
       local = c
     }
     this.openConnTab(local.id)
+    // 终端直写开发通道: --ps termCmd '<cmd>' —— 终端已无可见输入行(纯原生直输),
+    // 自动化/联调经此注入命令(等 PTY 就绪后写入,最多等 30s)
+    const termCmd = WantParams.getTermCmd()
+    if (termCmd !== '') {
+      hilog.info(0x0110, 'oat.termcmd', 'armed len=%{public}d', termCmd.length)
+      let waited = 0
+      const timerId = setInterval(() => {
+        waited += 1000
+        if (waited % 5000 === 0) {
+          hilog.info(0x0110, 'oat.termcmd', 'tick w=%{public}d active=%{public}s', waited, LocalTerminalService.active() ? 'y' : 'n')
+        }
+        if (LocalTerminalService.active() || waited >= 30000) {
+          clearInterval(timerId)
+          if (LocalTerminalService.active()) {
+            hilog.info(0x0110, 'oat.termcmd', 'fire len=%{public}d', termCmd.length)
+            LocalTerminalService.write(termCmd + '\r')
+          } else {
+            hilog.warn(0x0110, 'oat.termcmd', 'giveup after 30s')
+          }
+        }
+      }, 1000)
+    }
   }
 
   openSftpTab(connId: string): void {
