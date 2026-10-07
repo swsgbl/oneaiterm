@@ -122,14 +122,19 @@ static napi_value PtyOpen(napi_env env, napi_callback_info info) {
     return NULL;
   }
   if (pid == 0) {
-    // child: /bin/sh interactive
+    // child: /bin/sh login interactive
     setenv("TERM", "xterm-256color", 1);
     // r6f: app 进程环境缺 PATH/HOME,sh 内外部命令(uname/id/ls)全部
     // "inaccessible or not found"。补全标准路径(实测 /bin/uname 存在)。
     setenv("PATH", "/bin:/system/bin:/data/local/home/.local/bin", 1);
     setenv("HOME", "/data/local/home", 1);
     setenv("PS1", "$ ", 1);
-    execl("/bin/sh", "sh", NULL);
+    // 2026-10-07: argv[0] 前缀 '-' = login shell —— 让 sh 加载 /etc/profile 与
+    // $HOME/.profile(板端开发环境:node/.ohos 工具链/LD_LIBRARY_PATH 等),与系统
+    // 终端行为对齐;上方的 PATH/HOME 兜底在 profile 缺失/失配时仍然生效。
+    // 注意:localpty.cpp 改动必须用 build-localpty.sh 重编双 ABI 预编译库,
+    // 否则修复死在源码层(09-28 旧预编译件从未包含 r6f 的 PATH/HOME)。
+    execl("/bin/sh", "-sh", NULL);
     _exit(127);
   }
   g_child = pid;
