@@ -559,31 +559,31 @@ export struct AIDock {
         .align(Alignment.Top)
         .padding({ left: 12, right: 12 })
 
-        // ===== 输入行 =====
+        // ===== 输入行(2026-10-07 加大: 46px 高 + 大字号,此前 32px 近乎不可见) =====
         Row({ space: 8 }) {
           TextInput({ placeholder: this.inputPlaceholder(), text: this.input })
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(DesignTokens.FONT_HEADING)
             .fontColor(this.th().ink)
             .placeholderColor(this.th().inkSubtle)
             .backgroundColor(this.th().inputBg)
             .border({ width: 1, color: this.th().hairline })
             .borderRadius(DesignTokens.RADIUS_MD)
-            .height(32)
+            .height(46)
             .layoutWeight(1)
             .onChange((v: string) => {
               this.input = v
             })
             .onSubmit(() => this.send())
           Text(this.running ? '…' : '发送')
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(DesignTokens.FONT_HEADING)
             .fontColor(this.th().surface)
-            .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+            .padding({ left: 18, right: 18, top: 12, bottom: 12 })
             .borderRadius(DesignTokens.RADIUS_MD)
             .backgroundColor(this.running ? this.th().iconMuted : this.th().brand)
             .onClick(() => this.send())
         }
         .width('100%')
-        .padding({ left: 12, right: 12, top: 6, bottom: 8 })
+        .padding({ left: 12, right: 12, top: 8, bottom: 10 })
         .alignItems(VerticalAlign.Center)
       } else {
         // ===== 折叠态(28px 细条) =====

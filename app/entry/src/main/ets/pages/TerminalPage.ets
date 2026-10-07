@@ -732,28 +732,26 @@ export struct TerminalPage {
 
   build() {
     Column() {
-      // header
+      // header(紧凑单行: 标题+尺寸内联, 小按钮, 最大化终端显示区——2026-10-07 用户反馈)
       Column() {
         Row({ space: 8 }) {
-          Column() {
-            Text(this.title)
-              .fontSize(DesignTokens.FONT_DISPLAY)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(this.th().surfaceRaised)
-              .maxLines(1)
-            Text(this.cols.toString() + 'x' + this.rows.toString() + '  ' + this.measureNote
-              + (this.focused ? '  [key-passthrough]' : ''))
-              .fontSize(DesignTokens.FONT_CAPTION)
-              .fontColor(this.th().inkSubtle)
-              .maxLines(1)
-          }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
+          Text(this.title)
+            .fontSize(DesignTokens.FONT_BODY)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.th().surfaceRaised)
+            .maxLines(1)
+          Text(this.cols.toString() + 'x' + this.rows.toString() + (this.focused ? '  key' : ''))
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontColor(this.th().inkSubtle)
+            .maxLines(1)
+            .layoutWeight(1)
 
           this.StatusBadge()
 
           Button('ZM')
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .height(26)
+            .padding({ left: 10, right: 10 })
             .backgroundColor(this.th().brand)
             .onClick(() => {
               // M8 relay-5: trigger rz on the remote -> peer ZRINIT marker
@@ -761,14 +759,18 @@ export struct TerminalPage {
               ZmodemService.startTxManually();
             })
           Button('SFTP')
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .height(26)
+            .padding({ left: 10, right: 10 })
             .backgroundColor(this.th().brand)
             .enabled(this.storageStatus === 'connected')
             .onClick(() => {
               AppStorage.setOrCreate('ut.openSftp', this.connId);
             })
           Button('close')
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .height(26)
+            .padding({ left: 10, right: 10 })
             .backgroundColor(this.th().danger)
             .onClick(() => {
               if (TelnetService.active()) {
@@ -779,13 +781,15 @@ export struct TerminalPage {
             })
         }
         .width('100%')
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .padding({ left: 12, right: 12, top: 4, bottom: 4 })
 
-        Text(this.statText)
-          .fontSize(DesignTokens.FONT_CAPTION)
-          .fontColor(this.th().inkSubtle)
-          .width('100%')
-          .padding({ left: 12, right: 12, bottom: 4 })
+        if (this.statText !== '') {
+          Text(this.statText)
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontColor(this.th().inkSubtle)
+            .width('100%')
+            .padding({ left: 12, right: 12, bottom: 2 })
+        }
 
         if (this.storageStatus === 'error' && this.storageReason.length > 0) {
           Text('error: ' + this.storageReason)

@@ -1,9 +1,9 @@
 // LayoutConstants — 布局尺寸常量
 export class LayoutConstants {
-  static readonly CMD_BAR_HEIGHT: number = 44
-  static readonly TAB_BAR_HEIGHT: number = 28
+  static readonly CMD_BAR_HEIGHT: number = 36
+  static readonly TAB_BAR_HEIGHT: number = 24
   static readonly STATUS_BAR_HEIGHT: number = 24
-  static readonly DOCK_OPEN_HEIGHT: number = 220
+  static readonly DOCK_OPEN_HEIGHT: number = 248
   static readonly DOCK_CLOSED_HEIGHT: number = 28
   static readonly DOCK_NARROW_WIDTH: number = 56
   static readonly DOCK_WIDE_WIDTH: number = 200

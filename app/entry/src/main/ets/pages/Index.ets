@@ -1200,12 +1200,24 @@ struct Index {
       .layoutWeight(1)
       .width('100%')
 
-      // ===== M6 relay3: AI 智能体 Dock(主体与状态栏之间, 横跨全宽) =====
+      // ===== M6 relay3: AI 智能体 Dock(主体与状态栏之间) =====
+      // 2026-10-07 对齐修复: dock 左缘与终端内容列对齐(左侧留出侧坞宽度),
+      // 不再横跨全宽压在菜单栏上;输入框同步放大(AIDock 内)。
       if (this.aiDockOpen) {
-        AIDock({
-          autoPrompt: WantParams.getAgentPrompt(),
-          autoEngine: WantParams.getAgentEngine()
-        })
+        Row() {
+          Row()
+            .width(this.sidebarVisible
+              ? (this.dockWide ? LayoutConstants.DOCK_WIDE_WIDTH : LayoutConstants.DOCK_NARROW_WIDTH)
+              : 0)
+          Column() {
+            AIDock({
+              autoPrompt: WantParams.getAgentPrompt(),
+              autoEngine: WantParams.getAgentEngine()
+            })
+          }
+          .layoutWeight(1)
+        }
+        .width('100%')
       }
 
       // ===== 底部状态栏(24px) =====
