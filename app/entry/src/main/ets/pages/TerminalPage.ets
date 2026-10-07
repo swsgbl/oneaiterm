@@ -536,22 +536,40 @@ export struct TerminalPage {
   }
 
   /**
-   * 原生直输捕获框(2026-10-07): 2px 隐形 TextInput 常驻聚焦,软键盘/IME
-   * 输入流直达 PTY(系统终端同款手感);硬件键走终端体 onKeyEvent 不受影响。
-   * 每次变更即写即清(组合期拼音会逐段进入——终端场景 ASCII 为主,V1 已知限制)。
+   * 原生直输捕获层(2026-10-07 三修): 全幅透明 TextInput 覆盖终端区,承接一切
+   * 硬件键/软键盘/IME 输入。增量差分写 PTY——绝不依赖"程序化清空触发 onChange"
+   * (该平台不触发,导致初版护卫标志错位吞字,[hie] 连发实勘);回车由 onSubmit
+   * 独占(捕获层 onKeyEvent 对 KC_ENTER 放行,避免双 \r);删除按 \x7f 差分回写。
    */
-  private captureResetting: boolean = false
+  private lastCapture: string = ''
   private onCaptureChange(v: string): void {
-    if (this.captureResetting) {
-      this.captureResetting = false
-      return
+    const last = this.lastCapture
+    if (v !== last) {
+      if (v.length > last.length && v.startsWith(last)) {
+        this.writeTerm(v.substring(last.length))
+        this.kickPoll()
+      } else if (v.length < last.length && last.startsWith(v)) {
+        const n = last.length - v.length
+        let bs = ''
+        for (let i = 0; i < n; i++) {
+          bs += '\x7f'
+        }
+        this.writeTerm(bs)
+        this.kickPoll()
+      } else {
+        // 框架在 submit 后会静默清空字段(无 onChange 事件),lastCapture 与实际
+        // 内容失配——非前缀变化视为重新起步:整段写入并重对齐(实勘修复)。
+        if (v.length > 0) {
+          this.writeTerm(v)
+          this.kickPoll()
+        }
+      }
     }
-    if (v !== '') {
-      this.writeTerm(v)
-      this.kickPoll()
-      this.captureResetting = true
-      this.capture = ''
-    }
+    this.lastCapture = v
+  }
+  private onCaptureSubmit(): void {
+    this.writeTerm('\r')
+    this.kickPoll()
   }
 
   /** Hardware-key -> terminal byte mapping. Returns the string to write. */
@@ -782,65 +800,69 @@ export struct TerminalPage {
       .width('100%')
       .backgroundColor(this.th().panel)
 
-      // terminal body: focusable surface for hardware key passthrough
-      Scroll(this.scroller) {
-        Column() {
-          ForEach(this.winRows, (line: TermLine, idx: number) => {
-            this.TermLineView(line, this.winTop + idx)
-          }, (line: TermLine, idx: number) => (this.winTop + idx).toString() + ':' + line.rev.toString() + ':'
-            + this.tick.toString())
+      // 终端体:输出滚动区 + 全幅透明捕获层(Stack)。
+      // 直输机制(2026-10-07 二次返工:原"终端体焦点+onKeyEvent"路径实勘从未生效,
+      // 键入零到达):透明 TextInput 覆盖整个终端区承接焦点——硬件键/软键盘/IME
+      // 全部流入捕获层,onChange 逐字直写 PTY;hitTestTransparent 保住下方滚动
+      // 与文本选择;特殊键(方向/回车)经捕获层 onKeyEvent 走 mapKey。
+      Stack({ alignContent: Alignment.BottomStart }) {
+        Scroll(this.scroller) {
+          Column() {
+            ForEach(this.winRows, (line: TermLine, idx: number) => {
+              this.TermLineView(line, this.winTop + idx)
+            }, (line: TermLine, idx: number) => (this.winTop + idx).toString() + ':' + line.rev.toString() + ':'
+              + this.tick.toString())
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .padding(BODY_PAD)
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(BODY_PAD)
+        .height('100%')
+        .scrollBar(BarState.Auto)
+        .edgeEffect(EdgeEffect.None)
+
+        TextInput({ text: this.capture, placeholder: '' })
+          .id('termCaptureInput')
+          .width('100%')
+          .height('100%')
+          .fontSize(1)
+          .padding(0)
+          .opacity(0.01)
+          .backgroundColor(Color.Transparent)
+          .caretColor(Color.Transparent)
+          .placeholderColor(Color.Transparent)
+          .focusable(true)
+          .focusOnTouch(true)
+          .defaultFocus(true)
+          .hitTestBehavior(HitTestMode.Default)
+          .onChange((v: string) => {
+            this.onCaptureChange(v);
+          })
+          .onSubmit(() => {
+            this.onCaptureSubmit();
+          })
+          .onKeyEvent((ev: KeyEvent) => {
+            // 回车让位 onSubmit(双路径各写一次 \r 的坑,实勘);其余特殊键走 mapKey
+            if (ev.keyCode === KC_ENTER) {
+              return false;
+            }
+            return this.onTermKey(ev);
+          })
       }
       .layoutWeight(1)
       .width('100%')
       .backgroundColor(TERM_DEFAULT_BG)
       .align(Alignment.Bottom)
-      .scrollBar(BarState.Auto)
-      .edgeEffect(EdgeEffect.None)
-      .focusable(true)
-      .focusOnTouch(true)
       .onClick(() => {
         this.focused = true;
         this.tick++;
-      })
-      .onKeyEvent((ev: KeyEvent) => {
-        return this.onTermKey(ev);
       })
       .onAreaChange((oldArea: Area, newArea: Area) => {
         const w = newArea.width as number;
         const h = newArea.height as number;
         this.onBodyArea(w, h);
       })
-
-      // 原生直输捕获框: 2px 隐形常驻(defaultFocus——开终端即软键盘就绪,
-      // 打字直达 PTY,系统终端同款手感);硬件特殊键(方向/回车/Ctrl)经
-      // onKeyEvent 走 mapKey 同款映射;点终端体切硬件键焦点(focusOnTouch)。
-      TextInput({ text: this.capture })
-        .id('termCaptureInput')
-        .width('100%')
-        .height(2)
-        .fontSize(2)
-        .padding(0)
-        .opacity(0.03)
-        .backgroundColor(Color.Transparent)
-        .caretColor(Color.Transparent)
-        .focusable(true)
-        .focusOnTouch(true)
-        .defaultFocus(true)
-        .hitTestBehavior(HitTestMode.None)
-        .onChange((v: string) => {
-          this.onCaptureChange(v);
-        })
-        .onSubmit(() => {
-          this.writeTerm('\r');
-          this.kickPoll();
-        })
-        .onKeyEvent((ev: KeyEvent) => {
-          return this.onTermKey(ev);
-        })
     }
     .width('100%')
     .height('100%')
