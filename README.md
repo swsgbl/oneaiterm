@@ -36,6 +36,7 @@
 | **ACP 引擎(mock)** | ACP v1 JSON-RPC 握手(initialize 1.0/session-new/prompt)+SSE 订阅一次点火;双 delta 流式+tool 卡渲染;会话 engine=acp finished、审计 final 落档(`.verify/m8r14`) |
 | AI Dock UX | 自然语言→审批卡(档位徽标+超时倒计时)→执行→`task completed` 终态 |
 | want 直驱开发通道 | `--ps agentPrompt/--ps agentEngine` 绕过 UI 输入直接驱动任意引擎(并发使用/自动化场景) |
+| **本地终端工具箱** | 应用沙箱内自带工具链(jitless node+hmh+libc++),`install-board-tools.cmd` 一键供应,终端开箱即跑板端工具,零配置;系统命令(/bin,/system/bin)装完即用(`.verify/m8r13` 沙箱审计) |
 | 加密配置(承继) | 承继实证(V2.0.0 谱系,PBKDF2+AES-256-GCM) |
 
 ### 后续路线

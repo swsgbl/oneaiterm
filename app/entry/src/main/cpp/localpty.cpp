@@ -122,21 +122,29 @@ static napi_value PtyOpen(napi_env env, napi_callback_info info) {
     return NULL;
   }
   if (pid == 0) {
-    // child: 零配置继承板端系统终端能力(profile 显式引导,不依赖登录 shell 语义)
+    // child: 零配置继承终端能力(profile 显式引导,不依赖登录 shell 语义)
     setenv("TERM", "xterm-256color", 1);
-    // r6f: app 进程环境缺 PATH/HOME,sh 内外部命令(uname/id/ls)全部
-    // "inaccessible or not found"。补全标准路径(实测 /bin/uname 存在)。
-    setenv("PATH", "/bin:/system/bin:/data/local/home/.local/bin", 1);
-    setenv("HOME", "/data/local/home", 1);
+    // r6f 基线 + 应用内工具箱优先(2026-10-07 设计定稿):
+    // 三方应用沙箱命名空间不含 /data/local(板端 hmh/node 所在区,挂载表实勘),
+    // 系统级"继承"不可能;应用自有沙箱内 exec 已实证可行 → 工具箱路线:
+    // install-board-tools.cmd 把 node/hmh 等装进 files/tools,PATH 首位直取。
+    // /data/local/home/.local/bin 保留兜底(在可见该路径的上下文里自然生效)。
+    setenv("PATH",
+      "/data/storage/el2/base/files/tools/bin"
+      ":/bin:/system/bin:/data/local/home/.local/bin", 1);
+    // HOME 起始目录:沙箱工具箱 home 优先(应用沙箱内唯一稳定可写),板端路径兜底
+    // (仅在可见该路径的非沙箱上下文生效;沙箱内 /data/local 不存在,静默跳过)
+    if (access("/data/storage/el2/base/files/tools/home", F_OK) == 0) {
+      setenv("HOME", "/data/storage/el2/base/files/tools/home", 1);
+      chdir("/data/storage/el2/base/files/tools/home");
+    } else {
+      setenv("HOME", "/data/local/home", 1);
+      chdir("/data/local/home");
+    }
     setenv("PS1", "$ ", 1);
-    // 与系统终端一致:落在 $HOME 起步(而非应用 cwd)
-    chdir("/data/local/home");
     // 2026-10-07 实勘: 板端 /bin/sh 对 argv[0]="-sh" 与 "-l" 两种登录模式
-    // 均不加载 /data/local/home/.profile(应用 PTY 实测 env: PATH 停留在兜底值,
-    // 无 LD_LIBRARY_PATH → node.bin exec ENOENT)。改为显式 source 后再起交互
-    // shell——对所有 POSIX sh 确定性生效。sourcing 必须包在子 shell 里:
-    // profile/env.sh 在应用沙箱上下文可能触发 exit(实测 4ms 内带走整个 PTY
-    // 子进程),子 shell 包裹后其 exit 只影响自身,兜底环境仍然保住:
+    // 均不加载 .profile;且应用沙箱命名空间根本不含 /data/local。显式 source
+    // (子 shell 包裹,防 profile 在应用上下文 exit 自杀)只在路径可见时有实效:
     //   /etc/profile(若在) + 板端 .profile(node/NDK/hvigor/ohpm/LD_LIBRARY_PATH)
     execl("/bin/sh", "sh", "-c",
       "( . /etc/profile ) 2>/dev/null; ( . /data/local/home/.profile ) 2>/dev/null; "

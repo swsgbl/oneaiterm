@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## V2.1.2 — 应用内终端工具箱（零配置继承终端能力）
+
+### 新能力
+- **本地终端工具箱**：三方应用沙箱不含 `/data/local`（挂载表实勘），板端 hmh/node 等工具对应用结构性不可见——改为工具箱路线：`install-board-tools.cmd` 把 node（jitless）+ hmh + 自带 libc++_shared.so + HMH_HOME 装进应用沙箱 `files/tools`，localpty PATH 首位直取 → **应用终端开箱即跑 hmh 等工具链，零配置**（实测 `hmh --help`/`hmh web status` 全通）
+- **终端环境零配置基线**：TERM/PATH/HOME/PS1 全由 PTY 子进程自带；HOME 沙箱优先、板端兜底（探测定向）；系统命令（/bin、/system/bin 全家）装完即用
+
+### 修复
+- **本地终端环境三轮根因修复**：①预编译 .so 腐烂（09-28 旧件无 PATH，重编链固化 `build-localpty.sh`）②板端 /bin/sh 两种登录模式均不加载 profile（argv0/-l 双杀实证）→ 显式 source + 子 shell 包裹（裸 source 在应用上下文 4ms 自杀）③沙箱铁墙定性（/data/local 挂载缺失，非配置可解）
+
+---
+
 ## V2.1.1 — 远端引擎真机收官
 
 > 覆盖 M8 尾段 commit 区间 8b36e8d..（relay12/13/14）。三引擎中最后两块远端拼图在 KaihongOS 5.0 VM 真机端到端实证。
