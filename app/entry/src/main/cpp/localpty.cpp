@@ -122,19 +122,25 @@ static napi_value PtyOpen(napi_env env, napi_callback_info info) {
     return NULL;
   }
   if (pid == 0) {
-    // child: /bin/sh login interactive
+    // child: 零配置继承板端系统终端能力(profile 显式引导,不依赖登录 shell 语义)
     setenv("TERM", "xterm-256color", 1);
     // r6f: app 进程环境缺 PATH/HOME,sh 内外部命令(uname/id/ls)全部
     // "inaccessible or not found"。补全标准路径(实测 /bin/uname 存在)。
     setenv("PATH", "/bin:/system/bin:/data/local/home/.local/bin", 1);
     setenv("HOME", "/data/local/home", 1);
     setenv("PS1", "$ ", 1);
-    // 2026-10-07: argv[0] 前缀 '-' = login shell —— 让 sh 加载 /etc/profile 与
-    // $HOME/.profile(板端开发环境:node/.ohos 工具链/LD_LIBRARY_PATH 等),与系统
-    // 终端行为对齐;上方的 PATH/HOME 兜底在 profile 缺失/失配时仍然生效。
-    // 注意:localpty.cpp 改动必须用 build-localpty.sh 重编双 ABI 预编译库,
-    // 否则修复死在源码层(09-28 旧预编译件从未包含 r6f 的 PATH/HOME)。
-    execl("/bin/sh", "-sh", NULL);
+    // 与系统终端一致:落在 $HOME 起步(而非应用 cwd)
+    chdir("/data/local/home");
+    // 2026-10-07 实勘: 板端 /bin/sh 对 argv[0]="-sh" 与 "-l" 两种登录模式
+    // 均不加载 /data/local/home/.profile(应用 PTY 实测 env: PATH 停留在兜底值,
+    // 无 LD_LIBRARY_PATH → node.bin exec ENOENT)。改为显式 source 后再起交互
+    // shell——对所有 POSIX sh 确定性生效。sourcing 必须包在子 shell 里:
+    // profile/env.sh 在应用沙箱上下文可能触发 exit(实测 4ms 内带走整个 PTY
+    // 子进程),子 shell 包裹后其 exit 只影响自身,兜底环境仍然保住:
+    //   /etc/profile(若在) + 板端 .profile(node/NDK/hvigor/ohpm/LD_LIBRARY_PATH)
+    execl("/bin/sh", "sh", "-c",
+      "( . /etc/profile ) 2>/dev/null; ( . /data/local/home/.profile ) 2>/dev/null; "
+      "exec /bin/sh -i", NULL);
     _exit(127);
   }
   g_child = pid;
