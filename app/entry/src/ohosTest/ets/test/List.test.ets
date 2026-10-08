@@ -11,7 +11,8 @@ import capabilityDiscoveryTest from './CapabilityDiscovery.test.ets';
 import approvalCardTest from './ApprovalCard.test.ets';
 import agentAdapterTest from './AgentAdapter.test.ets';
 import approvalManagerTest from './ApprovalManager.test.ets';
-import backspaceKeyTest from './BackspaceKey.test.ets';
+import backspaceKeyTest from './BackspaceKey.test.ets'; // +tty7-M1a: layoutTreeTest (ListTest runner 静态引用本文件，不注册则新套件不执行)
+import layoutTreeTest from './LayoutTree.test.ets';
 
 export default function testsuite() {
   policyEngineTest();
@@ -22,5 +23,6 @@ export default function testsuite() {
   approvalCardTest();
   agentAdapterTest();
   approvalManagerTest();
-  backspaceKeyTest();
+  backspaceKeyTest(); // +tty7-M1a
+  layoutTreeTest();
 }
