@@ -151,4 +151,17 @@ export class WantParams {
     }
     return '';
   }
+
+  // +tty7-M1b: --ps shell tty7 - boot straight into the tty7 workbench shell.
+  static getShellMode(): string {
+    const w = WantParams.want;
+    if (w === null || w.parameters === undefined || w.parameters === null) {
+      return '';
+    }
+    const v = w.parameters['shell'];
+    if (typeof v === 'string') {
+      return v;
+    }
+    return '';
+  }
 }

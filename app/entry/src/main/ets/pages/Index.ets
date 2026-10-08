@@ -29,6 +29,9 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DesignTokens } from '../common/DesignTokens';
 import { LayoutConstants } from '../common/LayoutConstants';
 import { AppIcons } from '../common/AppIcons';
+// +tty7-M1b: tty7 工作台外壳(纯 UI + Vm 桩,零业务依赖)
+import { AppShell } from '../tty7/shell/AppShell';
+import { WorkbenchVm } from '../tty7/viewmodel/WorkbenchVm';
 
 interface TabInfo {
   id: number
@@ -80,6 +83,10 @@ struct Index {
   @State guideShow: boolean = false
   @StorageLink('ut.openSftp') @Watch('onOpenSftp') openSftpSignal: string = ''
   @StorageLink('ut.closeTab') @Watch('onCloseTab') closeTabSignal: string = ''
+  // +tty7-M1b: tty7 工作台外壳模式(''=旧界面原样;'tty7'=整页 AppShell)
+  @State shellMode: string = ''
+  // +tty7-M1b: tty7 外壳 ViewModel(纯桩,生命周期与 Index 同;@State 驱动 @ObjectLink)
+  @State tty7Vm: WorkbenchVm = new WorkbenchVm()
 
   aboutToAppear(): void {
     this.applyTheme(this.themeName)
@@ -97,6 +104,10 @@ struct Index {
       }
     } catch (e) {
       this.guideShow = true // 拿不到路径宁可弹(有跳过钮)
+    }
+    // +tty7-M1b: --ps shell tty7 直启工作台外壳(dev channel)
+    if (WantParams.getShellMode() === 'tty7') {
+      this.shellMode = 'tty7'
     }
     // M8-relay14 dev channel: --ps agentPrompt/--ps agentEngine
     if (WantParams.getAgentPrompt() !== '') {
@@ -219,6 +230,11 @@ struct Index {
     items.push({
       key: 'cmd.tunnel', icon: AppIcons.PANEL_TUNNEL, label: '隧道', hint: '端口转发 -L',
       run: () => { this.sideView = 3; this.sidebarVisible = true }
+    })
+    items.push({
+      key: 'cmd.tty7', icon: AppIcons.PANEL_WORKSPACE, label: 'tty7 工作台', hint: '打开新工作台外壳',
+      // +tty7-M1b: 命令面板入口——整页切换到 AppShell(返回钮置回 '')
+      run: () => { this.shellMode = 'tty7' }
     })
     // 连接: 按搜索词过滤
     try {
@@ -907,6 +923,15 @@ struct Index {
 
   build() {
     Stack() {
+      // +tty7-M1b: shellMode='tty7' 时整页渲染工作台外壳,旧界面零改动(else 分支)
+      if (this.shellMode === 'tty7') {
+        AppShell({
+          vm: this.tty7Vm,
+          onClose: () => {
+            this.shellMode = ''
+          }
+        })
+      } else {
       Column() {
       // ===== 命令栏(44px): 品牌 + 坞折叠钮 + 搜索命令面板 + AI/齿轮/分屏 =====
       Row() {
@@ -1257,6 +1282,7 @@ struct Index {
       .width('100%')
       .height('100%')
       .backgroundColor(this.th.surface)
+      } // +tty7-M1b: else(shellMode) 分支闭合
 
       if (this.guideShow) {
         GuideOverlay({ onFinish: () => this.finishGuide() })
@@ -1266,4 +1292,3 @@ struct Index {
     .height('100%')
   }
 }
-
