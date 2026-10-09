@@ -142,6 +142,45 @@ export class InputController {
     return a
   }
 
+  /**
+   * 多行粘贴块(IME 粘贴/驱动注入):整体写入,行间 '\r' 交给 sh 顺序执行
+   * (与真实终端粘贴一致,不在客户端逐行拆分);最后一行经差分对齐为当前行
+   * (setField=true);单行等价 onInput(差分路径)。行尾 '\r' 语义:末行不带
+   * '\r'(留在编辑行,等用户回车;前面 N-1 行后各补一个 '\r' 提交执行)。
+   */
+  onPasteBlock(text: string): InputAction {
+    const a = new InputAction()
+    if (text.indexOf('\n') < 0) {
+      return this.onInput(text) // 单行走差分(ghost/基线全保)
+    }
+    const lines = text.split('\n').map((l: string): string => l.replace(/\r$/, ''))
+    while (lines.length > 0 && lines[lines.length - 1].length === 0) {
+      lines.pop() // 末尾空行不入(粘贴块尾换行非用户输入)
+    }
+    if (lines.length === 0) {
+      return a
+    }
+    if (lines.length === 1) {
+      return this.onInput(lines[0]) // 剥尾后单行:回差分路径(含整行重写)
+    }
+    const last = lines[lines.length - 1]
+    // 编辑行有残留先 Ctrl-U 清行(块不得接在旧行后),再整块写入
+    let w = this.sent.length > 0 ? '\x15' : ''
+    for (let i = 0; i < lines.length - 1; i++) {
+      w += lines[i] + '\r'
+    }
+    w += last
+    a.writeText = w
+    a.fieldText = last
+    a.setField = true
+    this.sent = last
+    this.histIdx = -1
+    this.tabIdx = -1
+    this.ghostSuf = this.calcGhost(last)
+    a.ghost = this.ghostSuf
+    return a
+  }
+
   /** 回车:发 '\r' + 历史入档 + 行状态复位(submit 后框架清字段的
    *  onChange('') 因 sent 已清零恒无操作)。 */
   onEnter(): InputAction {

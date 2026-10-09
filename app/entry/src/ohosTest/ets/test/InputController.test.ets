@@ -161,5 +161,51 @@ export default function inputControllerTest() {
       expect(c.line()).assertEqual('')
       expect(c.ghost()).assertEqual('')
     })
+
+    // ===== 8. M4b onPasteBlock 三行:两处 \r + 末行对齐 + 单行差分 + 尾空行剥 ====
+    it('controller_onpasteblock_multiline', 0, () => {
+      const c = new InputController()
+      const a = c.onPasteBlock('ec\r\nho\r\nfoo') // CRLF 输入
+      expect(a.writeText).assertEqual('ec\rho\rfoo')
+      expect(a.setField).assertTrue()
+      expect(a.fieldText).assertEqual('foo')
+      expect(c.line()).assertEqual('foo')
+      const a2 = c.onPasteBlock('ls\r\n') // 剥尾空行→单行'ls'→走 onInput 差分:非前缀→整行重写
+      expect(a2.writeText).assertEqual('\x15ls')
+      expect(a2.setField).assertFalse() // 差分路径不重设字段(字段已是新值)
+      expect(c.line()).assertEqual('ls')
+      const a3 = c.onPasteBlock('ls -l') // 单行:纯差分
+      expect(a3.writeText).assertEqual(' -l')
+      expect(a3.setField).assertFalse()
+      const c4 = new InputController()
+      c4.onInput('ec') // 编辑行残留:块前须 Ctrl-U 清行
+      const a4 = c4.onPasteBlock('aa\nbb')
+      expect(a4.writeText).assertEqual('\x15aa\rbb')
+      expect(a4.setField).assertTrue()
+      expect(a4.fieldText).assertEqual('bb')
+      expect(c4.line()).assertEqual('bb')
+    })
+
+    // ===== 9. M4b onArrow 空历史安全(altScreen 判定在 View 层,Controller 不动) =====
+    it('controller_onarrow_empty_history_noop', 0, () => {
+      const c = new InputController()
+      c.onInput('ec')
+      const a = c.onArrow(true) // 空历史:无动作(不炸不重写)
+      expect(a.writeText).assertEqual('')
+      expect(a.setField).assertFalse()
+      const a2 = c.onInput('echo') // 控制器状态未被破坏
+      expect(a2.writeText).assertEqual('ho')
+    })
+
+    // ===== 10. M4b 回归:Tab 后 line()=候选,onEnter 入史正确行 ====
+    it('controller_tab_then_line_matches_pick', 0, () => {
+      const c = new InputController()
+      c.onInput('ec')
+      c.onTab() // → echo
+      expect(c.line()).assertEqual('echo') // 回归:M4b 驱动验收的判定源
+      const en = c.onEnter()
+      expect(en.writeText).assertEqual('\r')
+      expect(InputHistory.recent()[0]).assertEqual('echo') // 入史=补全产物
+    })
   })
 }

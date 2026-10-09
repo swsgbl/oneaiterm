@@ -57,6 +57,10 @@ export struct TermPaneView {
   private lastKeyEnterMs: number = 0
   /** M4a 输入控制器(捕获层与 TermHost.write 之间,差分/ghost/Tab/回溯)。 */
   private ctrl: InputController = new InputController()
+  /** M4b: full-screen mode mirror (TermModel.altScreen) for arrow passthrough. */
+  @State altScr: boolean = false
+  /** M4b: last sampled altScreen (dedupe @State writes per tick). */
+  private altScrLast: boolean = false
   private cols: number = 80
   private rows: number = 24
   private pendingCols: number = -1
@@ -109,6 +113,7 @@ export struct TermPaneView {
       return
     }
     const total = m.lines.length
+    if (m.altScreen !== this.altScrLast) { this.altScrLast = m.altScreen; this.altScr = m.altScreen } // M4b sample
     this.winTop = Math.max(0, total - m.rows)
     const end = Math.min(total, this.winTop + m.rows)
     this.winRows = m.lines.slice(this.winTop, end)
@@ -122,6 +127,20 @@ export struct TermPaneView {
   // ===================== 输入(M4a:捕获层三修 + InputController) =====================
 
   /** 统一写:→ TermHost.write + 同步排空回显 + 立即快照(不等下一拍)。 */
+  /**
+   * M4b 焦点保持:捕获层 .id() + UIContext.getFocusController().requestFocus。
+   * 本 SDK 索引已证 FocusController.requestFocus 存在(@ohos.arkui.UIContext.d.ts
+   * :3264);Tab/↑↓ 后系统焦点转移副作用会把输入焦点带走 → 处理完主动拉回,
+   * 不重点击即可连续输入/回车。requestFocus 不存在的旧场景静默降级(不杀输入)。
+   */
+  private keepCaptureFocus(): void {
+    try {
+      this.getUIContext().getFocusController().requestFocus('tty7TermCapture')
+    } catch (e) {
+      // 焦点控制器不可用:降级为靠 focusOnTouch(用户点击恢复)
+    }
+  }
+
   private writeTerm(text: string): void {
     if (text.length === 0) {
       return
@@ -154,6 +173,7 @@ export struct TermPaneView {
    * 前缀增长直写差量/缩短回写 \x7f/非前缀变化整行重写;ghost 同步重算。
    */
   private onCaptureChange(v: string): void {
+    if (v.indexOf('\n') >= 0) { this.applyAction(this.ctrl.onPasteBlock(v)); return } // M4b paste
     const a = this.ctrl.onInput(v)
     this.lastCapture = v
     this.applyAction(a)
@@ -209,14 +229,19 @@ export struct TermPaneView {
     // Enter 落到别处)——M4b 需产品级焦点保持;驱动验收每步前重点击规避。
     if (ev.keyCode === KC_TAB) {
       this.applyAction(this.ctrl.onTab())
+      this.keepCaptureFocus() // M4b: pull focus back after Tab completion
       return true
     }
     if (ev.keyCode === KC_DPAD_UP) {
+      if (this.altScr) { this.writeTerm('\x1b[A'); return true } // M4b: alt-screen raw passthrough
       this.applyAction(this.ctrl.onArrow(true))
+      this.keepCaptureFocus() // M4b: pull focus back after history recall
       return true
     }
     if (ev.keyCode === KC_DPAD_DOWN) {
+      if (this.altScr) { this.writeTerm('\x1b[B'); return true } // M4b: alt-screen raw passthrough
       this.applyAction(this.ctrl.onArrow(false))
+      this.keepCaptureFocus() // M4b: pull focus back after history recall
       return true
     }
     // 热修(M4a 验收实证):ASCII 可打印/DEL 必须走受控字段+onChange→Controller
@@ -393,6 +418,7 @@ export struct TermPaneView {
 
       // 全幅透明捕获层:承接一切输入;hitTestBehavior Default 保住下方滚动
       TextInput({ text: this.capture, placeholder: '' })
+        .id('tty7TermCapture') // M4b: FocusController.requestFocus target
         .width('100%')
         .height('100%')
         .fontSize(1)
