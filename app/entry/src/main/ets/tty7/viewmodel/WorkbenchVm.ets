@@ -1,27 +1,93 @@
 /**
- * tty7 工作台 ViewModel 桩(任务 tty7-M1b,ADR-0001 ArkUI 同构壳 M1 第二块)。
+ * tty7 工作台 ViewModel(任务 tty7-M1b 建立,M1c 扩容接入 LayoutTree)。
  *
- * 纯状态容器:字段 + 纯方法。红线:不 import 任何 service/PTY/SSH/AI/store——
- * shell 组件只消费本 Vm;M1c PaneGrid 接 LayoutTree、M1d RightPanel 接 agent 面板时
- * 由宿主层负责桥接,本文件继续保持零业务依赖。
- *
- * @Observed 只跟踪第一层属性,方法内一律"整体重赋值"(concat/slice),
- * 不做 push/splice 原地修改,保证 @ObjectLink 消费方可靠重渲染。
+ * 纯状态容器:字段 + 纯方法。红线:不 import 任何 service/PTY/SSH/AI/store。
+ * M1c 起 layout 为真布局树:一切变换经 LayoutOps 纯函数产出新树后整体替换
+ * (@Observed 只跟踪第一层,嵌套对象不可变替换驱动 @ObjectLink 消费方刷新);
+ * panes/focusedPane/statusText 均由 syncFromLayout 从树同步,禁止双源手写。
  */
+import { LayoutTreeModel, SplitDir } from '../layout/LayoutTree';
+import { LayoutOps } from '../layout/LayoutOps';
+
 @Observed
 export class WorkbenchVm {
-  /** tab 标题数组(activeTab 为下标)。 */
+  /** tab 标题数组(activeTab 为下标);本期一个 tab 对应一棵布局树。 */
   tabs: string[] = ['tty7']
   activeTab: number = 0
-  /** M1c 前固定两个 pane 占位 id(p1/p2),M1c 起由 LayoutOps.panes() 供数。 */
-  panes: string[] = ['p1', 'p2']
-  focusedPane: string = 'p1'
+  /** 布局树(M1c):一切布局事实的唯一来源。 */
+  layout: LayoutTreeModel = new LayoutTreeModel()
+  /** 以下两项由 syncFromLayout 从 layout 同步(派生展示态)。 */
+  panes: string[] = []
+  focusedPane: string = ''
   /** RightPanel(M1d agent 面板)开关桩。 */
   rightPanelOpen: boolean = false
+  /** 布局版本号:每次 syncFromLayout +1。PaneGrid 用其奇偶交替 if 分支强制
+   * 重建渲染子树(V1 精准更新不重评组件构造参数,树根/槽宽变化否则全部
+   * 冻结——M1c 验收实证;M3 前置优化:升级 @ObservedV2/@Trace 精细追踪)。 */
+  rev: number = 0
   statusText: string = '就绪'
   /** Agent 状态点桩(M1d 接 HMH Provider 真状态)。 */
   agentOnline: boolean = true
   private tabSeq: number = 1
+  private paneSeq: number = 0
+
+  constructor() {
+    // 双 pane 基线:single('p1') 再 split 出 p2(左右分)。
+    this.syncFromLayout(LayoutOps.split(LayoutOps.single('p1'), 'p1', 'h', 'p2'))
+  }
+
+  /** 树 → 展示态同步(唯一写入口;整体替换驱动刷新)。 */
+  private syncFromLayout(m: LayoutTreeModel): void {
+    this.rev += 1
+    this.layout = m
+    this.panes = LayoutOps.panes(m)
+    this.focusedPane = m.focusedPaneId
+    const focus = m.focusedPaneId !== '' ? m.focusedPaneId : '-'
+    this.statusText = 'panes ' + this.panes.length.toString() + ' · focus ' + focus
+  }
+
+  /** 新建 pane:空布局→single(首 pane);否则对焦点叶 split,新 id=p{现存最大序号+1}。 */
+  newPane(dir: SplitDir): void {
+    const ids = LayoutOps.panes(this.layout)
+    let max = 0
+    for (const id of ids) {
+      if (id.indexOf('p') === 0) {
+        const num = Number(id.substring(1))
+        if (!Number.isNaN(num) && num > max) {
+          max = num
+        }
+      }
+    }
+    this.paneSeq = max + 1
+    const fresh = 'p' + this.paneSeq.toString()
+    if (ids.length === 0) {
+      this.syncFromLayout(LayoutOps.single(fresh))
+      return
+    }
+    let host = this.layout.focusedPaneId
+    if (host === '') {
+      host = ids[0]
+    }
+    this.syncFromLayout(LayoutOps.split(this.layout, host, dir, fresh))
+  }
+
+  /** 关闭 pane(close 内建焦点迁移与父层折叠)。 */
+  closePane(id: string): void {
+    this.syncFromLayout(LayoutOps.close(this.layout, id))
+  }
+
+  /** 焦点叶 zoom 切换(zoom 语义由 PaneGrid 渲染层实现)。 */
+  zoomToggle(): void {
+    if (this.layout.focusedPaneId === '') {
+      return
+    }
+    this.syncFromLayout(LayoutOps.zoom(this.layout, this.layout.focusedPaneId))
+  }
+
+  /** 分隔条拖拽落点(供 PaneGrid 回调;clamp 由 LayoutOps 内建)。 */
+  resizeSplit(splitNodeId: string, ratio: number): void {
+    this.syncFromLayout(LayoutOps.resize(this.layout, splitNodeId, ratio))
+  }
 
   /** 新建 tab:标题 tty7-N,置为 active。 */
   newTab(): void {
@@ -51,11 +117,10 @@ export class WorkbenchVm {
     }
   }
 
-  /** 焦点 pane 切换(pane 必须存在,纯桩无副作用)。 */
+  /** 焦点 pane 切换(pane 必须存在;经 LayoutOps.focus 保持单源)。 */
   focusPane(id: string): void {
     if (this.panes.indexOf(id) >= 0 && id !== this.focusedPane) {
-      this.focusedPane = id
-      this.statusText = '焦点 ' + id
+      this.syncFromLayout(LayoutOps.focus(this.layout, id))
     }
   }
 

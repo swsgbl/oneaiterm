@@ -1,15 +1,16 @@
 /**
  * tty7 工作台整页外壳(任务 tty7-M1b,ADR-0001 ArkUI 同构壳)。
  * 非 @Entry 路由页——由宿主(Index/build 顶部 if shellMode)承载。
- * 布局:WorkspaceSidebar(左 44px) | 右 Column{ TabBar(28px) | PaneGrid 占位
+ * 布局:WorkspaceSidebar(左 44px) | 右 Column{ TabBar(28px) | PaneGrid
  * layoutWeight(1) | StatusBar(22px) };RightPanel(M1d)预留 vm.rightPanelOpen。
+ * M1c:中部占位 Row 换装 PaneGrid(布局树真渲染)。
  * 自带左上返回钮(onClose 回宿主)。深浅主题沿用 AppTheme/DesignTokens,零业务 import。
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { TabBar } from './TabBar';
 import { StatusBar } from './StatusBar';
-import { PanePlaceholder } from './PanePlaceholder';
+import { PaneGrid } from './PaneGrid';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
@@ -47,17 +48,10 @@ export struct AppShell {
         .width('100%')
         .height(28)
 
-        // PaneGrid 占位区(M1c 前固定两 pane 横排;rightPanelOpen 预留 M1d)
-        Row({ space: DesignTokens.SPACE_SM }) {
-          ForEach(this.vm.panes, (paneId: string) => {
-            PanePlaceholder({ vm: this.vm, paneId: paneId, themeName: this.themeName })
-          }, (paneId: string) => paneId)
-        }
-        .layoutWeight(1)
-        .width('100%')
-        .padding(DesignTokens.SPACE_SM)
-        .backgroundColor(this.th().surface)
-        .alignItems(VerticalAlign.Center)
+        // PaneGrid 真渲染区(M1c:布局树→分屏;rightPanelOpen 预留 M1d)
+        PaneGrid({ vm: this.vm, themeName: this.themeName })
+          .layoutWeight(1)
+          .width('100%')
 
         StatusBar({ vm: this.vm, themeName: this.themeName })
       }

@@ -64,8 +64,8 @@ export struct TabBar {
           .backgroundColor(this.th().panel)
           .border({ width: 1, color: this.th().hairline })
           .margin({ left: 4 })
-          .accessibilityText('新建 tty7 标签')
-          .onClick(() => this.vm.newTab())
+          .accessibilityText('新建 pane(左右分)')
+          .onClick(() => this.vm.newPane('h'))
       }
       .alignItems(VerticalAlign.Center)
     }
