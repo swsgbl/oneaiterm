@@ -5,6 +5,7 @@
  * 零业务 import。
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
+import { WorkspaceState } from '../model/WorkspaceState';
 import { AppIcons } from '../../common/AppIcons';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
@@ -21,17 +22,42 @@ export struct WorkspaceSidebar {
 
   build() {
     Column() {
-      // 工作区
-      Text(AppIcons.PANEL_WORKSPACE)
-        .fontSize(DesignTokens.FONT_HEADING)
+      // 工作区图标列(M2b:绑定 vm.workspaces;activeWs 高亮,hover 反馈,点击切换)
+      ForEach(this.vm.workspaces, (ws: WorkspaceState, idx: number) => {
+        Text(ws.glyph)
+          .fontSize(DesignTokens.FONT_HEADING)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.vm.activeWs === idx || this.hoverId === 'ws' + idx.toString()
+            ? this.th().brand : this.th().inkSubtle)
+          .width(32)
+          .height(32)
+          .textAlign(TextAlign.Center)
+          .borderRadius(DesignTokens.RADIUS_MD)
+          .backgroundColor(this.vm.activeWs === idx ? this.th().panel
+            : (this.hoverId === 'ws' + idx.toString() ? this.th().hover : Color.Transparent))
+          .margin({ top: idx === 0 ? DesignTokens.SPACE_SM : 0, bottom: DesignTokens.SPACE_XS })
+          .accessibilityText('切换工作区 ' + ws.name)
+          .onClick(() => this.vm.switchWorkspace(idx))
+          .onHover((h: boolean) => {
+            this.hoverId = h ? 'ws' + idx.toString() : ''
+          })
+      }, (ws: WorkspaceState, idx: number) => ws.wsId + '#' + idx.toString() + '#' + ws.glyph)
+      // + 新建工作区小钮
+      Text(AppIcons.OP_ADD)
+        .fontSize(DesignTokens.FONT_CAPTION)
         .fontWeight(FontWeight.Bold)
-        .fontColor(this.th().brand)
+        .fontColor(this.hoverId === 'wsnew' ? this.th().brand : this.th().iconMuted)
         .width(32)
-        .height(32)
+        .height(20)
         .textAlign(TextAlign.Center)
         .borderRadius(DesignTokens.RADIUS_MD)
-        .backgroundColor(this.th().panel)
-        .margin({ top: DesignTokens.SPACE_SM, bottom: DesignTokens.SPACE_XS })
+        .backgroundColor(this.hoverId === 'wsnew' ? this.th().hover : Color.Transparent)
+        .margin({ bottom: DesignTokens.SPACE_XS })
+        .accessibilityText('新建工作区')
+        .onClick(() => this.vm.newWorkspace())
+        .onHover((h: boolean) => {
+          this.hoverId = h ? 'wsnew' : ''
+        })
       // 连接
       Text(AppIcons.PANEL_CONNECTIONS)
         .fontSize(DesignTokens.FONT_HEADING)

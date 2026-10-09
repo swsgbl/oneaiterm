@@ -1,22 +1,23 @@
 /**
- * tty7 WorkbenchStore 存档层单元测试(任务 tty7-M2a,ArkTS/hypium)。
+ * tty7 WorkbenchStore 存档层单元测试(任务 tty7-M2a 建立,M2b 适配 v2 多工作区格式)。
  *
- * 纯序列化/反序列化用例直接验证 serializeTabs/deserializeTabs;Vm 用例不落盘
+ * 纯序列化/反序列化用例直接验证 serializeWorkspaces/deserializeWorkspaces;Vm 用例不落盘
  * ——单测环境无 ability context,AppStorage 无 'ut.filesDir',WorkbenchVm 构造
  * 走恢复失败降级分支(双 pane 基线),persist() 静默不落盘。
  *
- * 覆盖(对应 M2a 交付物 5):
- *   1. serialize→deserialize 往返一致(2 tab:一棵 2x2 树 + 一棵单叶)
+ * 覆盖(原 M2a 套件适配 v2 后语义不变):
+ *   1. serialize→deserialize 往返一致(2 工作区:一棵 2x2 树 + 一棵单叶)
  *   2. 损坏 JSON(截断/非 JSON/缺字段/错 dir/children<2)→ null
- *   3. 空 tabs 数组 → null
+ *   3. 空 workspaces 数组 → null
  *   4. ratio 越界 clamp 后恢复
  *   5. Vm 层:tab1 分屏后切 tab2 新建 pane,切回 tab1 布局不变(布局独立性)
  *   6. Vm 层:setActiveTab 派生态跟随(statusText 'panes N' 与该 tab 树一致)
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { serializeTabs, deserializeTabs } from '../../../main/ets/tty7/store/WorkbenchStore';
+import { serializeWorkspaces, deserializeWorkspaces } from '../../../main/ets/tty7/store/WorkbenchStore';
 import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
 import { TabState } from '../../../main/ets/tty7/model/TabState';
+import { WorkspaceState } from '../../../main/ets/tty7/model/WorkspaceState';
 import { PaneLeaf, SplitNode } from '../../../main/ets/tty7/layout/LayoutTree';
 
 /** 构造 2x2 树:p1|p2 两列,各列上下再分(p3 挂 p1 下,p4 挂 p2 下)。 */
@@ -46,17 +47,31 @@ function tabSingle(): TabState {
   return t
 }
 
+/** 手工单工作区。 */
+function wsOf(wsId: string, tabs: TabState[]): WorkspaceState {
+  const ws = new WorkspaceState()
+  ws.wsId = wsId
+  ws.name = 'ws-' + wsId
+  ws.glyph = '◈'
+  ws.tabs = tabs
+  ws.activeTab = 0
+  return ws
+}
+
 export default function workbenchStoreTest() {
   describe('tty7WorkbenchStore', () => {
     // ===== 1. 往返一致 =====
-    it('roundtrip_two_tabs_2x2_and_single', 0, () => {
-      const json = serializeTabs([tab2x2(), tabSingle()], 1)
-      const back = deserializeTabs(json)
+    it('roundtrip_two_workspaces_2x2_and_single', 0, () => {
+      const json = serializeWorkspaces([wsOf('w1', [tab2x2()]), wsOf('w2', [tabSingle()])], 1)
+      const back = deserializeWorkspaces(json)
       expect(back !== null).assertTrue()
-      const tabs = back as TabState[]
-      expect(tabs.length).assertEqual(2)
-      // tab0: 2x2 结构
-      const root0 = tabs[0].layout.root as SplitNode
+      const wss = back as WorkspaceState[]
+      expect(wss.length).assertEqual(2)
+      expect(wss[0].wsId).assertEqual('w1')
+      expect(wss[1].wsId).assertEqual('w2')
+      expect(wss[0].tabs.length).assertEqual(1)
+      // ws0 tab0: 2x2 结构
+      const root0 = wss[0].tabs[0].layout.root as SplitNode
       expect(root0 instanceof SplitNode).assertTrue()
       expect(root0.dir).assertEqual('h')
       expect(root0.children.length).assertEqual(2)
@@ -68,48 +83,48 @@ export default function workbenchStoreTest() {
       expect((col0.children[1] as PaneLeaf).paneId).assertEqual('p3')
       expect((col1.children[0] as PaneLeaf).paneId).assertEqual('p2')
       expect((col1.children[1] as PaneLeaf).paneId).assertEqual('p4')
-      // tab1: 单叶
-      expect(tabs[1].layout.root instanceof PaneLeaf).assertTrue()
-      expect((tabs[1].layout.root as PaneLeaf).paneId).assertEqual('p7')
+      // ws1 tab0: 单叶
+      expect(wss[1].tabs[0].layout.root instanceof PaneLeaf).assertTrue()
+      expect((wss[1].tabs[0].layout.root as PaneLeaf).paneId).assertEqual('p7')
       // 元数据
-      expect(tabs[0].tabId).assertEqual('t9')
-      expect(tabs[0].title).assertEqual('vm-2x2')
-      expect(tabs[1].tabId).assertEqual('t8')
+      expect(wss[0].tabs[0].tabId).assertEqual('t9')
+      expect(wss[0].tabs[0].title).assertEqual('vm-2x2')
+      expect(wss[1].tabs[0].tabId).assertEqual('t8')
     })
 
     // ===== 2. 损坏 JSON → null =====
     it('corrupt_json_returns_null', 0, () => {
-      const good = serializeTabs([tab2x2()], 0)
+      const good = serializeWorkspaces([wsOf('w1', [tab2x2()])], 0)
       // 截断
-      expect(deserializeTabs(good.substring(0, good.length - 5))).assertNull()
+      expect(deserializeWorkspaces(good.substring(0, good.length - 5))).assertNull()
       // 非 JSON
-      expect(deserializeTabs('not-json-at-all')).assertNull()
-      // 缺 tabs 字段(合法 JSON)
-      expect(deserializeTabs('{"v":1,"active":0}')).assertNull()
+      expect(deserializeWorkspaces('not-json-at-all')).assertNull()
+      // 缺 workspaces 字段(合法 JSON)
+      expect(deserializeWorkspaces('{"v":2,"activeWs":0}')).assertNull()
       // 错 dir(x)
       const badDir = good.replace('"dir":"h"', '"dir":"x"')
-      expect(deserializeTabs(badDir)).assertNull()
+      expect(deserializeWorkspaces(badDir)).assertNull()
       // children<2(手写最小坏档:单子分割节点)
-      const badChildren = '{"v":1,"active":0,"tabs":[{"tabId":"t1","title":"x","layout":{"root":{"t":"s","id":"sp1","dir":"h","ratio":0.5,"ch":[{"t":"l","id":"p1"}]},"focused":"p1","zoomed":""},"sessions":[]}]}'
-      expect(deserializeTabs(badChildren)).assertNull()
+      const badChildren = '{"v":2,"activeWs":0,"workspaces":[{"wsId":"w1","name":"x","glyph":"◈","activeTab":0,"tabs":[{"tabId":"t1","title":"x","layout":{"root":{"t":"s","id":"sp1","dir":"h","ratio":0.5,"ch":[{"t":"l","id":"p1"}]},"focused":"p1","zoomed":""},"sessions":[]}]}]}'
+      expect(deserializeWorkspaces(badChildren)).assertNull()
     })
 
-    // ===== 3. 空 tabs 数组 → null =====
-    it('empty_tabs_returns_null', 0, () => {
-      expect(deserializeTabs('{"v":1,"active":0,"tabs":[]}')).assertNull()
+    // ===== 3. 空 workspaces 数组 → null =====
+    it('empty_workspaces_returns_null', 0, () => {
+      expect(deserializeWorkspaces('{"v":2,"activeWs":0,"workspaces":[]}')).assertNull()
     })
 
     // ===== 4. ratio 越界 clamp =====
     it('ratio_clamped_on_restore', 0, () => {
-      const over = '{"v":1,"active":0,"tabs":[{"tabId":"t1","title":"x","layout":{"root":{"t":"s","id":"sp1","dir":"h","ratio":1.7,"ch":[{"t":"l","id":"p1"},{"t":"l","id":"p2"}]},"focused":"p1","zoomed":""},"sessions":[]}]}'
-      const backOver = deserializeTabs(over)
+      const over = '{"v":2,"activeWs":0,"workspaces":[{"wsId":"w1","name":"x","glyph":"◈","activeTab":0,"tabs":[{"tabId":"t1","title":"x","layout":{"root":{"t":"s","id":"sp1","dir":"h","ratio":1.7,"ch":[{"t":"l","id":"p1"},{"t":"l","id":"p2"}]},"focused":"p1","zoomed":""},"sessions":[]}]}]}'
+      const backOver = deserializeWorkspaces(over)
       expect(backOver !== null).assertTrue()
-      expect((backOver as TabState[])[0].layout.root instanceof SplitNode).assertTrue()
-      expect(((backOver as TabState[])[0].layout.root as SplitNode).ratio).assertEqual(0.9)
+      expect((backOver as WorkspaceState[])[0].tabs[0].layout.root instanceof SplitNode).assertTrue()
+      expect(((backOver as WorkspaceState[])[0].tabs[0].layout.root as SplitNode).ratio).assertEqual(0.9)
       const under = over.replace('"ratio":1.7', '"ratio":0.01')
-      const backUnder = deserializeTabs(under)
+      const backUnder = deserializeWorkspaces(under)
       expect(backUnder !== null).assertTrue()
-      expect(((backUnder as TabState[])[0].layout.root as SplitNode).ratio).assertEqual(0.1)
+      expect(((backUnder as WorkspaceState[])[0].tabs[0].layout.root as SplitNode).ratio).assertEqual(0.1)
     })
 
     // ===== 5. Vm 层:布局独立性 =====

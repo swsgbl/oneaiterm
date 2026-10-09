@@ -26,9 +26,11 @@ export struct PaneSurface {
 
   build() {
     Column() {
-      // 标题行:paneId + zoom 钮(◎)+ 关闭钮(×)
+      // 标题行:paneId/会话标题 + zoom 钮(◎)+ 关闭钮(×)
+      // M2b:绑会话显示 slot.title(非空优先);表达式读 vm.slotsRev(绑定字段)
+      // 建立追踪——V1 方法调用不追踪,sessionTitle 纯查询。
       Row({ space: DesignTokens.SPACE_XS }) {
-        Text(this.paneId)
+        Text(this.vm.slotsRev >= 0 ? this.vm.sessionTitle(this.paneId) : this.paneId)
           .fontSize(DesignTokens.FONT_CAPTION)
           .fontWeight(FontWeight.Bold)
           .maxLines(1)

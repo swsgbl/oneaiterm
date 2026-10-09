@@ -68,6 +68,23 @@ export function paletteCmds(): PaletteCmd[] {
       vm.toggleRightPanel()
     }
   }
+  // M2b:会话挂接(本地元数据级,真会话 M3 接终端核)与工作区新建
+  const sessionLocal: PaletteCmd = {
+    key: 'session.new.local',
+    label: '会话 · 新建本地',
+    run: (vm: WorkbenchVm) => {
+      if (vm.focusedPane !== '') {
+        vm.bindSession(vm.focusedPane, 'local', '', 'local shell')
+      }
+    }
+  }
+  const wsNew: PaletteCmd = {
+    key: 'ws.new',
+    label: '工作区 · 新建',
+    run: (vm: WorkbenchVm) => {
+      vm.newWorkspace()
+    }
+  }
   const themeToggle: PaletteCmd = {
     key: 'theme.toggle',
     label: '切换主题',
@@ -83,6 +100,8 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(newTab)
   cmds.push(closeTab)
   cmds.push(agentPanel)
+  cmds.push(sessionLocal)
+  cmds.push(wsNew)
   cmds.push(themeToggle)
   return cmds
 }
