@@ -21,6 +21,8 @@ export class WorkbenchVm {
   focusedPane: string = ''
   /** RightPanel(M1d agent 面板)开关桩。 */
   rightPanelOpen: boolean = false
+  /** 命令面板开关(M1d):单源状态,AppShell/StatusBar 共用(避免双源)。 */
+  paletteOpen: boolean = false
   /** 布局版本号:每次 syncFromLayout +1。PaneGrid 用其奇偶交替 if 分支强制
    * 重建渲染子树(V1 精准更新不重评组件构造参数,树根/槽宽变化否则全部
    * 冻结——M1c 验收实证;M3 前置优化:升级 @ObservedV2/@Trace 精细追踪)。 */
@@ -128,6 +130,11 @@ export class WorkbenchVm {
   toggleRightPanel(): void {
     this.rightPanelOpen = !this.rightPanelOpen
     this.statusText = this.rightPanelOpen ? 'Agent 面板开' : 'Agent 面板关'
+  }
+
+  /** 命令面板开关翻转(M1d;syncFromLayout 不动它——非布局派生态)。 */
+  togglePalette(): void {
+    this.paletteOpen = !this.paletteOpen
   }
 
   /** 状态栏文案直写(Sidebar 桩动作回写)。 */

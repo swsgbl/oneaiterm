@@ -11,6 +11,8 @@ import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { TabBar } from './TabBar';
 import { StatusBar } from './StatusBar';
 import { PaneGrid } from './PaneGrid';
+import { RightPanel } from './RightPanel';
+import { WorkbenchPalette } from './WorkbenchPalette';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
@@ -44,19 +46,50 @@ export struct AppShell {
             .accessibilityText('返回旧界面')
             .onClick(() => this.onClose())
           TabBar({ vm: this.vm, themeName: this.themeName })
+          // ⌘ 命令面板钮(M1d):开/关 paletteOpen(vm 单源)
+          Text('⌘')
+            .fontSize(DesignTokens.FONT_HEADING)
+            .fontColor(this.th().iconMuted)
+            .width(24)
+            .height(22)
+            .textAlign(TextAlign.Center)
+            .borderRadius(DesignTokens.RADIUS_SM)
+            .backgroundColor(this.th().panel)
+            .border({ width: 1, color: this.th().hairline })
+            .margin({ left: DesignTokens.SPACE_XS })
+            .accessibilityText('命令面板')
+            .onClick(() => this.vm.togglePalette())
         }
         .width('100%')
         .height(28)
 
-        // PaneGrid 真渲染区(M1c:布局树→分屏;rightPanelOpen 预留 M1d)
-        PaneGrid({ vm: this.vm, themeName: this.themeName })
-          .layoutWeight(1)
-          .width('100%')
+        // PaneGrid 真渲染区(M1c:布局树→分屏)叠命令面板浮层(M1d);
+        // palette 条件分支直接读 vm.paletteOpen(V1 状态追踪规则)
+        Stack() {
+          PaneGrid({ vm: this.vm, themeName: this.themeName })
+            .width('100%')
+            .height('100%')
+          if (this.vm.paletteOpen) {
+            WorkbenchPalette({
+              vm: this.vm,
+              themeName: this.themeName,
+              onClose: () => {
+                this.vm.paletteOpen = false
+              }
+            })
+          }
+        }
+        .layoutWeight(1)
+        .width('100%')
 
         StatusBar({ vm: this.vm, themeName: this.themeName })
       }
       .layoutWeight(1)
       .height('100%')
+      // RightPanel 抽屉(M1d 桩):条件分支直接读 vm.rightPanelOpen
+      if (this.vm.rightPanelOpen) {
+        RightPanel({ vm: this.vm, themeName: this.themeName })
+      }
     }
     .width('100%')
     .height('100%')

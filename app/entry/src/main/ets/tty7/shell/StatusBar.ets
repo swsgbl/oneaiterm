@@ -18,6 +18,16 @@ export struct StatusBar {
 
   build() {
     Row({ space: DesignTokens.SPACE_MD }) {
+      // ⌘ 命令面板钮(M1d):与 AppShell 顶行 ⌘ 同源(vm.paletteOpen)
+      Text('⌘')
+        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontColor(this.th().iconMuted)
+        .width(18)
+        .height(16)
+        .textAlign(TextAlign.Center)
+        .borderRadius(DesignTokens.RADIUS_SM)
+        .accessibilityText('命令面板')
+        .onClick(() => this.vm.togglePalette())
       Text(this.vm.statusText)
         .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().inkSubtle)

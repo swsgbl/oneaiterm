@@ -14,6 +14,7 @@ import approvalManagerTest from './ApprovalManager.test.ets';
 import backspaceKeyTest from './BackspaceKey.test.ets'; // +tty7-M1a: layoutTreeTest (ListTest runner 静态引用本文件，不注册则新套件不执行)
 import layoutTreeTest from './LayoutTree.test.ets';
 import workbenchVmTest from './WorkbenchVm.test.ets'; // +tty7-M1c: Vm 布局集成
+import paletteCommandsTest from './PaletteCommands.test.ets'; // +tty7-M1d: 命令面板注册表
 
 export default function testsuite() {
   policyEngineTest();
@@ -27,4 +28,5 @@ export default function testsuite() {
   backspaceKeyTest(); // +tty7-M1a
   layoutTreeTest();
   workbenchVmTest(); // +tty7-M1c
+  paletteCommandsTest(); // +tty7-M1d
 }
