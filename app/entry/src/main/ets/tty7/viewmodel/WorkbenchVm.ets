@@ -1,20 +1,25 @@
 /**
- * tty7 工作台 ViewModel(任务 tty7-M1b 建立,M1c 扩容接入 LayoutTree)。
+ * tty7 工作台 ViewModel(任务 tty7-M1b 建立,M1c 扩容接入 LayoutTree,M2a 多 Tab 独立布局树+持久化恢复)。
  *
- * 纯状态容器:字段 + 纯方法。红线:不 import 任何 service/PTY/SSH/AI/store。
- * M1c 起 layout 为真布局树:一切变换经 LayoutOps 纯函数产出新树后整体替换
- * (@Observed 只跟踪第一层,嵌套对象不可变替换驱动 @ObjectLink 消费方刷新);
- * panes/focusedPane/statusText 均由 syncFromLayout 从树同步,禁止双源手写。
+ * 纯状态容器:字段 + 纯方法。红线:除 tty7/store/WorkbenchStore 外不 import 任何 service/PTY/SSH/AI。
+ * M2a 起 tabs 为 TabState[](每 tab 独立布局树):切 tab 布局跟随 setActiveTab 内
+ * syncFromLayout(tabs[i].layout);一切布局变换经 syncFromLayout 落到
+ * tabs[activeTab].layout 再派生 panes/focusedPane/statusText/rev(整树不可变替换驱动刷新)。
+ * 持久化:构造恢复(失败→双 pane 基线);sync/newTab/closeTab/setActiveTab 后 saveWorkbench。
+ * 对外签名/字段(tabs/activeTab/panes/focusedPane/statusText/rev/layout)不变——消费方零改动
+ * (TabBar 渲染改读 tabs[i].title,属展示字段适配,非签名破坏)。
  */
 import { LayoutTreeModel, SplitDir } from '../layout/LayoutTree';
 import { LayoutOps } from '../layout/LayoutOps';
+import { TabState } from '../model/TabState';
+import { restoreWorkbench, saveWorkbench } from '../store/WorkbenchStore';
 
 @Observed
 export class WorkbenchVm {
-  /** tab 标题数组(activeTab 为下标);本期一个 tab 对应一棵布局树。 */
-  tabs: string[] = ['tty7']
+  /** tab 状态数组(activeTab 为下标);每 tab 独立布局树(M2a)。 */
+  tabs: TabState[] = []
   activeTab: number = 0
-  /** 布局树(M1c):一切布局事实的唯一来源。 */
+  /** 布局树(=tabs[activeTab].layout 同步引用;一切布局事实的唯一来源)。 */
   layout: LayoutTreeModel = new LayoutTreeModel()
   /** 以下两项由 syncFromLayout 从 layout 同步(派生展示态)。 */
   panes: string[] = []
@@ -34,18 +39,63 @@ export class WorkbenchVm {
   private paneSeq: number = 0
 
   constructor() {
-    // 双 pane 基线:single('p1') 再 split 出 p2(左右分)。
-    this.syncFromLayout(LayoutOps.split(LayoutOps.single('p1'), 'p1', 'h', 'p2'))
+    // 恢复存档;失败(无档/损坏/无 context)→ 双 pane 基线:single('p1') 再 split 出 p2。
+    let restored = false
+    try {
+      const snap = restoreWorkbench()
+      if (snap !== null) {
+        this.tabs = snap.tabs
+        this.activeTab = snap.active
+        // tabSeq 从恢复的 tabId 重导(防 closeTab 后 newTab 生成重复 id:
+        // 存档可能来自 t1..t3 的会话,tabSeq 若仍为 1 会再造出 t2/t3 撞键)
+        let maxTab = 0
+        for (const t of this.tabs) {
+          if (t.tabId.indexOf('t') === 0) {
+            const num = Number(t.tabId.substring(1))
+            if (!Number.isNaN(num) && num > maxTab) {
+              maxTab = num
+            }
+          }
+        }
+        this.tabSeq = maxTab
+        this.syncFromLayout(this.tabs[this.activeTab].layout)
+        restored = true
+      }
+    } catch (e) {
+      restored = false
+    }
+    if (!restored) {
+      const t = new TabState()
+      t.tabId = 't1'
+      t.title = 'tty7'
+      t.layout = LayoutOps.split(LayoutOps.single('p1'), 'p1', 'h', 'p2')
+      this.tabs = [t]
+      this.activeTab = 0
+      this.syncFromLayout(t.layout)
+    }
   }
 
-  /** 树 → 展示态同步(唯一写入口;整体替换驱动刷新)。 */
+  /** 树 → 展示态同步(唯一写入口;写入当前 tab 树 + 整体替换驱动刷新 + 落盘)。 */
   private syncFromLayout(m: LayoutTreeModel): void {
     this.rev += 1
     this.layout = m
+    if (this.activeTab >= 0 && this.activeTab < this.tabs.length) {
+      this.tabs[this.activeTab].layout = m
+    }
     this.panes = LayoutOps.panes(m)
     this.focusedPane = m.focusedPaneId
     const focus = m.focusedPaneId !== '' ? m.focusedPaneId : '-'
     this.statusText = 'panes ' + this.panes.length.toString() + ' · focus ' + focus
+    this.persist()
+  }
+
+  /** 持久化(无 context 环境静默不落盘;失败静默,绝不外抛)。 */
+  private persist(): void {
+    try {
+      saveWorkbench(this.tabs, this.activeTab)
+    } catch (e) {
+      // 静默:存档失败不阻塞 UI
+    }
   }
 
   /** 新建 pane:空布局→single(首 pane);否则对焦点叶 split,新 id=p{现存最大序号+1}。 */
@@ -91,11 +141,15 @@ export class WorkbenchVm {
     this.syncFromLayout(LayoutOps.resize(this.layout, splitNodeId, ratio))
   }
 
-  /** 新建 tab:标题 tty7-N,置为 active。 */
+  /** 新建 tab:空模型根叶(切到即见"空白工作区"引导),标题 tty7-N,置为 active。 */
   newTab(): void {
     this.tabSeq += 1
-    this.tabs = this.tabs.concat(['tty7-' + this.tabSeq.toString()])
+    const t = new TabState()
+    t.tabId = 't' + this.tabSeq.toString()
+    t.title = 'tty7-' + this.tabSeq.toString()
+    this.tabs = this.tabs.concat([t])
     this.activeTab = this.tabs.length - 1
+    this.syncFromLayout(t.layout)
     this.statusText = '新标签 tty7-' + this.tabSeq.toString()
   }
 
@@ -110,12 +164,15 @@ export class WorkbenchVm {
     } else if (i < this.activeTab) {
       this.activeTab -= 1
     }
+    this.syncFromLayout(this.tabs[this.activeTab].layout)
     this.statusText = '关闭标签,共 ' + this.tabs.length.toString() + ' 个'
   }
 
+  /** 切 tab:布局跟随(整树替换 + sync 派生)。 */
   setActiveTab(i: number): void {
     if (i >= 0 && i < this.tabs.length && i !== this.activeTab) {
       this.activeTab = i
+      this.syncFromLayout(this.tabs[i].layout)
     }
   }
 

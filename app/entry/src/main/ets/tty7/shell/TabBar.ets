@@ -4,6 +4,7 @@
  * 零业务 import。
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
+import { TabState } from '../model/TabState';
 import { AppIcons } from '../../common/AppIcons';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
@@ -21,9 +22,9 @@ export struct TabBar {
   build() {
     Scroll() {
       Row({ space: 2 }) {
-        ForEach(this.vm.tabs, (title: string, idx: number) => {
+        ForEach(this.vm.tabs, (t: TabState, idx: number) => {
           Row({ space: 4 }) {
-            Text(title)
+            Text(t.title)
               .fontSize(DesignTokens.FONT_CAPTION)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -51,7 +52,7 @@ export struct TabBar {
           .alignItems(VerticalAlign.Center)
           .margin({ left: 2, right: 2 })
           .onClick(() => this.vm.setActiveTab(idx))
-        }, (title: string, idx: number) => title + '#' + idx.toString())
+        }, (t: TabState, idx: number) => t.title + '#' + idx.toString())
         // + 新建钮
         Text(AppIcons.OP_ADD)
           .fontSize(DesignTokens.FONT_CAPTION)
