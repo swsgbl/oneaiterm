@@ -63,7 +63,7 @@ export function paletteCmds(): PaletteCmd[] {
   }
   const agentPanel: PaletteCmd = {
     key: 'panel.agent',
-    label: 'Agent 面板',
+    label: 'AI · 打开面板', // +tty7-M5a: palette 一键唤起 Agent 面板
     run: (vm: WorkbenchVm) => {
       vm.toggleRightPanel()
     }
