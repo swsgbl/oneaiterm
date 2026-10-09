@@ -9,6 +9,8 @@ import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
+import { TermHost } from '../term/TermHost';
+import { TermPaneView } from '../term/TermPaneView';
 
 @Component
 export struct PaneSurface {
@@ -66,17 +68,23 @@ export struct PaneSurface {
       .padding({ left: DesignTokens.SPACE_SM, right: DesignTokens.SPACE_SM })
       .alignItems(VerticalAlign.Center)
 
-      // 内容区:M1c 大字水印,M3 换 Terminal Core
-      Column() {
-        Text(this.paneId)
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.th().inkSubtle)
-          .opacity(0.55)
+      // 内容区(M3a):绑定本 pane 的本地终端优先;否则 paneId 大字水印。
+      // V1 规则:if 表达式直接读 vm 绑定字段 termTick 建立追踪(TermHost.bound()
+      // 静态查询不追踪,termTick 变化驱动表达式重评,同 slotsRev 模式)。
+      if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
+        TermPaneView({ paneId: this.paneId })
+      } else {
+        Column() {
+          Text(this.paneId)
+            .fontSize(28)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.th().inkSubtle)
+            .opacity(0.55)
+        }
+        .layoutWeight(1)
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
       }
-      .layoutWeight(1)
-      .width('100%')
-      .justifyContent(FlexAlign.Center)
     }
     .width('100%')
     .height('100%')

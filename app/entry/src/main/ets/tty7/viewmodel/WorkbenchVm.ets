@@ -21,6 +21,7 @@ import { LayoutOps } from '../layout/LayoutOps';
 import { TabState, SessionSlot } from '../model/TabState';
 import { WorkspaceState } from '../model/WorkspaceState';
 import { restoreWorkbench, saveWorkbench } from '../store/WorkbenchStore';
+import { TermHost } from '../term/TermHost';
 
 /** Sidebar 工作区图标 glyph 池(AppIcons 现有 glyph 集内取;本地常量,不 import UI 模块)。 */
 const WS_GLYPHS: string[] = ['◈', '▣', '☸', '⌗', '∿', '▦', '◷'];
@@ -50,6 +51,10 @@ export class WorkbenchVm {
    * 此绑定字段(V1 方法调用不追踪,借 slotsRev 建立依赖),sessionTitle 纯查询。 */
   slotsRev: number = 0
   statusText: string = '就绪'
+  /** 终端会话版本号(M3a):TermHost 绑定/解绑/EOF 死亡时 +1。PaneSurface
+   *  内容区条件渲染表达式读此绑定字段(bound() 静态查询不追踪,借 termTick
+   *  建立依赖,同 slotsRev 模式)。 */
+  termTick: number = 0
   /** Agent 状态点桩(M1d 接 HMH Provider 真状态)。 */
   agentOnline: boolean = true
   private tabSeq: number = 1
@@ -112,6 +117,11 @@ export class WorkbenchVm {
       this.tabs = ws.tabs
       this.activeTab = 0
       this.syncFromLayout(t.layout)
+    }
+    // M3a:PTY EOF(sh exit)时通知 UI(model 保留供回看,termTick 驱动重评)
+    TermHost.onDead = (): void => {
+      this.termTick += 1
+      this.statusText = '会话已结束'
     }
   }
 
@@ -204,6 +214,7 @@ export class WorkbenchVm {
     this.activeTab = ws.activeTab >= 0 && ws.activeTab < ws.tabs.length ? ws.activeTab : 0
     this.syncFromLayout(this.tabs[this.activeTab].layout)
     this.statusText = '关闭工作区,共 ' + this.workspaces.length.toString() + ' 个'
+    this.reapTermIfGone() // M3a:工作区收缩后绑定 pane 不在当前树 → 回收
   }
 
   // ===================== SessionSlot 挂接(M2b) =====================
@@ -321,6 +332,53 @@ export class WorkbenchVm {
     }
   }
 
+  // ===================== 本地终端会话(M3a,单会话) =====================
+
+  /** 焦点 pane 起本地 shell。规则(任务书):已绑定本 pane → 聚焦即可(幂等);
+   *  已绑定他 pane → 先解绑旧 pane 再绑新;PTY 启动失败 → false 不动状态。 */
+  bindLocalSession(): boolean {
+    const paneId = this.focusedPane
+    if (paneId === '') {
+      return false
+    }
+    if (TermHost.bound() === paneId) {
+      this.focusPane(paneId)
+      return true
+    }
+    if (TermHost.bound() !== '') {
+      this.unbindSession(TermHost.bound())
+    }
+    if (!TermHost.start(80, 24)) {
+      return false
+    }
+    TermHost.bind(paneId)
+    this.bindSession(paneId, 'local', '', 'local shell')
+    this.termTick += 1
+    // statusText 由 bindSession→refreshStatus 统一组装(panes · focus · sess N),
+    // 此处不覆写——保留布局与焦点信息(验收判据:状态栏含 sess 1)
+    return true
+  }
+
+  /** 结束本地会话:PTY 关 + 绑定 pane 的 slot 清 + termTick 驱动水印回归。 */
+  unbindTerm(): void {
+    const wasBound = TermHost.bound()
+    TermHost.stop()
+    if (wasBound !== '') {
+      this.unbindSession(wasBound) // 内部 refreshStatus:sess 计数归零
+    }
+    this.termTick += 1
+  }
+
+  /** 绑定 pane 已不在当前树 → 回收 PTY + 清 slot(布局收缩后统一调用)。 */
+  private reapTermIfGone(): void {
+    const b = TermHost.bound()
+    if (b !== '' && this.panes.indexOf(b) < 0) {
+      TermHost.stop()
+      this.unbindSession(b)
+      this.termTick += 1
+    }
+  }
+
   // ===================== 布局(M1c) =====================
 
   /** 新建 pane:空布局→single(首 pane);否则对焦点叶 split,新 id=p{现存最大序号+1}。 */
@@ -352,6 +410,7 @@ export class WorkbenchVm {
   closePane(id: string): void {
     this.syncFromLayout(LayoutOps.close(this.layout, id))
     this.pruneSessions()
+    this.reapTermIfGone() // M3a:被删 pane 持有 PTY → 回收
   }
 
   /** 焦点叶 zoom 切换(zoom 语义由 PaneGrid 渲染层实现)。 */
@@ -394,6 +453,7 @@ export class WorkbenchVm {
     }
     this.syncFromLayout(this.tabs[this.activeTab].layout)
     this.statusText = '关闭标签,共 ' + this.tabs.length.toString() + ' 个'
+    this.reapTermIfGone() // M3a:新 active 树无绑定 pane → 回收 PTY
   }
 
   /** 切 tab:布局跟随(整树替换 + sync 派生)。 */

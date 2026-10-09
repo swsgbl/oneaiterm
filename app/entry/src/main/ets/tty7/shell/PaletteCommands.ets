@@ -68,14 +68,25 @@ export function paletteCmds(): PaletteCmd[] {
       vm.toggleRightPanel()
     }
   }
-  // M2b:会话挂接(本地元数据级,真会话 M3 接终端核)与工作区新建
+  // M2b:会话挂接(M3a 起本地命令为真启动:焦点 pane 起单例 PTY shell)与工作区新建
   const sessionLocal: PaletteCmd = {
     key: 'session.new.local',
     label: '会话 · 新建本地',
     run: (vm: WorkbenchVm) => {
-      if (vm.focusedPane !== '') {
-        vm.bindSession(vm.focusedPane, 'local', '', 'local shell')
+      if (vm.focusedPane === '') {
+        vm.setStatus('无焦点 pane')
+        return
       }
+      if (!vm.bindLocalSession()) {
+        vm.setStatus('PTY 启动失败')
+      }
+    }
+  }
+  const sessionEnd: PaletteCmd = {
+    key: 'session.end',
+    label: '会话 · 结束',
+    run: (vm: WorkbenchVm) => {
+      vm.unbindTerm()
     }
   }
   const wsNew: PaletteCmd = {
@@ -101,6 +112,7 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(closeTab)
   cmds.push(agentPanel)
   cmds.push(sessionLocal)
+  cmds.push(sessionEnd)
   cmds.push(wsNew)
   cmds.push(themeToggle)
   return cmds

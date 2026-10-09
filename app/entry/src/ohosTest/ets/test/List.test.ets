@@ -17,6 +17,7 @@ import workbenchVmTest from './WorkbenchVm.test.ets'; // +tty7-M1c: Vm 布局集
 import paletteCommandsTest from './PaletteCommands.test.ets'; // +tty7-M1d: 命令面板注册表
 import workbenchStoreTest from './WorkbenchStore.test.ets'; // +tty7-M2a: 存档序列化/恢复 + 多 Tab 布局独立
 import workbenchVmSessionsTest from './WorkbenchVmSessions.test.ets'; // +tty7-M2b: 会话挂接 + 多工作区 + 存档 v2
+import termHostTest from './TermHost.test.ets'; // +tty7-M3a: TermHost 桥接 + 终端会话生命周期
 
 export default function testsuite() {
   policyEngineTest();
@@ -33,4 +34,5 @@ export default function testsuite() {
   paletteCommandsTest(); // +tty7-M1d
   workbenchStoreTest(); // +tty7-M2a
   workbenchVmSessionsTest(); // +tty7-M2b
+  termHostTest(); // +tty7-M3a
 }
