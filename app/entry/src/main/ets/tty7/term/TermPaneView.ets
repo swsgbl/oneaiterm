@@ -1,5 +1,5 @@
 /**
- * tty7 终端 pane 渲染组件(任务 tty7-M3a)。
+ * tty7 终端 pane 渲染组件(任务 tty7-M3a;M4a 升级:捕获层接 InputController)。
  *
  * 机制照抄 TerminalPage(pages/TerminalPage.ets)的终端体与直输捕获层三修,
  * 去业务(无 Zmodem/SFTP/header/主题切换,终端恒暗底):
@@ -7,23 +7,26 @@
  *    line.rev + tick(只有脏行换键,大输出不重绑干净行);
  *  - 刷新:自链式 setTimeout 100ms 一拍(tick++ + 快照 + scrollEdge 贴底),
  *    输出数据源是 TermHost.term()(TermHost 自持排水链,组件只读快照);
- *  - 直输捕获层三修(TerminalPage 2026-10-07 实勘):全幅透明 TextInput
- *    承接硬件键/软键盘/IME,onChange 差分重对齐(前缀增长直写差量/缩短
- *    回写 \x7f/非前缀变化整行重发),回车 onSubmit 独占发 '\r',方向键走
- *    mapKey(上/下/C/D/B);
+ *  - 直输捕获层三修(M4a 上移至 InputController,组件只执行动作指令):
+ *    onChange 差分重对齐(前缀增长直写差量/缩短回写 \x7f/非前缀变化整行
+ *    重写),回车 onSubmit 独占发 '\r',Tab 补全/↑↓ 历史回溯由控制器接管;
+ *  - ghost 建议(M4a):底部一行,前缀 ink 色+后缀次文色,@State 驱动;
  *  - 尺寸:onAreaChange 算 cols/rows(字符宽 fontSize*0.6 近似,TerminalPage
  *    降级算法),开窗 600ms 只记录 + 后续两拍一致/300ms 防抖才应用(防初次
  *    布局虚假大 resize 撑爆网格)→ TermHost.resize;
  *  - 交互后同步 kick(write + drainOnce + 立即快照,不等下一拍)。
  */
-import { TermModel, TermLine, lineToSpans, SpanRun, TERM_DEFAULT_BG } from '../../components/TermModel';
+import { TermModel, TermLine, lineToSpans, SpanRun, TERM_DEFAULT_BG, TERM_DEFAULT_FG } from '../../components/TermModel';
 import { TermHost } from './TermHost';
+import { InputController, InputAction } from './InputController';
 
 const TERM_FONT_SIZE: number = 13
 const TERM_FONT_FAMILY: string = 'monospace'
 const TERM_LINE_H: number = TERM_FONT_SIZE * 1.5
 const TERM_PAD: number = 4
 const TERM_POLL_MS: number = 100
+/** ghost 后缀色(暗底次文近似,不用 ThemeGet 免 context)。 */
+const GHOST_SUBTLE_FG: string = '#7d8590'
 
 // KeyCode(api/@ohos.multimodalInput.keyCode.d.ts,与 TerminalPage 同源)
 const KC_DPAD_UP: number = 2012
@@ -43,9 +46,17 @@ export struct TermPaneView {
   @State winRows: TermLine[] = []
   @State winTop: number = 0
   @State capture: string = ''
+  /** ghost 建议行前缀(=当前输入行;'' = 无建议;V1:组件内 @State 驱动渲染)。 */
+  @State ghostBase: string = ''
+  /** ghost 建议后缀(不含前缀)。 */
+  @State ghostSuf: string = ''
   private scroller: Scroller = new Scroller()
   private renderTimer: number = -1
   private lastCapture: string = ''
+  /** keyEvent 回车时间戳(onSubmit 去重基准;IME 正常时防双 \r)。 */
+  private lastKeyEnterMs: number = 0
+  /** M4a 输入控制器(捕获层与 TermHost.write 之间,差分/ghost/Tab/回溯)。 */
+  private ctrl: InputController = new InputController()
   private cols: number = 80
   private rows: number = 24
   private pendingCols: number = -1
@@ -108,7 +119,7 @@ export struct TermPaneView {
     }
   }
 
-  // ===================== 输入(捕获层三修,照抄 TerminalPage) =====================
+  // ===================== 输入(M4a:捕获层三修 + InputController) =====================
 
   /** 统一写:→ TermHost.write + 同步排空回显 + 立即快照(不等下一拍)。 */
   private writeTerm(text: string): void {
@@ -125,38 +136,40 @@ export struct TermPaneView {
     this.refreshWindow()
   }
 
+  /** 统一执行控制器动作:writeText → setField(fieldText+基线) → ghost。 */
+  private applyAction(a: InputAction): void {
+    if (a.writeText.length > 0) {
+      this.writeTerm(a.writeText)
+    }
+    if (a.setField) {
+      this.capture = a.fieldText
+      this.lastCapture = a.fieldText // 差分基线与控制器 sent 重新对齐
+    }
+    this.ghostBase = a.setField ? '' : this.ctrl.line()
+    this.ghostSuf = a.ghost
+  }
+
   /**
-   * onChange 差分重对齐(TerminalPage 实勘三修):
-   * 前缀增长 → 直写差量;缩短 → 回写 \x7f;非前缀变化(submit 后框架静默
-   * 清空字段)→ 整段重发重新起步。绝不依赖"程序化清空触发 onChange"。
+   * onChange → 控制器差分(M3a 三修语义上移至 InputController.onInput):
+   * 前缀增长直写差量/缩短回写 \x7f/非前缀变化整行重写;ghost 同步重算。
    */
   private onCaptureChange(v: string): void {
-    const last = this.lastCapture
-    if (v !== last) {
-      if (v.length > last.length && v.startsWith(last)) {
-        this.writeTerm(v.substring(last.length))
-      } else if (v.length < last.length && last.startsWith(v)) {
-        const n = last.length - v.length
-        let bs = ''
-        for (let i = 0; i < n; i++) {
-          bs += '\x7f'
-        }
-        this.writeTerm(bs)
-      } else {
-        if (v.length > 0) {
-          this.writeTerm(v)
-        }
-      }
-    }
+    const a = this.ctrl.onInput(v)
     this.lastCapture = v
+    this.applyAction(a)
   }
 
-  /** 回车由 onSubmit 独占('\r',PTY 行规范;onKeyEvent 对 KC_ENTER 放行)。 */
+  /** 回车:onSubmit 独占 → 控制器 onEnter('\r' + 历史 push + 行复位清 ghost)。 */
   private onCaptureSubmit(): void {
-    this.writeTerm('\r')
+    const a = this.ctrl.onEnter()
+    // keyEvent 路径框架不清字段(原依赖 submit 的框架清空),自清受控值;
+    // IME 正常时框架再清 onChange('') 幂等无操作。
+    this.capture = ''
+    this.lastCapture = ''
+    this.applyAction(a)
   }
 
-  /** 硬件键映射(方向/回车/删除/Tab/Esc + ASCII 可打印)。 */
+  /** 硬件键映射(方向/回车/删除/Esc + ASCII 可打印;Tab 与 ↑↓ 由控制器接管)。 */
   private mapKey(code: number, ev: KeyEvent): string {
     switch (code) {
       case KC_ENTER:
@@ -164,8 +177,6 @@ export struct TermPaneView {
         return '\r'
       case KC_DEL:
         return '\x7f'
-      case KC_TAB:
-        return '\t'
       case KC_ESCAPE:
         return '\x1b'
       case KC_DPAD_UP:
@@ -193,7 +204,45 @@ export struct TermPaneView {
     if (ev.type !== KeyType.Down) {
       return false
     }
+    // M4a:Tab 补全;↑↓ 历史回溯(输入行态;箭头键不再透传 sh)。
+    // 已知限制:Tab/↑↓ 的系统焦点转移副作用会带走捕获层焦点(实测后续
+    // Enter 落到别处)——M4b 需产品级焦点保持;驱动验收每步前重点击规避。
+    if (ev.keyCode === KC_TAB) {
+      this.applyAction(this.ctrl.onTab())
+      return true
+    }
+    if (ev.keyCode === KC_DPAD_UP) {
+      this.applyAction(this.ctrl.onArrow(true))
+      return true
+    }
+    if (ev.keyCode === KC_DPAD_DOWN) {
+      this.applyAction(this.ctrl.onArrow(false))
+      return true
+    }
+    // 热修(M4a 验收实证):ASCII 可打印/DEL 必须走受控字段+onChange→Controller
+    // 统一入口(直写 writeTerm 绕过差分/ghost/Tab 基线,IME 路径在本机 VM
+    // 已坏,inputText 无法兜底);转义序列与 \r 保持直写。
+    // 热修(M4a 验收实证):onSubmit 走 IME 通道,本机 VM IME 损坏时永不触发
+    // → Enter 死路。keyEvent 直发 onCaptureSubmit,onSubmit 以时间戳去重
+    // (400ms 内的 onSubmit 视为同一回车,防双 \r)。
+    if (ev.keyCode === KC_ENTER) {
+      this.lastKeyEnterMs = Date.now()
+      this.onCaptureSubmit()
+      return true
+    }
     const s = this.mapKey(ev.keyCode, ev)
+    if (s.length === 1 && s.charCodeAt(0) >= 0x20 && s.charCodeAt(0) < 0x7f) {
+      this.capture = this.capture + s
+      this.onCaptureChange(this.capture) // 程序赋值不保证触发 onChange;幂等兜底
+      return true
+    }
+    if (ev.keyCode === KC_DEL) {
+      if (this.capture.length > 0) {
+        this.capture = this.capture.substring(0, this.capture.length - 1)
+        this.onCaptureChange(this.capture)
+      }
+      return true
+    }
     if (s.length > 0) {
       this.writeTerm(s)
       return true
@@ -324,6 +373,24 @@ export struct TermPaneView {
       .scrollBar(BarState.Auto)
       .edgeEffect(EdgeEffect.None)
 
+      // ghost 建议行(M4a):前缀 ink 色 + 后缀 inkSubtle 色,终端区底部一行,
+      // 与捕获层同层不拦截(Text 天然不拦截,不用 hitTest 设置)
+      if (this.ghostSuf.length > 0) {
+        Row() {
+          Text(this.ghostBase)
+            .fontSize(TERM_FONT_SIZE)
+            .fontFamily(TERM_FONT_FAMILY)
+            .fontColor(TERM_DEFAULT_FG)
+          Text(this.ghostSuf)
+            .fontSize(TERM_FONT_SIZE)
+            .fontFamily(TERM_FONT_FAMILY)
+            .fontColor(GHOST_SUBTLE_FG)
+        }
+        .height(TERM_LINE_H)
+        .alignItems(VerticalAlign.Bottom)
+        .padding({ left: TERM_PAD * 2, bottom: TERM_PAD * 2 })
+      }
+
       // 全幅透明捕获层:承接一切输入;hitTestBehavior Default 保住下方滚动
       TextInput({ text: this.capture, placeholder: '' })
         .width('100%')
@@ -341,13 +408,12 @@ export struct TermPaneView {
           this.onCaptureChange(v)
         })
         .onSubmit(() => {
+          if (Date.now() - this.lastKeyEnterMs < 400) {
+            return // keyEvent 已处理同一回车(防双 \r)
+          }
           this.onCaptureSubmit()
         })
         .onKeyEvent((ev: KeyEvent) => {
-          // 回车让位 onSubmit(双 \r 坑);其余特殊键走 mapKey
-          if (ev.keyCode === KC_ENTER) {
-            return false
-          }
           return this.onTermKey(ev)
         })
     }

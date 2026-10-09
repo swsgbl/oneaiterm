@@ -18,6 +18,7 @@
  */
 import { TermModel } from '../../components/TermModel';
 import { LocalTerminalService } from '../../service/LocalTerminalService';
+import { InputHistory } from './InputHistory';
 
 const TERM_POLL_MS: number = 100;
 
@@ -33,6 +34,7 @@ export class TermHost {
     if (TermHost.model !== null && TermHost.timer >= 0) {
       return true
     }
+    InputHistory.restore() // M4a:会话起时恢复输入历史(无 context 静默)
     if (!LocalTerminalService.open(cols, rows)) {
       return false
     }
@@ -79,6 +81,7 @@ export class TermHost {
       TermHost.timer = -1
     }
     TermHost.onDead = null
+    InputHistory.persist() // M4a:会话停时封存输入历史(无 context 静默)
     if (LocalTerminalService.active()) {
       LocalTerminalService.close()
     }
