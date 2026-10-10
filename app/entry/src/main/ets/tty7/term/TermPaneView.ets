@@ -1,10 +1,11 @@
 /**
- * tty7 终端 pane 渲染组件(任务 tty7-M3a;M4a 升级:捕获层接 InputController)。
+ * tty7 终端 pane 渲染组件(任务 tty7-M3a;M4a 升级:捕获层接 InputController;M3c:scrollback+搜索)。
+ * M3c:渲染源=lines 尾部 SCROLLBACK_MAX 行;贴底跟随 atBottom(上滚不打断);palette 搜索浮层。
  *
  * 机制照抄 TerminalPage(pages/TerminalPage.ets)的终端体与直输捕获层三修,
  * 去业务(无 Zmodem/SFTP/header/主题切换,终端恒暗底):
- *  - 渲染:Scroll + ForEach(winRows 窗口快照) + lineToSpans 行渲染,键含
- *    line.rev + tick(只有脏行换键,大输出不重绑干净行);
+ *  - 渲染:Scroll + ForEach(lines 尾部 SCROLLBACK_MAX 行,M3c) + lineToSpans 行渲染,
+ *    键含 line.rev(只有脏行换键,大输出不重绑干净行);
  *  - 刷新:自链式 setTimeout 100ms 一拍(tick++ + 快照 + scrollEdge 贴底),
  *    输出数据源是 TermHost.term()(TermHost 自持排水链,组件只读快照);
  *  - 直输捕获层三修(M4a 上移至 InputController,组件只执行动作指令):
@@ -19,6 +20,7 @@
 import { TermModel, TermLine, lineToSpans, SpanRun, TERM_DEFAULT_BG, TERM_DEFAULT_FG } from '../../components/TermModel';
 import { TermHost } from './TermHost';
 import { InputController, InputAction } from './InputController';
+import { searchHits, nextHit, shouldStick, SCROLLBACK_MAX } from './TermScrollback';
 
 const TERM_FONT_SIZE: number = 13
 const TERM_FONT_FAMILY: string = 'monospace'
@@ -27,6 +29,10 @@ const TERM_PAD: number = 4
 const TERM_POLL_MS: number = 100
 /** ghost 后缀色(暗底次文近似,不用 ThemeGet 免 context)。 */
 const GHOST_SUBTLE_FG: string = '#7d8590'
+/** M3c:搜索命中行高亮(brand #58a6ff 30% 透明近似)。 */
+const HIT_CUR_BG: string = '#4d58a6ff'
+/** M3c:搜索浮层输入底色(暗底近似)。 */
+const SEARCH_BAR_BG: string = '#161b22'
 
 // KeyCode(api/@ohos.multimodalInput.keyCode.d.ts,与 TerminalPage 同源)
 const KC_DPAD_UP: number = 2012
@@ -49,9 +55,18 @@ export struct TermPaneView {
   /** M6a:外部注入尺寸口(远程;缺省 TermHost.resize)。 */
   resizeFn: ((c: number, r: number) => void) | null = null
   @State tick: number = 0
-  @State winRows: TermLine[] = []
-  @State winTop: number = 0
+  /** M3c:渲染源 = lines 尾部最多 SCROLLBACK_MAX 行(winRows 窗口快照语义废弃)。 */
+  @State viewRows: TermLine[] = []
+  @State viewTop: number = 0
   @State capture: string = ''
+  /** M3c:贴底态(用户上滚即失贴;新输出仅贴底态跟随)。 */
+  @State atBottom: boolean = true
+  /** M3c:搜索浮层开/关键字/命中下标(viewRows 基,升序)/当前命中序号/渲染代。 */
+  @State searching: boolean = false
+  @State searchText: string = ''
+  @State hitIdxs: number[] = []
+  @State hitCur: number = 0
+  @State searchEpoch: number = 0
   /** ghost 建议行前缀(=当前输入行;'' = 无建议;V1:组件内 @State 驱动渲染)。 */
   @State ghostBase: string = ''
   /** ghost 建议后缀(不含前缀)。 */
@@ -73,10 +88,23 @@ export struct TermPaneView {
   private pendingRows: number = -1
   private resizeTimer: number = -1
   private firstAreaMs: number = -1
+  /** M3c:Scroll 视口高采样(-1 未测;距底判定基准)。 */
+  private viewH: number = -1
+  /** M3c:贴底过一次后 true(首帧 shouldStick 强制贴底用)。 */
+  private everStuck: boolean = false
+  /** M3c:可视首行缓存(refreshWindow/updateBottom 刷新;键与 cursorXFor 共用)。 */
+  private curSegCache: number = 0
+  /** M3c:模型代际(modelOrNull 身份变化 +1;ForEach 键防跨模型键撞)。 */
+  private modelEpoch: number = 0
+  private modelInit: boolean = false
+  private modelLast: TermModel | null = null
+  /** M3c:搜索信号轮询句柄(AppStorage 'ut.term.search',照抄 ut.git.focus)。 */
+  private searchWatch: number = -1
 
   aboutToAppear(): void {
     this.startRenderLoop()
     this.refreshWindow()
+    this.startSearchWatch() // M3c:palette 搜索信号
   }
 
   aboutToDisappear(): void {
@@ -87,6 +115,10 @@ export struct TermPaneView {
     if (this.resizeTimer >= 0) {
       clearTimeout(this.resizeTimer)
       this.resizeTimer = -1
+    }
+    if (this.searchWatch >= 0) {
+      clearTimeout(this.searchWatch)
+      this.searchWatch = -1
     }
   }
 
@@ -109,25 +141,212 @@ export struct TermPaneView {
     this.renderTimer = setTimeout(tickFn, TERM_POLL_MS)
   }
 
-  /** 窗口快照:贴底模式(winTop=total-rows;回看历史留 M3b)。 */
+  /**
+   * M3c:渲染快照 = lines 尾部最多 SCROLLBACK_MAX 行(scrollback 全量可滚);
+   * 贴底只在 atBottom(用户未上滚)时跟随——上滚看历史时新输出不打断。
+   */
   private refreshWindow(): void {
     const m = this.modelOrNull()
     if (m === null) {
-      if (this.winRows.length > 0) {
-        this.winRows = []
+      if (this.viewRows.length > 0) {
+        this.viewRows = []
+        this.viewTop = 0
       }
       return
     }
-    const total = m.lines.length
-    if (m.altScreen !== this.altScrLast) { this.altScrLast = m.altScreen; this.altScr = m.altScreen } // M4b sample
-    this.winTop = Math.max(0, total - m.rows)
-    const end = Math.min(total, this.winTop + m.rows)
-    this.winRows = m.lines.slice(this.winTop, end)
-    try {
-      this.scroller.scrollEdge(Edge.Bottom)
-    } catch (e) {
-      // 布局阶段不可调时静默(scrollEdge 不得杀链)
+    if (!this.modelInit) {
+      this.modelInit = true
+      this.modelLast = m
+    } else if (this.modelLast !== m) {
+      this.modelLast = m
+      this.modelEpoch += 1
     }
+    if (m.altScreen !== this.altScrLast) { this.altScrLast = m.altScreen; this.altScr = m.altScreen } // M4b sample
+    const total = m.lines.length
+    const take = Math.min(total, SCROLLBACK_MAX)
+    this.viewTop = total - take
+    this.viewRows = m.lines.slice(this.viewTop, total)
+    this.curSegCache = this.computeSeg()
+    if (shouldStick(this.atBottom, !this.everStuck)) {
+      this.everStuck = true
+      try {
+        this.scroller.scrollEdge(Edge.Bottom)
+      } catch (e) {
+        // 布局阶段不可调时静默(scrollEdge 不得杀链)
+      }
+    }
+  }
+
+  // ===================== M3c:贴底判定 + 搜索浮层(组件内 @State,不进 vm) =====================
+
+  /** 可视首行近似(lines 绝对索引):yOffset/行高四舍五入,夹 [0,∞)。 */
+  private computeSeg(): number {
+    try {
+      return Math.max(0, Math.round(this.scroller.currentOffset().yOffset / TERM_LINE_H))
+    } catch (e) {
+      return 0
+    }
+  }
+
+  /** 距底判定:yOffset 距内容底 ≤20vp 视为贴底(≈40px@2x;本 SDK Scroll 无 onReachEnd)。 */
+  private updateBottom(): void {
+    if (this.viewH <= 0) {
+      return // 视口未测:保持现值(初始贴底)
+    }
+    try {
+      const off = this.scroller.currentOffset()
+      this.curSegCache = Math.max(0, Math.round(off.yOffset / TERM_LINE_H))
+      const max = Math.max(0, this.viewRows.length * TERM_LINE_H + 2 * TERM_PAD - this.viewH)
+      const at = (max - off.yOffset) <= 20
+      if (at !== this.atBottom) {
+        this.atBottom = at
+      }
+    } catch (e) {
+      // currentOffset 不可用:保持现值
+    }
+  }
+
+  /** palette 信号轮询:ut.term.search 单调 +1 → 开浮层(500ms 自链,照抄 ut.git.focus)。 */
+  private startSearchWatch(): void {
+    let last = AppStorage.get<number>('ut.term.search') ?? 0
+    const tickFn = (): void => {
+      try {
+        const cur = AppStorage.get<number>('ut.term.search') ?? 0
+        if (cur !== last) {
+          last = cur
+          this.openSearch()
+        }
+      } finally {
+        this.searchWatch = setTimeout(tickFn, 500)
+      }
+    }
+    this.searchWatch = setTimeout(tickFn, 500)
+  }
+
+  /** 打开浮层:清搜索态 + 焦点落搜索框。 */
+  private openSearch(): void {
+    this.searching = true
+    this.searchText = ''
+    this.hitIdxs = []
+    this.hitCur = 0
+    this.recomputeHits(true)
+    try {
+      this.getUIContext().getFocusController().requestFocus('tty7TermSearch')
+    } catch (e) {
+      // 焦点控制器不可用:降级为手动点击搜索框
+    }
+  }
+
+  /** 关闭浮层:清搜索态(高亮随 searchEpoch 失效)+ 焦点回捕获层。 */
+  private closeSearch(): void {
+    this.searching = false
+    this.searchText = ''
+    this.hitIdxs = []
+    this.hitCur = 0
+    this.searchEpoch += 1
+    this.keepCaptureFocus()
+  }
+
+  /** 重算命中:textOf 快照(viewRows 同源)大小写不敏感;reset 归零当前序号。 */
+  private recomputeHits(reset: boolean): void {
+    const m = this.modelOrNull()
+    const texts: string[] = []
+    if (m !== null) {
+      for (let i = 0; i < this.viewRows.length; i++) {
+        texts.push(m.textOf(this.viewRows[i]))
+      }
+    }
+    this.hitIdxs = searchHits(texts, this.searchText)
+    if (reset) {
+      this.hitCur = 0
+    } else if (this.hitCur >= this.hitIdxs.length) {
+      this.hitCur = Math.max(0, this.hitIdxs.length - 1)
+    }
+    this.searchEpoch += 1
+  }
+
+  /** 跳到命中序号 cur(0 基)并滚该行入视(行号×行高近似,vp≈px)。 */
+  private jumpHit(cur: number): void {
+    this.hitCur = cur
+    if (cur < 0 || cur >= this.hitIdxs.length) {
+      return
+    }
+    const y = this.hitIdxs[cur] * TERM_LINE_H + TERM_PAD
+    try {
+      this.scroller.scrollTo({ xOffset: 0, yOffset: y, animation: { duration: 120, curve: Curve.EaseOut } })
+    } catch (e) {
+      // 布局期不可调:静默(高亮仍切换)
+    }
+  }
+
+  /** ↑↓:命中间环绕步进(先重算防新输出致命中漂移)。 */
+  private hitStep(step: number): void {
+    this.recomputeHits(false)
+    const n = this.hitIdxs.length
+    if (n === 0) {
+      return
+    }
+    this.jumpHit(nextHit(this.hitCur, n, step))
+  }
+
+  /** 计数文本:'3/17';空关键字 '';无命中 '0/0'。 */
+  private hitText(): string {
+    if (this.searchText.trim().length === 0) {
+      return ''
+    }
+    const n = this.hitIdxs.length
+    return (n === 0 ? 0 : this.hitCur + 1).toString() + '/' + n.toString()
+  }
+
+  /** 当前行(viewRows 下标)是否为当前命中行(高亮分支)。 */
+  private isHitRowCur(viewIdx: number): boolean {
+    if (!this.searching || this.hitCur >= this.hitIdxs.length) {
+      return false
+    }
+    return this.hitIdxs[this.hitCur] === viewIdx
+  }
+
+  /** 搜索框 keyEvent(IME 坏环境主通道,照抄捕获层热修):Esc 关/↑↓ 跳/回车搜/ASCII·DEL。 */
+  private onSearchKey(ev: KeyEvent): boolean {
+    if (ev.type !== KeyType.Down) {
+      return false
+    }
+    if (ev.keyCode === KC_ESCAPE) {
+      this.closeSearch()
+      return true
+    }
+    if (ev.keyCode === KC_DPAD_UP) {
+      this.hitStep(-1)
+      return true
+    }
+    if (ev.keyCode === KC_DPAD_DOWN) {
+      this.hitStep(1)
+      return true
+    }
+    if (ev.keyCode === KC_ENTER || ev.keyCode === KC_DPAD_CENTER) {
+      this.recomputeHits(true)
+      if (this.hitIdxs.length > 0) {
+        this.jumpHit(0)
+      }
+      return true
+    }
+    const t = ev.keyText
+    if (t !== undefined && t !== null && t.length === 1) {
+      const c = t.charCodeAt(0)
+      if (c >= 0x20 && c < 0x7f) {
+        this.searchText = this.searchText + t
+        this.recomputeHits(false)
+        return true
+      }
+    }
+    if (ev.keyCode === KC_DEL) {
+      if (this.searchText.length > 0) {
+        this.searchText = this.searchText.substring(0, this.searchText.length - 1)
+        this.recomputeHits(false)
+      }
+      return true
+    }
+    return false
   }
 
   // ===================== 输入(M4a:捕获层三修 + InputController) =====================
@@ -371,14 +590,15 @@ export struct TermPaneView {
       return -1
     }
     const cy = m.lines.length - m.rows + m.cursor.y
-    if (rowIdx === cy) {
+    if (rowIdx === cy && rowIdx >= this.viewTop + this.curSegCache
+      && rowIdx < this.viewTop + this.curSegCache + m.rows) { // M3c:仅可视段亮块(上滚不残留)
       return m.cursor.x
     }
     return -1
   }
 
   @Builder
-  TermLineRow(line: TermLine, rowIdx: number) {
+  TermLineRow(line: TermLine, rowIdx: number, viewIdx: number) {
     Row() {
       ForEach(lineToSpans(line, this.cursorXFor(rowIdx), true), (run: SpanRun, idx: number) => {
         Text(run.text.replace(/ /g, '\u00a0'))
@@ -388,20 +608,22 @@ export struct TermPaneView {
           .fontWeight(run.bold ? FontWeight.Bold : FontWeight.Normal)
           .backgroundColor(run.bg !== null ? run.bg : Color.Transparent)
       }, (run: SpanRun, idx: number) => rowIdx.toString() + ':' + idx.toString() + ':'
-        + run.text.length + ':' + run.fg + ':' + (run.bg ?? '-') + ':' + this.tick.toString())
+        + run.text.length + ':' + run.fg + ':' + (run.bg ?? '-') + ':' + this.cursorXFor(rowIdx))
     }
     .height(TERM_LINE_H)
     .width('100%')
+    .backgroundColor(this.isHitRowCur(viewIdx) ? HIT_CUR_BG : Color.Transparent) // M3c 命中高亮
   }
 
   build() {
     Stack({ alignContent: Alignment.BottomStart }) {
       Scroll(this.scroller) {
         Column() {
-          ForEach(this.winRows, (line: TermLine, idx: number) => {
-            this.TermLineRow(line, this.winTop + idx)
-          }, (line: TermLine, idx: number) => (this.winTop + idx).toString() + ':' + line.rev.toString() + ':'
-            + this.tick.toString())
+          ForEach(this.viewRows, (line: TermLine, idx: number) => {
+            this.TermLineRow(line, this.viewTop + idx, idx)
+          }, (line: TermLine, idx: number) => (this.viewTop + idx).toString() + ':' + line.rev.toString() + ':'
+            + this.curSegCache.toString() + ':e' + this.modelEpoch.toString() + ':s' + this.searchEpoch.toString()
+            + (this.isHitRowCur(idx) ? ':h' + this.hitCur.toString() : ''))
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
@@ -411,6 +633,13 @@ export struct TermPaneView {
       .height('100%')
       .scrollBar(BarState.Auto)
       .edgeEffect(EdgeEffect.None)
+      .onDidScroll((_x: number, _y: number, _st: ScrollState) => {
+        this.updateBottom() // M3c:贴底态跟踪(上滚即失贴)
+      })
+      .onAreaChange((_o: Area, n: Area) => {
+        this.viewH = Number(n.height) // M3c:视口高采样
+        this.updateBottom()
+      })
 
       // ghost 建议行(M4a):前缀 ink 色 + 后缀 inkSubtle 色,终端区底部一行,
       // 与捕获层同层不拦截(Text 天然不拦截,不用 hitTest 设置)
@@ -456,6 +685,66 @@ export struct TermPaneView {
         .onKeyEvent((ev: KeyEvent) => {
           return this.onTermKey(ev)
         })
+
+      // M3c 搜索浮层:顶部一条(输入+计数+↑↓+×);Stack 后声明=顶层可点
+      if (this.searching) {
+        Row({ space: 6 }) {
+          TextInput({ text: this.searchText, placeholder: '搜索...' })
+            .id('tty7TermSearch') // requestFocus 目标(keyEvent 主通道)
+            .focusable(true)
+            .focusOnTouch(true)
+            .layoutWeight(1)
+            .height(30)
+            .fontSize(14)
+            .fontColor(TERM_DEFAULT_FG)
+            .placeholderColor(GHOST_SUBTLE_FG)
+            .caretColor('#58a6ff')
+            .backgroundColor(SEARCH_BAR_BG)
+            .borderRadius(4)
+            .padding({ left: 8, right: 8 })
+            .onChange((v: string) => {
+              this.searchText = v
+              this.recomputeHits(false)
+            })
+            .onSubmit(() => {
+              this.recomputeHits(true)
+              if (this.hitIdxs.length > 0) {
+                this.jumpHit(0)
+              }
+            })
+            .onKeyEvent((ev: KeyEvent) => {
+              return this.onSearchKey(ev)
+            })
+          Text(this.hitText())
+            .fontSize(12)
+            .fontColor(TERM_DEFAULT_FG)
+            .maxLines(1)
+          Text('↑')
+            .fontSize(14)
+            .fontColor(TERM_DEFAULT_FG)
+            .width(24)
+            .height(30)
+            .textAlign(TextAlign.Center)
+            .onClick(() => this.hitStep(-1))
+          Text('↓')
+            .fontSize(14)
+            .fontColor(TERM_DEFAULT_FG)
+            .width(24)
+            .height(30)
+            .textAlign(TextAlign.Center)
+            .onClick(() => this.hitStep(1))
+          Text('×')
+            .fontSize(16)
+            .fontColor(TERM_DEFAULT_FG)
+            .width(24)
+            .height(30)
+            .textAlign(TextAlign.Center)
+            .onClick(() => this.closeSearch())
+        }
+        .position({ x: 0, y: 0 }) // M3c 顶部绝对定位(Stack alignContent 不管辖 position)
+        .width('100%')
+        .padding({ left: TERM_PAD, right: TERM_PAD, top: TERM_PAD })
+      }
     }
     .width('100%')
     .height('100%')

@@ -26,6 +26,7 @@ import sftpDrawerTest from './SftpDrawer.test.ets'; // +tty7-M6b: RightPanel 抽
 import gitServiceTest from './GitService.test.ets'; // +tty7-M7a: git 解析纯函数 + runner 行缓冲/回显剔除/标记检测
 import gitWriteTest from './GitWrite.test.ets'; // +tty7-M7b: 写命令构造/quoteMsg 双闸/XY 分类/pushDry 解析
 import commandBridgeTest from './CommandBridge.test.ets'; // +tty7-M8a/M8b/M9: CLI 桥纯函数(parse/format/doctor/token 恒时比较)
+import termScrollbackTest from './TermScrollback.test.ets'; // +tty7-M3c: scrollback 尾截 + 终端搜索纯函数
 
 export default function testsuite() {
   policyEngineTest();
@@ -51,4 +52,5 @@ export default function testsuite() {
   gitServiceTest(); // +tty7-M7a
   gitWriteTest(); // +tty7-M7b
   commandBridgeTest(); // +tty7-M8a +tty7-M8b +tty7-M9
+  termScrollbackTest(); // +tty7-M3c
 }

@@ -156,6 +156,21 @@ export function paletteCmds(): PaletteCmd[] {
       }
     }
   }
+  // +tty7-M3c: 终端搜索浮层——AppStorage 'ut.term.search' 单调 +1 信号,
+  // 焦点 pane 的 TermPaneView 500ms 轮询侧开浮层(搜索态组件内,不进 vm)
+  const termSearch: PaletteCmd = {
+    key: 'term.search',
+    label: '搜索 · 终端',
+    run: (vm: WorkbenchVm) => {
+      if (vm.focusedPane === '') {
+        vm.setStatus('无焦点 pane')
+        return
+      }
+      const cur = AppStorage.get<number>('ut.term.search') ?? 0
+      AppStorage.setOrCreate('ut.term.search', cur + 1)
+      vm.setStatus('终端搜索:输入关键字回车,↑↓ 跳转,×/Esc 关闭')
+    }
+  }
   const themeToggle: PaletteCmd = {
     key: 'theme.toggle',
     label: '切换主题',
@@ -195,6 +210,7 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(sessionEnd)
   cmds.push(wsNew)
   cmds.push(cliStatus) // +tty7-M8a
+  cmds.push(termSearch) // +tty7-M3c: 终端搜索浮层信号
   cmds.push(themeToggle)
   return cmds
 }
