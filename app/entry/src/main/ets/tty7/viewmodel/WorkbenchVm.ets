@@ -57,6 +57,10 @@ export class WorkbenchVm {
   termTick: number = 0
   /** Agent 状态点桩(M1d 接 HMH Provider 真状态)。 */
   agentOnline: boolean = true
+  /** Agent 活跃版本号(M5b):桥 emit 含 paneId 的事件时经 agentRevTap ++。
+   *  PaneSurface 标题表达式读此绑定字段建立追踪(V1 方法调用不追踪,
+   *  activeOnPane 纯查询,同 slotsRev/termTick 模式)。 */
+  agentRev: number = 0
   private tabSeq: number = 1
   private paneSeq: number = 0
   private wsSeq: number = 1

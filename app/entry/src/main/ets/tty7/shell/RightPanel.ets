@@ -9,6 +9,12 @@
  * 引擎未配置时 statusText 提示不崩溃。
  * V1 刷新纪律:事件数组**整体替换**(concat+slice)触发 ForEach 重评;
  * 同步分发回调轻(只拼数组+贴底)。红线:零业务 import(只消费总线/桥/VM)。
+ *
+ * M5b:审批卡(approval_required 渲染风险色边框+两钮[允许][拒绝],决策经
+ * HmhEventBridge.decide 走 ApprovalManager 原通道——只调不造,决策不进 bus;
+ * approval_result 同 toolId 回流后置灰;决策调用失败卡片保持可点+状态栏提示,
+ * 永不 fail-open)。checkpoint 卡 '↻ 会话恢复'桩(M8 CLI 接 resume)。
+ * 发送时传 vm.focusedPane(pane 绑定;run_started.paneId 落到焦点 pane)。
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
@@ -16,6 +22,7 @@ import { DesignTokens } from '../../common/DesignTokens';
 import { AgentEvent } from '../agent/AgentEvent';
 import { AgentEventBus } from '../agent/AgentEventBus';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
+import { approvalToneOf, approvalSettled, checkpointLabel } from '../agent/ApprovalCardLogic';
 
 /** delta 单条正文显示上限(溢出省略)。 */
 const TEXT_CAP: number = 200;
@@ -126,6 +133,36 @@ export struct RightPanel {
     return this.th().inkSubtle
   }
 
+  /** 审批风险色档(ApprovalCardLogic 纯函数;单测共靶)。 */
+  private toneColor(tone: string): number {
+    if (tone === 'danger') {
+      return this.th().danger
+    }
+    if (tone === 'warn') {
+      return this.th().warn
+    }
+    return this.th().brand
+  }
+
+  /** 审批决策:经桥走 ApprovalManager 原通道;失败卡片保持可点+状态栏提示
+   *  (永不 fail-open——异常不吞、不假成功、不置灰)。 */
+  private decideApproval(ev: AgentEvent, decision: string): void {
+    HmhEventBridge.decide(ev.runId, ev.toolId, decision).then((ok: boolean): void => {
+      if (!ok) {
+        this.vm.setStatus('审批提交失败(通道异常),卡片保持可点')
+      }
+    }).catch((_e: Object): void => {
+      this.vm.setStatus('审批提交失败(通道异常),卡片保持可点')
+    })
+  }
+
+  /** 审批卡收口判定:事件流里同 toolId 的 approval_result 已回流 → 置灰。
+   *  V1 规则:events 为 @State 数组,读即建立追踪(approval_result 回流时
+   *  数组整体替换驱动卡片重评)。 */
+  private approvalSettledFor(ev: AgentEvent): boolean {
+    return approvalSettled(this.events, ev.toolId)
+  }
+
   /** 超长文本截断(省略)。 */
   private capText(s: string): string {
     if (s.length <= TEXT_CAP) {
@@ -134,13 +171,15 @@ export struct RightPanel {
     return s.substring(0, TEXT_CAP) + '…'
   }
 
-  /** 发送:经 HmhEventBridge(hmh 引擎);未配置→提示不假成功;成功→只清输入。 */
+  /** 发送:经 HmhEventBridge(hmh 引擎);未配置→提示不假成功;成功→只清输入。
+   *  M5b:传 vm.focusedPane(pane 绑定;无引擎时 sendTask 返回 no_engine
+   *  不产事件,pane 零标记——零回归)。 */
   private send(): void {
     const t = this.input.trim()
     if (t === '') {
       return
     }
-    HmhEventBridge.sendTask(t).then((r: string): void => {
+    HmhEventBridge.sendTask(t, this.vm.focusedPane).then((r: string): void => {
       if (r === 'no_engine') {
         this.vm.setStatus('AI 引擎未配置')
       } else if (r.indexOf('reject:') === 0 || r.indexOf('fail:') === 0) {
@@ -209,21 +248,63 @@ export struct RightPanel {
       .width('100%')
       .padding({ top: 2, bottom: 2 })
     } else if (ev.type === 'approval_required') {
-      Row({ space: DesignTokens.SPACE_XS }) {
-        Text('⚠ 审批 ' + (ev.toolName !== '' ? ev.toolName : ''))
+      // M5b 审批卡:风险色边框 + '需要审批: tool·digest' + [允许][拒绝]两钮;
+      // approval_result 同 toolId 回流后置灰(决策不重发);未收口前可点。
+      Column({ space: DesignTokens.SPACE_XS }) {
+        Text('需要审批: ' + (ev.toolName !== '' ? ev.toolName : '') + '·' + this.capText(ev.argsDigest))
           .fontSize(DesignTokens.FONT_CAPTION)
-          .fontColor(this.th().warn)
-          .maxLines(1)
+          .fontColor(this.approvalSettledFor(ev) ? this.th().inkSubtle : this.th().ink)
+          .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .layoutWeight(1)
-        if (ev.riskLevel !== '') {
-          Text('· ' + ev.riskLevel)
+        Row({ space: DesignTokens.SPACE_SM }) {
+          if (ev.riskLevel !== '') {
+            Text('· ' + ev.riskLevel)
+              .fontSize(DesignTokens.FONT_LABEL)
+              .fontColor(this.toneColor(approvalToneOf(ev.riskLevel)))
+              .layoutWeight(1)
+          } else {
+            Blank().layoutWeight(1)
+          }
+          Text('允许')
             .fontSize(DesignTokens.FONT_LABEL)
-            .fontColor(this.th().danger)
+            .fontColor(this.approvalSettledFor(ev) ? this.th().inkSubtle : this.th().success)
+            .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+            .borderRadius(DesignTokens.RADIUS_SM)
+            .border({
+              width: 1,
+              color: this.approvalSettledFor(ev) ? this.th().hairline : this.th().success
+            })
+            .onClick(() => {
+              if (!this.approvalSettledFor(ev)) {
+                this.decideApproval(ev, 'approved')
+              }
+            })
+          Text('拒绝')
+            .fontSize(DesignTokens.FONT_LABEL)
+            .fontColor(this.approvalSettledFor(ev) ? this.th().inkSubtle : this.th().danger)
+            .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+            .borderRadius(DesignTokens.RADIUS_SM)
+            .border({
+              width: 1,
+              color: this.approvalSettledFor(ev) ? this.th().hairline : this.th().danger
+            })
+            .onClick(() => {
+              if (!this.approvalSettledFor(ev)) {
+                this.decideApproval(ev, 'denied')
+              }
+            })
         }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
-      .padding({ top: 2, bottom: 2 })
+      .padding({ top: 4, bottom: 4, left: 6, right: 6 })
+      .borderRadius(DesignTokens.RADIUS_SM)
+      .border({
+        width: 1,
+        color: this.approvalSettledFor(ev) ? this.th().hairline : this.toneColor(approvalToneOf(ev.riskLevel))
+      })
+      .opacity(this.approvalSettledFor(ev) ? 0.55 : 1)
     } else if (ev.type === 'final') {
       Row({ space: DesignTokens.SPACE_XS }) {
         Text(ev.ok ? '✓ 完成' : '✗ 失败')
@@ -247,8 +328,17 @@ export struct RightPanel {
       }
       .width('100%')
       .padding({ top: 2, bottom: 2 })
+    } else if (ev.type === 'session_checkpoint') {
+      // M5b 桩:'↻ 会话恢复 sessionId 前缀'(HMH resume 机制接入留 M8 CLI 棒)
+      Text(checkpointLabel(ev.text === '' ? 'resumed' : ev.text))
+        .fontSize(DesignTokens.FONT_LABEL)
+        .fontColor(this.th().inkSubtle)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+        .padding({ top: 2, bottom: 2 })
     } else {
-      // attention / session_checkpoint:轻提示行
+      // attention:轻提示行
       Text('· ' + this.capText(ev.text))
         .fontSize(DesignTokens.FONT_LABEL)
         .fontColor(this.th().inkSubtle)

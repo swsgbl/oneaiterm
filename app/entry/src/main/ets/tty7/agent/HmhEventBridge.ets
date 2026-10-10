@@ -15,21 +15,37 @@
  *   engine_state_changed(UNAVAILABLE)→state_changed(error) /
  *   session_resumed→session_checkpoint;turn/audit_write_failed→attention。
  * paneId 暂 ''(M5b pane 绑定);agentId='hmh';runId 桥侧任务号。
+ *
+ * M5b:
+ *   - sendTask 增可选参 paneId(默认 '');dispatch 统一分发口(map→paneId
+ *     覆写→emit;pane 事件触发 agentRevTap);activeOnPane 纯查询 bus
+ *     (run_started.paneId 命中且未 final 即活跃——PaneSurface '✦' 标记源);
+ *   - approval_required/approval_result 事件携带 requestId→v1 toolId
+ *     (审批卡匹配/置灰对账;ApprovalView 原负载只读挂接,不复制凭据);
+ *   - decide():决策走 AgentAdapter.approve→ApprovalManager 原通道
+ *     (只调不造;决策不进 bus,approval_result 回流照常广播)。
  */
 import { AgentAdapter } from '../../agent/AgentAdapter';
 import {
   AgentEvent as AE, AgentEventListener, AgentSessionConfig, PromptAck, PromptInput,
-  AGENT_ENGINE_UNAVAILABLE
+  ApprovalDecision, AGENT_ENGINE_UNAVAILABLE
 } from '../../agent/AgentProvider';
 import { AgentSettingsStore } from '../../service/AgentSettingsStore';
 import { AgentEvent, AgentEventType } from './AgentEvent';
 import { AgentEventBus } from './AgentEventBus';
+
+/** activeOnPane 回看深度(覆盖一个 run 的全部事件;bus 环形 200)。 */
+const RING_SCAN: number = 200;
 
 export class HmhEventBridge {
   private static attached: boolean = false
   private static runSeq: number = 0
   /** 当前活跃订阅退订口(hmh 单流 v1;新任务前先退旧)。 */
   private static unsub: (() => void) | null = null
+  /** pane 活跃标记回调(emit 含 paneId 的事件后触发;Vm 注册驱动 agentRev)。 */
+  private static agentRevTap: (() => void) | null = null
+  /** runId→sessionId 映射(decide 决策通道寻址用;runId 桥侧任务号)。 */
+  private static sessionOf: Map<string, string> = new Map()
 
   /** 挂载(幂等)。v1 无常驻流——真实接线发生在 sendTask 的 subscribe,此处仅置位。 */
   static attach(): void {
@@ -46,6 +62,34 @@ export class HmhEventBridge {
     return HmhEventBridge.attached
   }
 
+  /** 注册 pane 活跃标记回调(AppShell aboutToAppear 绑 vm.agentRev++;null 清除)。 */
+  static setAgentRevTap(fn: (() => void) | null): void {
+    HmhEventBridge.agentRevTap = fn
+  }
+
+  /** pane 是否有活跃 run:bus 里最近 run_started.paneId 命中且其后无 final。
+   *  纯查询(PaneSurface 标题表达式借 vm.agentRev 建立追踪后调用,同 slotsRev)。 */
+  static activeOnPane(paneId: string): boolean {
+    if (paneId === '') {
+      return false
+    }
+    const ring = AgentEventBus.instance().recent(RING_SCAN)
+    // 回看本 pane 的 run:最近的 run_started(paneId 命中)之后若无 final 收口
+    // 即活跃。final(任意)在 run_started 之前出现 → 该 run 已收口。
+    let started = false
+    for (let i = ring.length - 1; i >= 0; i--) {
+      const ev = ring[i]
+      if (ev.type === 'final' && ev.paneId === paneId) {
+        return false // 本 pane 最近 run 已收口
+      }
+      if (ev.type === 'run_started' && ev.paneId === paneId) {
+        started = true
+        break
+      }
+    }
+    return started
+  }
+
   private static closeStream(): void {
     const u = HmhEventBridge.unsub
     HmhEventBridge.unsub = null
@@ -59,7 +103,7 @@ export class HmhEventBridge {
    * 事件经 map 进总线。结果:'ok'|'no_engine'(未配置,不假成功)|'reject:码'|
    * 'fail:原因'。任务文本原样透传(不加包装)。
    */
-  static async sendTask(text: string): Promise<string> {
+  static async sendTask(text: string, paneId: string = ''): Promise<string> {
     const t = text.trim()
     if (t === '') {
       return 'empty'
@@ -80,8 +124,9 @@ export class HmhEventBridge {
     try {
       const h = await adapter.createSession(cfg)
       HmhEventBridge.closeStream()
+      HmhEventBridge.sessionOf.set(runId, h.sessionId)
       const listener: AgentEventListener = (e: AE): void => {
-        bus.emit(HmhEventBridge.map(runId, e))
+        HmhEventBridge.dispatch(runId, paneId, e)
       }
       HmhEventBridge.unsub = adapter.subscribe(h.sessionId, listener)
       const pi = new PromptInput()
@@ -90,9 +135,52 @@ export class HmhEventBridge {
       if (!ack.accepted) {
         return 'reject:' + ack.errCode
       }
+      // pane 活跃锚点:引擎 session_started 在 subscribe 前 emit(桥收不到),
+      // 提交受理后补发 run_started(paneId) 使 activeOnPane 有源(final 收口)
+      if (paneId !== '') {
+        const anchor = new AgentEvent()
+        anchor.runId = runId
+        anchor.agentId = 'hmh'
+        anchor.paneId = paneId
+        anchor.type = 'run_started'
+        anchor.state = 'working'
+        AgentEventBus.instance().emit(anchor)
+        const tap0 = HmhEventBridge.agentRevTap
+        if (tap0 !== null) {
+          tap0()
+        }
+      }
       return 'ok'
     } catch (e) {
       return 'fail:' + (e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  /** 统一分发口:map→paneId 覆写→emit;pane 事件(pneId≠'')触发 agentRevTap。 */
+  static dispatch(runId: string, paneId: string, e: AE): void {
+    const ev = HmhEventBridge.map(runId, e)
+    ev.paneId = paneId
+    AgentEventBus.instance().emit(ev)
+    if (ev.paneId !== '') {
+      const tap = HmhEventBridge.agentRevTap
+      if (tap !== null) {
+        tap()
+      }
+    }
+  }
+
+  /** 审批决策:走 AgentAdapter.approve→ApprovalManager 原通道(只调不造;
+   *  决策不进 bus,approval_result 回流照常广播)。未知 runId→false 不 fail-open。 */
+  static async decide(runId: string, requestId: string, decision: string): Promise<boolean> {
+    const sid = HmhEventBridge.sessionOf.get(runId)
+    if (sid === undefined) {
+      return false
+    }
+    try {
+      await AgentAdapter.instance().approve(sid, requestId, decision as ApprovalDecision)
+      return true
+    } catch (e) {
+      return false
     }
   }
 
@@ -143,6 +231,7 @@ export class HmhEventBridge {
         ev.toolName = av !== null ? av.toolName : ''
         ev.argsDigest = av !== null ? av.argsDigest : ''
         ev.riskLevel = e.level !== '' ? e.level : ''
+        ev.toolId = av !== null ? av.requestId : '' // 审批卡匹配/置灰对账
         ev.state = 'waiting'
         break
       }
@@ -151,6 +240,7 @@ export class HmhEventBridge {
         ev.text = e.text
         ev.ok = e.text === 'approved'
         ev.toolName = ''
+        ev.toolId = e.approval !== null ? e.approval.requestId : ''
         break
       case 'done':
         type = 'final'
@@ -168,7 +258,7 @@ export class HmhEventBridge {
         break
       case 'session_resumed':
         type = 'session_checkpoint'
-        ev.text = 'resumed'
+        ev.text = e.sessionId !== '' ? 'resumed ' + e.sessionId : 'resumed'
         break
       case 'audit_write_failed':
         type = 'attention'

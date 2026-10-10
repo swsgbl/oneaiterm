@@ -13,6 +13,7 @@ import { StatusBar } from './StatusBar';
 import { PaneGrid } from './PaneGrid';
 import { RightPanel } from './RightPanel';
 import { WorkbenchPalette } from './WorkbenchPalette';
+import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
@@ -26,6 +27,18 @@ export struct AppShell {
 
   private th(): AppTheme {
     return themeByName(this.themeName)
+  }
+
+  aboutToAppear(): void {
+    // M5b:桥 emit 含 paneId 的 Agent 事件时驱动 vm.agentRev(PaneSurface
+    // '✦' 标记的追踪源;组件销毁置 null 防悬挂回调)
+    HmhEventBridge.setAgentRevTap((): void => {
+      this.vm.agentRev += 1
+    })
+  }
+
+  aboutToDisappear(): void {
+    HmhEventBridge.setAgentRevTap(null)
   }
 
   build() {

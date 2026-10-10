@@ -20,6 +20,7 @@ import workbenchVmSessionsTest from './WorkbenchVmSessions.test.ets'; // +tty7-M
 import termHostTest from './TermHost.test.ets'; // +tty7-M3a: TermHost 桥接 + 终端会话生命周期
 import inputControllerTest from './InputController.test.ets'; // +tty7-M4a: 输入历史 + ghost + Tab 补全
 import agentEventBusTest from './AgentEventBus.test.ets'; // +tty7-M5a: AgentEvent v1 总线 + Hmh 事件桥映射
+import agentApprovalTest from './AgentApproval.test.ets'; // +tty7-M5b: pane 绑定 + 审批卡 + checkpoint 文案
 
 export default function testsuite() {
   policyEngineTest();
@@ -39,4 +40,5 @@ export default function testsuite() {
   termHostTest(); // +tty7-M3a
   inputControllerTest(); // +tty7-M4a
   agentEventBusTest(); // +tty7-M5a
+  agentApprovalTest(); // +tty7-M5b
 }

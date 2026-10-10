@@ -11,6 +11,7 @@ import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
 import { TermHost } from '../term/TermHost';
 import { TermPaneView } from '../term/TermPaneView';
+import { HmhEventBridge } from '../agent/HmhEventBridge';
 
 @Component
 export struct PaneSurface {
@@ -32,7 +33,10 @@ export struct PaneSurface {
       // M2b:绑会话显示 slot.title(非空优先);表达式读 vm.slotsRev(绑定字段)
       // 建立追踪——V1 方法调用不追踪,sessionTitle 纯查询。
       Row({ space: DesignTokens.SPACE_XS }) {
-        Text(this.vm.slotsRev >= 0 ? this.vm.sessionTitle(this.paneId) : this.paneId)
+        // M5b:agent 活跃标记——表达式读 vm.agentRev 建立追踪后调
+        // bridge.activeOnPane 纯查询(run 未 final 时 '✦' 前缀;同 slotsRev 模式)
+        Text((this.vm.agentRev >= 0 && HmhEventBridge.activeOnPane(this.paneId) ? '✦ ' : '') +
+          (this.vm.slotsRev >= 0 ? this.vm.sessionTitle(this.paneId) : this.paneId))
           .fontSize(DesignTokens.FONT_CAPTION)
           .fontWeight(FontWeight.Bold)
           .maxLines(1)
