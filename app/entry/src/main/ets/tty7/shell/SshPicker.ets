@@ -9,6 +9,7 @@
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { getSharedStore } from '../../store/ConnStore';
+import { ensureSharedStore } from '../remote/ConnStoreBootstrap';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 
@@ -32,7 +33,8 @@ export struct SshPicker {
   /** ssh 类型连接列表(打开瞬间快照;只留 id/名称/user@host 展示字段)。 */
   private rows(): SshRow[] {
     const out: SshRow[] = []
-    const store = getSharedStore()
+    // 2026-10-11 热修:tty7 直启时 store 未初始化——惰性引导(同 palette 命令)
+    const store = ensureSharedStore()
     if (store === null) {
       return out
     }

@@ -7,6 +7,7 @@
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { getSharedStore, ConnRec } from '../../store/ConnStore';
+import { ensureSharedStore } from '../remote/ConnStoreBootstrap';
 import { CommandBridge } from '../bridge/CommandBridge';
 
 /** 面板命令项:key 唯一;run 同步轻操作。 */
@@ -102,7 +103,9 @@ export function paletteCmds(): PaletteCmd[] {
     key: 'session.new.ssh',
     label: '会话 · SSH 连接',
     run: (vm: WorkbenchVm) => {
-      const store = getSharedStore()
+      // 2026-10-11 热修:tty7 直启时旧界面未挂载,store 从未初始化——
+      // 惰性引导(ConnStoreBootstrap,null 时最小 load,已有实例不动)
+      const store = ensureSharedStore()
       if (store === null) {
         vm.setStatus('连接库未就绪(先在旧界面打开连接列表)')
         return
