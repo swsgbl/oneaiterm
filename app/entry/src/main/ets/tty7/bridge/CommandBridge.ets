@@ -20,6 +20,8 @@
  * 分离——单测只测纯函数,TCP 层 M9 冒烟。
  */
 import { socket } from '@kit.NetworkKit';
+import { util } from '@kit.ArkTS';
+import fs from '@ohos.file.fs';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { TermHost } from '../term/TermHost';
@@ -32,8 +34,43 @@ import { GitService, GitBranchInfo, GitFileEntry, GitCommit } from '../git/GitSe
 const DOMAIN: number = 0x0700;
 const TAG: string = 'tty7.bridge';
 const BRIDGE_PORT: number = 18971;
-/** TODO-M9: 首发常量 token(dev 阶段);M9 换 filesDir 下 cli_token 真文件。 */
-const DEV_TOKEN: string = 'dev-local';
+const TOKEN_FILE: string = '/cli_token';
+
+/**
+ * 双 UUID 拼 hex(任务 tty7-M9,纯函数,单测共靶):两次 generateRandomUUID
+ * 各去 '-' 得 32 hex,拼接成 64 hex = 32 字节熵(单 UUID 仅 16 字节熵,
+ * 不达标)。任一输入空/形态错 → ''(拒绝,不降熵)。
+ */
+export function joinUuidHex(a: string, b: string): string {
+  const x = a.replace(/-/g, '');
+  const y = b.replace(/-/g, '');
+  if (x.length !== 32 || y.length !== 32) {
+    return '';
+  }
+  if (!/^[0-9a-f]{32}$/.test(x) || !/^[0-9a-f]{32}$/.test(y)) {
+    return '';
+  }
+  return x + y;
+}
+
+/**
+ * token 恒时比较(任务 tty7-M9,纯函数,单测共靶):逐字节异或累积,
+ * 不早退(长度不等也扫完短串+差值,总时恒;长度本身是公开信息)。
+ * 空 token 永远 false(未生成态拒绝一切)。
+ */
+export function tokenTimeEqual(a: string, b: string): boolean {
+  if (a === '' || b === '') {
+    return false;
+  }
+  const n = a.length > b.length ? a.length : b.length;
+  let diff = a.length === b.length ? 0 : 1;
+  for (let i = 0; i < n; i++) {
+    const ca = i < a.length ? a.charCodeAt(i) : 0;
+    const cb = i < b.length ? b.charCodeAt(i) : 0;
+    diff |= ca ^ cb;
+  }
+  return diff === 0;
+}
 
 /** 桥响应统一形态:{id,ok,data} 或 {id,ok:false,error}。 */
 export interface BridgeResponse {
@@ -454,6 +491,56 @@ export class CommandBridge {
   private static server: socket.TCPSocketServer | null = null
   private static running: boolean = false
   private static vm: WorkbenchVm | null = null
+  private static tok: string = ''
+
+  /**
+   * 真 token(M9):filesDir/cli_token 读/生成/写(双 UUID 64 hex);
+   * 文件读写失败降级内存 token(app 本次生命周期内一致)。token 绝不
+   * 进 hilog/不回显全量(tokenPrefix 只显前 4 字)。
+   */
+  static token(): string {
+    if (CommandBridge.tok !== '') {
+      return CommandBridge.tok
+    }
+    let fromFile = ''
+    try {
+      const filesDir = AppStorage.get<string>('ut.filesDir') ?? ''
+      if (filesDir !== '') {
+        const p = filesDir + TOKEN_FILE
+        try {
+          const t = fs.readTextSync(p).trim()
+          if (t !== '' && t.length <= 128) {
+            fromFile = t
+          }
+        } catch (e) {
+          // 无文件:首次冷启,走生成
+        }
+        if (fromFile === '') {
+          const gen = joinUuidHex(util.generateRandomUUID(false), util.generateRandomUUID(false))
+          if (gen !== '') {
+            const f = fs.openSync(p, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC)
+            fs.writeSync(f.fd, gen)
+            fs.closeSync(f)
+            fromFile = gen
+          }
+        }
+      }
+    } catch (e) {
+      hilog.warn(DOMAIN, TAG, 'bridge token io failed')
+    }
+    if (fromFile === '') {
+      // 降级:内存 token(本次进程生命周期一致;下次冷启重生成)
+      fromFile = joinUuidHex(util.generateRandomUUID(false), util.generateRandomUUID(false))
+    }
+    CommandBridge.tok = fromFile
+    return fromFile
+  }
+
+  /** token 前 4 字(palette 状态展示;肩窥安全,不回显全量)。 */
+  static tokenPrefix(): string {
+    const t = CommandBridge.token()
+    return t !== '' ? t.substring(0, 4) : ''
+  }
 
   /** vm 注册(ArkTS 事件循环内调用;传 null 即注销,命令降级)。 */
   static setVm(vm: WorkbenchVm | null): void {
@@ -473,6 +560,8 @@ export class CommandBridge {
     if (CommandBridge.running) {
       return true
     }
+    // M9:冷启即生成/加载 token(判据:filesDir/cli_token 落盘)
+    CommandBridge.token()
     try {
       const srv: socket.TCPSocketServer = socket.constructTCPSocketServerInstance()
       srv.listen({ address: '127.0.0.1', port: port } as socket.NetAddress)
@@ -510,8 +599,8 @@ export class CommandBridge {
           const line = buf.slice(0, nl).replace(/\r$/, '')
           buf = buf.slice(nl + 1)
           if (!authed) {
-            // 首行 token(TODO-M9 常量);失败即断,绝不回显
-            if (line === DEV_TOKEN) {
+            // 首行 token(filesDir/cli_token 真文件,M9);失败即断,绝不回显
+            if (tokenTimeEqual(line, CommandBridge.token())) {
               authed = true
             } else {
               hilog.warn(DOMAIN, TAG, 'bridge auth rejected')

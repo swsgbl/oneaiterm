@@ -8,8 +8,11 @@ import {
   escapeText,
   waitParams,
   agentsSummary,
-  gitSubOk
+  gitSubOk,
+  tokenTimeEqual,
+  joinUuidHex
 } from '../../../main/ets/tty7/bridge/CommandBridge';
+import { gitAuditRecord } from '../../../main/ets/tty7/git/GitService';
 import { AgentEvent, AgentEventType } from '../../../main/ets/tty7/agent/AgentEvent';
 
 export default function commandBridgeTest() {
@@ -132,6 +135,42 @@ export default function commandBridgeTest() {
       expect(gitSubOk('push')).assertFalse()
       expect(gitSubOk('commit')).assertFalse()
       expect(gitSubOk('')).assertFalse()
+    })
+    // ---- M9:tokenTimeEqual(恒时比较;长度不等早 false 合法——长度公开)----
+    it('tokenTimeConst', 0, () => {
+      expect(tokenTimeEqual('', '')).assertFalse()
+      expect(tokenTimeEqual('', 'abc')).assertFalse()
+      expect(tokenTimeEqual('abc', 'abc')).assertTrue()
+      expect(tokenTimeEqual('abc', 'abd')).assertFalse()
+      expect(tokenTimeEqual('abc', 'ab')).assertFalse()
+      expect(tokenTimeEqual('ab', 'abc')).assertFalse()
+      expect(tokenTimeEqual('a'.repeat(64), 'a'.repeat(64))).assertTrue()
+      expect(tokenTimeEqual('a'.repeat(64), 'a'.repeat(63) + 'b')).assertFalse()
+    })
+    // ---- M9:joinUuidHex(双 UUID 拼接 64 hex;非法输入拒)----
+    it('tokenHexShape', 0, () => {
+      const u = '0123456789abcdef0123456789abcdef'
+      expect(joinUuidHex(u, u)).assertEqual(u + u)
+      expect(joinUuidHex(u, u + '0')).assertEqual('')
+      expect(joinUuidHex('', u)).assertEqual('')
+      expect(joinUuidHex(u + 'g', u)).assertEqual('')
+      // 带 - 的真 UUID 形态
+      const v = '01234567-89ab-cdef-0123-456789abcdef'
+      expect(joinUuidHex(v, v)).assertEqual(u + u)
+    })
+    // ---- M9:gitAuditRecord(审计记录构造;tool/摘要/approval)----
+    it('gitAuditRecordShape', 0, () => {
+      const r = gitAuditRecord('commit', '/w', 'fix: bug', true, '')
+      expect(r.tool).assertEqual('git.commit')
+      expect(r.argsDigest.indexOf('/w') >= 0).assertTrue()
+      expect(r.argsDigest.indexOf('fix: bug') >= 0).assertTrue()
+      expect(r.resultDigest).assertEqual('ok')
+      expect(r.approval).assertEqual('approved')
+      expect(r.ts > 0).assertTrue()
+      const bad = gitAuditRecord('stage', '/w', 'a b', false, 'boom')
+      expect(bad.resultDigest).assertEqual('boom')
+      const bad2 = gitAuditRecord('unstage', '/w', 'a', false, '')
+      expect(bad2.resultDigest).assertEqual('failed')
     })
   })
 }

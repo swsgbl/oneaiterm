@@ -11,6 +11,7 @@
  * 路径含引号直接拒绝(不构造命令,防注入)。
  */
 import { RemoteCommandRunner } from './RemoteCommandRunner';
+import { AuditWriter, AuditRecord } from '../../agent/security/AuditWriter';
 
 /** 分支信息(status -b 头行派生;detached 时 branch='HEAD')。 */
 export class GitBranchInfo {
@@ -161,6 +162,22 @@ export function quoteMsg(msg: string): string | null {
     return null
   }
   return '\'' + t + '\''
+}
+
+/**
+ * git 写操作审计记录构造(任务 tty7-M9,纯函数,单测共靶):kind∈
+ * stage/unstage/commit/pushDry;p 为 path 或 commit msg(摘要入
+ * argsDigest,写入时经 AuditWriter.digest 脱敏+截断);ok → 'ok',
+ * 否则 err。approval 恒 'approved'(UI 面板操作即用户意图)。
+ */
+export function gitAuditRecord(kind: string, cwd: string, p: string, ok: boolean, err: string): AuditRecord {
+  const rec = new AuditRecord()
+  rec.ts = Date.now()
+  rec.tool = 'git.' + kind
+  rec.argsDigest = 'cwd=' + cwd + ' p=' + p
+  rec.resultDigest = ok ? 'ok' : (err !== '' ? err : 'failed')
+  rec.approval = 'approved'
+  return rec
 }
 
 /**
@@ -333,6 +350,7 @@ export class GitService {
       return false
     }
     return RemoteCommandRunner.run(c, 15000, (out: string, ok: boolean): void => {
+      gitAuditAppend('stage', cwd, path, ok, ok ? '' : GitService.firstLine(out, 'stage 失败'))
       cb(ok, ok ? '' : GitService.firstLine(out, 'stage 失败(超时或非零退出)'))
     })
   }
@@ -348,6 +366,7 @@ export class GitService {
       return false
     }
     return RemoteCommandRunner.run(c, 15000, (out: string, ok: boolean): void => {
+      gitAuditAppend('unstage', cwd, path, ok, ok ? '' : GitService.firstLine(out, 'unstage 失败'))
       cb(ok, ok ? '' : GitService.firstLine(out, 'unstage 失败(超时或非零退出)'))
     })
   }
@@ -363,6 +382,7 @@ export class GitService {
       return false
     }
     return RemoteCommandRunner.run(c, 20000, (out: string, ok: boolean): void => {
+      gitAuditAppend('commit', cwd, msg, ok, ok ? '' : GitService.firstLine(out, 'commit 失败'))
       cb(ok, ok ? '' : GitService.firstLine(out, 'commit 失败(超时或非零退出)'))
     })
   }
@@ -385,6 +405,7 @@ export class GitService {
     }
     return RemoteCommandRunner.run('git -C ' + q + ' push --dry-run ' + r + ' 2>&1', 20000,
       (out: string, ok: boolean): void => {
+        gitAuditAppend('pushDry', cwd, remote, ok, ok ? '' : GitService.firstLine(out, 'push 预演失败'))
         if (!ok) {
           cb('', GitService.firstLine(out, 'push 预演失败(超时或非零退出)'))
           return
@@ -417,6 +438,15 @@ export class GitService {
     return fallback
   }
 
+}
+
+/** git 写审计落地(模块级:filesDir 经 AppStorage 通道;写失败静默不阻断 UI)。 */
+function gitAuditAppend(kind: string, cwd: string, p: string, ok: boolean, err: string): void {
+  const filesDir = AppStorage.get<string>('ut.filesDir') ?? ''
+  if (filesDir === '') {
+    return
+  }
+  AuditWriter.append(filesDir, gitAuditRecord(kind, cwd, p, ok, err))
 }
 
 /** 数字解析助手('[ahead 2...' 段后取正整数;失败 0;模块级纯函数)。 */

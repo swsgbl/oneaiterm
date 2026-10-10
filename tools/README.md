@@ -1,16 +1,34 @@
 # oneaiterm-cli(工具集)
 
 VM/宿主侧 node 工具,驱动 app 内 tty7 CommandBridge(TCP JSON-RPC,
-仅 listen `127.0.0.1:18971`)。协议:首行 token(dev 阶段常量
-`dev-local`,M9 换 filesDir 下 cli_token 真文件),之后每行一个 JSON
+仅 listen `127.0.0.1:18971`)。协议:首行 token,之后每行一个 JSON
 请求 `{id,cmd,args}`,响应 `{id,ok,data|error}` 单行 JSON(按 id 匹配;
 `wait`/`git` 响应异步到,同连接并发安全)。
 
 ## 用法
 
 ```
-node --jitless oneaiterm-cli.js <cmd> [args...] [--token dev-local]
+node --jitless oneaiterm-cli.js <cmd> [args...] --token <cli_token 值>
 ```
+
+## token 获取(任务 tty7-M9:真 token,替换 dev 常量)
+
+app 冷启自动生成并持久化 `filesDir/cli_token`(双 UUID 拼接 64 hex =
+32 字节熵;文件读写失败降级本次进程内存 token)。两种取法:
+
+1. **hdc 侧直读文件**(全量):
+   ```
+   hdc shell cat /data/app/el2/100/base/com.oneaiterm.terminal/haps/entry/files/cli_token
+   ```
+   输出即 64 hex,直接作 `--token` 值。(app 内代码看到的
+   `/data/storage/el2/base/haps/entry/files/cli_token` 是沙箱虚拟路径,
+   hdc shell 全局命名空间下须走上表实路径;若 hdc shell 直探虚拟路径
+   报 No such file 属预期。)
+2. **应用内比对**(前 4 字):palette `CLI · 桥状态` 显示
+   `CLI 桥运行中 · 127.0.0.1:18971 · token 3f2a…`——用于与 hdc 取回
+   的 token 比对确认(肩窥安全,不全显)。
+
+握手失败立即断连(`bridge auth rejected`);token 值绝不进 hilog。
 
 ## 命令全集(M8a 六命令 + M8b 四命令)
 

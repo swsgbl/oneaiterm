@@ -146,7 +146,8 @@ export function paletteCmds(): PaletteCmd[] {
     label: 'CLI · 桥状态',
     run: (_vm: WorkbenchVm) => {
       if (CommandBridge.isRunning()) {
-        _vm.setStatus('CLI 桥运行中 · 127.0.0.1:18971')
+        const tp = CommandBridge.tokenPrefix()
+        _vm.setStatus('CLI 桥运行中 · 127.0.0.1:18971' + (tp !== '' ? ' · token ' + tp + '…' : ''))
       } else {
         _vm.setStatus('CLI 桥未运行')
       }
