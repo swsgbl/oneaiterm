@@ -22,6 +22,7 @@ import inputControllerTest from './InputController.test.ets'; // +tty7-M4a: 输�
 import agentEventBusTest from './AgentEventBus.test.ets'; // +tty7-M5a: AgentEvent v1 总线 + Hmh 事件桥映射
 import agentApprovalTest from './AgentApproval.test.ets'; // +tty7-M5b: pane 绑定 + 审批卡 + checkpoint 文案
 import remoteWorkspaceTest from './RemoteWorkspace.test.ets'; // +tty7-M6a: 远程 provider + SSH pane 挂接
+import sftpDrawerTest from './SftpDrawer.test.ets'; // +tty7-M6b: RightPanel 抽屉页签 + SFTP 路径/排序纯函数
 
 export default function testsuite() {
   policyEngineTest();
@@ -43,4 +44,5 @@ export default function testsuite() {
   agentEventBusTest(); // +tty7-M5a
   agentApprovalTest(); // +tty7-M5b
   remoteWorkspaceTest(); // +tty7-M6a
+  sftpDrawerTest(); // +tty7-M6b
 }

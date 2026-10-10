@@ -15,6 +15,13 @@
  * approval_result 同 toolId 回流后置灰;决策调用失败卡片保持可点+状态栏提示,
  * 永不 fail-open)。checkpoint 卡 '↻ 会话恢复'桩(M8 CLI 接 resume)。
  * 发送时传 vm.focusedPane(pane 绑定;run_started.paneId 落到焦点 pane)。
+ *
+ * M6b:上下文抽屉页签化(Agent | SFTP)。Agent 页=原事件流零功能改动(只挪
+ * if 层级——events 为组件 @State,分支切换不重建组件不丢列表);SFTP 页接
+ * 现有 SessionService.sshHandle 只读目录浏览(SftpBrowser,独立文件)。
+ * 连接态=vm.termTick + SshWorkspaceProvider.active() 纯查询组合(同
+ * PaneSurface termTick 模式;断线 onDead → termTick++ → 条件重评回未连接态)。
+ * drawerTab 组件内 @State(不进 vm);tab 值经 drawerTabOf 白名单守卫。
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
@@ -23,6 +30,9 @@ import { AgentEvent } from '../agent/AgentEvent';
 import { AgentEventBus } from '../agent/AgentEventBus';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { approvalToneOf, approvalSettled, checkpointLabel } from '../agent/ApprovalCardLogic';
+import { drawerTabOf } from './SftpDrawerLogic';
+import { SshWorkspaceProvider } from '../remote/RemoteWorkspaceProvider';
+import { SftpBrowser } from './SftpBrowser';
 
 /** delta 单条正文显示上限(溢出省略)。 */
 const TEXT_CAP: number = 200;
@@ -36,8 +46,15 @@ export struct RightPanel {
   @State events: AgentEvent[] = []
   @State input: string = ''
   @State agentState: string = '' // '' = 无事件(默认在线);idle|working|waiting|done|error
+  @State drawerTab: string = 'agent' // M6b:'agent' | 'sftp'(drawerTabOf 白名单守卫)
   private subId: number = -1
   private scroller: Scroller = new Scroller()
+
+  /** 页签切换(经 drawerTabOf 归一;Agent 事件列表是组件 @State,
+   *  if/else 分支切换不销毁重建,列表天然不丢)。 */
+  private switchTab(next: string): void {
+    this.drawerTab = drawerTabOf(next)
+  }
 
   private th(): AppTheme {
     return themeByName(this.themeName)
@@ -373,8 +390,33 @@ export struct RightPanel {
       })
       .border({ width: { bottom: 1 }, color: this.th().hairline })
 
-      // ===== 事件流(正序贴底;V1 整体替换驱动 ForEach) =====
-      Scroll(this.scroller) {
+      // ===== M6b 页签行:Agent | SFTP pill(active=brand 底/surface 字) =====
+      Row({ space: DesignTokens.SPACE_XS }) {
+        Text('Agent')
+          .fontSize(DesignTokens.FONT_LABEL)
+          .fontColor(this.drawerTab === 'agent' ? this.th().surface : this.th().inkSubtle)
+          .padding({ left: 10, right: 10, top: 3, bottom: 3 })
+          .borderRadius(DesignTokens.RADIUS_MD)
+          .backgroundColor(this.drawerTab === 'agent' ? this.th().brand : Color.Transparent)
+          .onClick(() => this.switchTab('agent'))
+        Text('SFTP')
+          .fontSize(DesignTokens.FONT_LABEL)
+          .fontColor(this.drawerTab === 'sftp' ? this.th().surface : this.th().inkSubtle)
+          .padding({ left: 10, right: 10, top: 3, bottom: 3 })
+          .borderRadius(DesignTokens.RADIUS_MD)
+          .backgroundColor(this.drawerTab === 'sftp' ? this.th().brand : Color.Transparent)
+          .onClick(() => this.switchTab('sftp'))
+        Blank().layoutWeight(1)
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      .padding({ left: DesignTokens.SPACE_MD, right: DesignTokens.SPACE_MD, top: DesignTokens.SPACE_XS, bottom: DesignTokens.SPACE_XS })
+
+      // ===== Agent 页:事件流(正序贴底;V1 整体替换驱动 ForEach)。
+      //  M6b:与底部输入行同包 'agent' 分支——分支切换不销毁组件,events
+      //  (@State)不丢;SFTP 页为并列分支。 =====
+      if (this.drawerTab === 'agent') {
+        Scroll(this.scroller) {
         Column() {
           if (this.events.length === 0) {
             Text('暂无事件;输入任务后此处实时显示 Agent 事件流')
@@ -422,6 +464,24 @@ export struct RightPanel {
       .padding({ left: DesignTokens.SPACE_MD, right: DesignTokens.SPACE_MD, top: DesignTokens.SPACE_SM, bottom: DesignTokens.SPACE_SM })
       .alignItems(VerticalAlign.Center)
       .border({ width: { top: 1 }, color: this.th().hairline })
+      } else if (this.vm.termTick >= 0 && SshWorkspaceProvider.active()) {
+        // ===== SFTP 页·连接态:只读目录浏览(SftpBrowser;
+        //  条件读 vm.termTick + active() 纯查询——断线 onDead →
+        //  termTick++ → 重评回未连接分支;组件重建即重列目录) =====
+        SftpBrowser({ themeName: this.themeName })
+      } else {
+        // ===== SFTP 页·未连接态 =====
+        Column({ space: DesignTokens.SPACE_XS }) {
+          Text('SSH 会话未连接')
+            .fontSize(DesignTokens.FONT_BODY)
+            .fontColor(this.th().inkSubtle)
+          Text('先在 palette 建立 SSH 会话')
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontColor(this.th().inkSubtle)
+        }
+        .width('100%')
+        .padding({ top: DesignTokens.SPACE_LG })
+      }
     }
     .width(300)
     .height('100%')

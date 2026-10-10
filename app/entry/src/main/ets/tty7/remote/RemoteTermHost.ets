@@ -22,6 +22,8 @@ export class RemoteTermHost {
   private static handle: RemoteSessionHandle | null = null
   /** 远程死亡回调(vm 注册:清 slot + termTick++;不抛)。 */
   static onDead: (() => void) | null = null
+  /** 连接建立回调(M6b:vm 注册 statusText 'ssh 已连接';不抛;可空)。 */
+  static onOpen: (() => void) | null = null
   /** 最近一次错误原因(诊断用;不含凭据——只有 connKey 与错误文本)。 */
   static lastError: string = ''
 
@@ -43,7 +45,17 @@ export class RemoteTermHost {
           }
         }
       }
-      // 'open' 事件:数据经 dataSink 自然流,无需动作
+      // 'open' 事件:数据经 dataSink 自然流;M6b:通知 vm 连接已建立
+      if (ev === 'open') {
+        const cb = RemoteTermHost.onOpen
+        if (cb !== null) {
+          try {
+            cb()
+          } catch (e) {
+            // 回调不得反向杀状态
+          }
+        }
+      }
     })
     if (h === null) {
       return false

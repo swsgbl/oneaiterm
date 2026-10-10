@@ -133,11 +133,19 @@ export class WorkbenchVm {
     // termTick 驱动 PaneSurface 条件重评(statusText 由 refreshStatus 统一组装)
     RemoteTermHost.onDead = (): void => {
       const b = RemoteTermHost.bound()
+      const why = this.remoteErrorBrief() // stop() 前取(死后保留诊断)
       RemoteTermHost.stop()
       if (b !== '') {
         this.unbindSession(b)
       }
       this.termTick += 1
+      // M6b:失败/断线反馈(带原因前 60 字;无错回退通用文案)
+      this.statusText = why !== '' ? 'ssh 失败:' + why : 'ssh 已断开'
+    }
+    // M6b:连接建立反馈(statusText;'ssh 已连接';onDead 同站点会覆写,
+    // 文案不叠加)。错误原因经 RemoteTermHost.lastError 查询,不在此展开。
+    RemoteTermHost.onOpen = (): void => {
+      this.statusText = 'ssh 已连接'
     }
   }
 
@@ -378,6 +386,10 @@ export class WorkbenchVm {
     RemoteTermHost.bind(paneId)
     this.bindSession(paneId, 'ssh', connKey, 'ssh ' + this.sshConnName(connKey))
     this.termTick += 1
+    // M6b:发起反馈('连接中';成败由 onOpen/onDead 异步覆写——成功
+    // 'ssh 已连接',失败带原因前 60 字)。此处覆写 refreshStatus 文案可接受:
+    // 布局/会话计数经后续 sync 重组,连接反馈为瞬时态。
+    this.statusText = 'ssh 连接中…'
     return true
   }
 
@@ -403,6 +415,13 @@ export class WorkbenchVm {
       this.unbindSession(wasBound)
     }
     this.termTick += 1
+  }
+
+  /** 最近一次远程错误摘要(M6b:live-ssh 反馈;前 60 字,无错回 '')。
+   *  纯查询 RemoteTermHost.lastError,不重连不碰句柄。 */
+  remoteErrorBrief(): string {
+    const e = RemoteTermHost.lastError
+    return e.length > 60 ? e.substring(0, 60) : e
   }
 
   // ===================== 本地终端会话(M3a,单会话) =====================
