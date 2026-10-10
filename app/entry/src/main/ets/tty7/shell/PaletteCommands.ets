@@ -7,6 +7,7 @@
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { getSharedStore, ConnRec } from '../../store/ConnStore';
+import { CommandBridge } from '../bridge/CommandBridge';
 
 /** 面板命令项:key 唯一;run 同步轻操作。 */
 export interface PaletteCmd {
@@ -139,6 +140,18 @@ export function paletteCmds(): PaletteCmd[] {
       vm.newWorkspace()
     }
   }
+  // +tty7-M8a: CLI 桥状态(纯展示:running+port 写状态栏)
+  const cliStatus: PaletteCmd = {
+    key: 'cli.status',
+    label: 'CLI · 桥状态',
+    run: (_vm: WorkbenchVm) => {
+      if (CommandBridge.isRunning()) {
+        _vm.setStatus('CLI 桥运行中 · 127.0.0.1:18971')
+      } else {
+        _vm.setStatus('CLI 桥未运行')
+      }
+    }
+  }
   const themeToggle: PaletteCmd = {
     key: 'theme.toggle',
     label: '切换主题',
@@ -177,6 +190,7 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(sessionSsh) // +tty7-M6a: pane 挂 SSH 远程会话
   cmds.push(sessionEnd)
   cmds.push(wsNew)
+  cmds.push(cliStatus) // +tty7-M8a
   cmds.push(themeToggle)
   return cmds
 }

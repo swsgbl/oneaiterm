@@ -21,6 +21,7 @@ import { LayoutOps } from '../layout/LayoutOps';
 import { TabState, SessionSlot } from '../model/TabState';
 import { WorkspaceState } from '../model/WorkspaceState';
 import { restoreWorkbench, saveWorkbench } from '../store/WorkbenchStore';
+import { TermModel } from '../../components/TermModel';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { getSharedStore } from '../../store/ConnStore';
@@ -313,7 +314,35 @@ export class WorkbenchVm {
     return null
   }
 
-  /** 当前 tab 绑定数(状态栏 sess N 派生源)。 */
+  /** CLI capture 用:pane 尾部可视行文本拼接(任务 tty7-M8a)。
+   *  纯查询:经 TermHost/RemoteTermHost.term().lines 取尾 N 行 textOf;
+   *  宿主未绑/model 为空返回空串(桥侧转 error)。 */
+  paneCapture(paneId: string, lines: number): string {
+    let model: TermModel | null = null
+    if (TermHost.bound() === paneId) {
+      model = TermHost.term()
+    } else if (RemoteTermHost.bound() === paneId) {
+      model = RemoteTermHost.term()
+    }
+    if (model === null) {
+      return ''
+    }
+    const src: string[] = []
+    for (const ln of model.lines) {
+      src.push(model.textOf(ln))
+    }
+    const n = lines > 0 ? Math.min(lines, src.length) : src.length
+    let out = ''
+    for (let i = src.length - n; i < src.length; i++) {
+      if (out.length > 0) {
+        out += '\n'
+      }
+      out += src[i]
+    }
+    return out
+  }
+
+    /** 当前 tab 绑定数(状态栏 sess N 派生源)。 */
   sessionCount(): number {
     const cur = this.curTabOrNull()
     return cur === null ? 0 : cur.sessions.length

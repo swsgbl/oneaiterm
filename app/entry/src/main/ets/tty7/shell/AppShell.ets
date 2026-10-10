@@ -15,6 +15,7 @@ import { RightPanel } from './RightPanel';
 import { WorkbenchPalette } from './WorkbenchPalette';
 import { SshPicker } from './SshPicker';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
+import { CommandBridge } from '../bridge/CommandBridge';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
@@ -36,10 +37,16 @@ export struct AppShell {
     HmhEventBridge.setAgentRevTap((): void => {
       this.vm.agentRev += 1
     })
+    // +tty7-M8a: CLI 桥注册 vm 并自动起服(仅 127.0.0.1:18971;失败仅记
+    // 日志不阻 UI;socket 回调主线程事件循环交付,vm 直调安全)
+    CommandBridge.setVm(this.vm)
+    CommandBridge.start(18971)
   }
 
   aboutToDisappear(): void {
     HmhEventBridge.setAgentRevTap(null)
+    // +tty7-M8a: 仅注销 vm(server/连接保留;后续命令 doctor 降级不崩)
+    CommandBridge.setVm(null)
   }
 
   build() {
