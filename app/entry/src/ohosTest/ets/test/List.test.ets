@@ -24,6 +24,7 @@ import agentApprovalTest from './AgentApproval.test.ets'; // +tty7-M5b: pane 绑
 import remoteWorkspaceTest from './RemoteWorkspace.test.ets'; // +tty7-M6a: 远程 provider + SSH pane 挂接
 import sftpDrawerTest from './SftpDrawer.test.ets'; // +tty7-M6b: RightPanel 抽屉页签 + SFTP 路径/排序纯函数
 import gitServiceTest from './GitService.test.ets'; // +tty7-M7a: git 解析纯函数 + runner 行缓冲/回显剔除/标记检测
+import gitWriteTest from './GitWrite.test.ets'; // +tty7-M7b: 写命令构造/quoteMsg 双闸/XY 分类/pushDry 解析
 
 export default function testsuite() {
   policyEngineTest();
@@ -47,4 +48,5 @@ export default function testsuite() {
   remoteWorkspaceTest(); // +tty7-M6a
   sftpDrawerTest(); // +tty7-M6b
   gitServiceTest(); // +tty7-M7a
+  gitWriteTest(); // +tty7-M7b
 }

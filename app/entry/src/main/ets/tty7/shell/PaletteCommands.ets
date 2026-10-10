@@ -155,6 +155,24 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(closeTab)
   cmds.push(agentPanel)
   cmds.push(gitPanel) // +tty7-M7a: Git 页签唤起
+  // +tty7-M7b: Git · 提交——开右面板落 Git 页 + 焦点信号投递(AppStorage
+  // 'ut.git.focus' 单调 +1;GitBrowser 轮询侧 requestFocus 消息输入行)。
+  // staged 判定不在 palette 侧(组件 @State 私有;无 staged 时输入行聚焦
+  // 后提交钮自然禁用,statusText 提示由信号语义兜底)
+  const gitCommit: PaletteCmd = {
+    key: 'git.commit',
+    label: 'Git · 提交',
+    run: (vm: WorkbenchVm) => {
+      vm.setRightTab('git')
+      if (!vm.rightPanelOpen) {
+        vm.toggleRightPanel()
+      }
+      const cur = AppStorage.get<number>('ut.git.focus') ?? 0
+      AppStorage.setOrCreate('ut.git.focus', cur + 1)
+      vm.setStatus('Git:输入提交消息(无已暂存条目时先暂存)')
+    }
+  }
+  cmds.push(gitCommit) // +tty7-M7b
   cmds.push(sessionLocal)
   cmds.push(sessionSsh) // +tty7-M6a: pane 挂 SSH 远程会话
   cmds.push(sessionEnd)

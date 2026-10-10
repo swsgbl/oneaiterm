@@ -122,6 +122,122 @@ export function quoteCwd(cwd: string): string | null {
   return cwd
 }
 
+/**
+ * git 路径参数转义(M7b,纯函数,单测共靶):单引号包裹语义——
+ * 含单引号/反斜杠 → null(拒绝,防闭合逃逸);含空格或任何 shell
+ * 元字符($ ~ * ? [ ; | & > < 等,porcelain '??' 路径含 ? 也会走到)
+ * → 单引号包裹;纯常规路径原样。单引号内一切字面量,注入面关死。
+ */
+export function quotePath(p: string): string | null {
+  if (p.length === 0) {
+    return null
+  }
+  if (p.indexOf('\'') >= 0 || p.indexOf('\\') >= 0) {
+    return null
+  }
+  if (p.indexOf(' ') >= 0 || p.indexOf('$') >= 0 || p.indexOf('~') >= 0
+    || p.indexOf('*') >= 0 || p.indexOf('?') >= 0 || p.indexOf('[') >= 0
+    || p.indexOf(';') >= 0 || p.indexOf('|') >= 0 || p.indexOf('&') >= 0
+    || p.indexOf('>') >= 0 || p.indexOf('<') >= 0) {
+    return '\'' + p + '\''
+  }
+  return p
+}
+
+/**
+ * commit 消息转义(M7b,黑名单拒绝式,纯函数,单测共靶):非空(trim 后)
+ * 且 ≤200 字;含 单引号/反引号/$( /分号/竖线/重定向/&/裸美元 任一 →
+ * null(拒绝,UI 提示非法字符)。合法 → 单引号包裹返回(命令内字面量)。
+ * 黑名单覆盖 sh 元字符;ASCII 可打印其余(含中文)均放行。
+ */
+export function quoteMsg(msg: string): string | null {
+  const t = msg.trim()
+  if (t.length === 0 || t.length > 200) {
+    return null
+  }
+  if (t.indexOf('\'') >= 0 || t.indexOf('\u0060') >= 0 || t.indexOf('$(') >= 0
+    || t.indexOf(';') >= 0 || t.indexOf('$') >= 0 || t.indexOf('|') >= 0
+    || t.indexOf('>') >= 0 || t.indexOf('<') >= 0 || t.indexOf('&') >= 0) {
+    return null
+  }
+  return '\'' + t + '\''
+}
+
+/**
+ * 写命令构造(M7b,纯函数,单测共靶;非法输入 → null 不构造命令):
+ *  'stage'   → git -C <cwd> add -- <path>(untracked/修改同 add)
+ *  'unstage' → git -C <cwd> reset HEAD -- <path>
+ *  'commit'  → git -C <cwd> commit -m '<msg>'
+ * cwd 走 quoteCwd,path 走 quotePath,msg 走 quoteMsg——双闸转义。
+ */
+export function cmdFor(kind: string, cwd: string, p: string): string | null {
+  const q = quoteCwd(cwd)
+  if (q === null) {
+    return null
+  }
+  if (kind === 'stage' || kind === 'unstage') {
+    const pp = quotePath(p)
+    if (pp === null) {
+      return null
+    }
+    return 'git -C ' + q + (kind === 'stage' ? ' add -- ' : ' reset HEAD -- ') + pp
+  }
+  if (kind === 'commit') {
+    const mm = quoteMsg(p)
+    if (mm === null) {
+      return null
+    }
+    return 'git -C ' + q + ' commit -m ' + mm
+  }
+  return null
+}
+
+/**
+ * porcelain XY 分类(M7b,纯函数,单测共靶):首列=staged。
+ * 首列非空且非 '?' → 已暂存;首列空或 '??' → 未暂存/untracked。
+ */
+export function isStaged(xy: string): boolean {
+  if (xy.length < 2) {
+    return false
+  }
+  const x = xy.charAt(0)
+  return x !== ' ' && x !== '?'
+}
+
+/** untracked('??')判定(纯函数)。 */
+export function isUntracked(xy: string): boolean {
+  return xy.length >= 2 && xy.substring(0, 2) === '??'
+}
+
+/**
+ * pushDry 输出摘要(M7b,纯函数,单测共靶):干跑输出 → ahead 摘要文本。
+ *  - 空输出 → '无待推送内容(本地与远端一致)'
+ *  - 剔除 'To <url>' 行(免暴露仓库地址),更新行(abc..def main -> main)
+ *    与 rejected 行原样逐行拼
+ *  - 截 300 字(溢出加 …)
+ */
+export function pushDryText(out: string): string {
+  const lines: string[] = []
+  for (const l of out.split('\n')) {
+    const t = l.trim()
+    if (t.length === 0) {
+      continue
+    }
+    if (t.indexOf('To ') === 0) {
+      continue
+    }
+    lines.push(t)
+  }
+  if (lines.length === 0) {
+    return '无待推送内容(本地与远端一致)'
+  }
+  let s = lines.join('\n')
+  if (s.length > 300) {
+    s = s.substring(0, 300) + '…'
+  }
+  return s
+}
+
 /** Git 只读查询(静态;全经 RemoteCommandRunner 单飞串行)。 */
 export class GitService {
   /**
@@ -204,6 +320,79 @@ export class GitService {
         cb(out.trim(), '')
       })
   }
+
+  /**
+   * stage 单文件(M7b 最小写集):git add -- <path>(untracked/工作区
+   * 修改同 add)。路径走 quotePath 转义;runner 单飞串行;成功后由
+   * UI 侧自动刷新 status+log。返回 false = 命令未发起(通道忙/非法路径)。
+   */
+  static stage(cwd: string, path: string, cb: (ok: boolean, err: string) => void): boolean {
+    const c = cmdFor('stage', cwd, path)
+    if (c === null) {
+      cb(false, '路径含非法字符')
+      return false
+    }
+    return RemoteCommandRunner.run(c, 15000, (out: string, ok: boolean): void => {
+      cb(ok, ok ? '' : GitService.firstLine(out, 'stage 失败(超时或非零退出)'))
+    })
+  }
+
+  /**
+   * unstage 单文件:git reset HEAD -- <path>(仅退索引,不动工作区,
+   * 非破坏性)。同 stage 协议。
+   */
+  static unstage(cwd: string, path: string, cb: (ok: boolean, err: string) => void): boolean {
+    const c = cmdFor('unstage', cwd, path)
+    if (c === null) {
+      cb(false, '路径含非法字符')
+      return false
+    }
+    return RemoteCommandRunner.run(c, 15000, (out: string, ok: boolean): void => {
+      cb(ok, ok ? '' : GitService.firstLine(out, 'unstage 失败(超时或非零退出)'))
+    })
+  }
+
+  /**
+   * commit:git commit -m '<msg>'。消息走 quoteMsg 双闸(非法字符/
+   * 超 200 字在纯函数层拒绝,不构造命令);成功后 UI 刷新 status+log。
+   */
+  static commit(cwd: string, msg: string, cb: (ok: boolean, err: string) => void): boolean {
+    const c = cmdFor('commit', cwd, msg)
+    if (c === null) {
+      cb(false, '消息含非法字符或为空')
+      return false
+    }
+    return RemoteCommandRunner.run(c, 20000, (out: string, ok: boolean): void => {
+      cb(ok, ok ? '' : GitService.firstLine(out, 'commit 失败(超时或非零退出)'))
+    })
+  }
+
+  /**
+   * pushDry 推送预演:git push --dry-run <remote> 2>&1 收集——只展示
+   * 将要推什么,**不真推**(真 push 留 M8 CLI 棒带二次确认)。
+   * 输出经 pushDryText 提炼 ahead 摘要(剔 To 行)。
+   */
+  static pushDry(cwd: string, remote: string, cb: (ahead: string, err: string) => void): boolean {
+    const q = quoteCwd(cwd)
+    if (q === null) {
+      cb('', '路径含非法字符(引号)')
+      return false
+    }
+    const r = quotePath(remote)
+    if (r === null) {
+      cb('', '远端名含非法字符')
+      return false
+    }
+    return RemoteCommandRunner.run('git -C ' + q + ' push --dry-run ' + r + ' 2>&1', 20000,
+      (out: string, ok: boolean): void => {
+        if (!ok) {
+          cb('', GitService.firstLine(out, 'push 预演失败(超时或非零退出)'))
+          return
+        }
+        cb(pushDryText(out), '')
+      })
+  }
+
 
   /** 输出按行切(去空行;trim 兜底)。 */
   private static outLines(out: string): string[] {
