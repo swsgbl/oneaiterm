@@ -50,5 +50,5 @@ export default function testsuite() {
   sftpDrawerTest(); // +tty7-M6b
   gitServiceTest(); // +tty7-M7a
   gitWriteTest(); // +tty7-M7b
-  commandBridgeTest(); // +tty7-M8a
+  commandBridgeTest(); // +tty7-M8a +tty7-M8b
 }

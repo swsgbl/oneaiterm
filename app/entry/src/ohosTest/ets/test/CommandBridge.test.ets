@@ -4,8 +4,13 @@ import {
   formatResponse,
   linesToText,
   doctorSnapshot,
-  handleCmd
+  handleCmd,
+  escapeText,
+  waitParams,
+  agentsSummary,
+  gitSubOk
 } from '../../../main/ets/tty7/bridge/CommandBridge';
+import { AgentEvent, AgentEventType } from '../../../main/ets/tty7/agent/AgentEvent';
 
 export default function commandBridgeTest() {
   describe('CommandBridge', () => {
@@ -66,6 +71,67 @@ export default function commandBridgeTest() {
       const r = handleCmd({ id: 2, cmd: 'nope' })
       expect(r.ok).assertFalse()
       expect(r.error !== '').assertTrue()
+    })
+    // ---- M8b:escapeText(CLI \r 转义,桥侧统一)----
+    it('escapeTextControlChars', 0, () => {
+      // 字面两字符 '\r' → 0x0d(CR);'\n' → LF;'\t' → TAB
+      expect(escapeText('echo hi\\r')).assertEqual('echo hi\r')
+      expect(escapeText('a\\nb')).assertEqual('a\nb')
+      expect(escapeText('a\\tb')).assertEqual('a\tb')
+      // 其他反斜杠序列不动
+      expect(escapeText('a\\xb')).assertEqual('a\\xb')
+      expect(escapeText('a\\')).assertEqual('a\\')
+      expect(escapeText('plain')).assertEqual('plain')
+    })
+    // ---- M8b:waitParams(timeout clamp/interval 下限/match 非空)----
+    it('waitParamsClamp', 0, () => {
+      const bad = waitParams('', 5000, 300)
+      expect(bad.ok).assertFalse()
+      const d = waitParams('X', 0, 0)
+      expect(d.ok).assertTrue()
+      expect(d.timeout).assertEqual(10000)
+      expect(d.interval).assertEqual(300)
+      const big = waitParams('X', 999999, 50000)
+      expect(big.timeout).assertEqual(60000)
+      expect(big.interval).assertEqual(50000)
+      const low = waitParams('X', 5000, 5)
+      expect(low.interval).assertEqual(100)
+      expect(low.timeout).assertEqual(5000)
+    })
+    // ---- M8b:agentsSummary(events 聚合纯函数)----
+    it('agentsSummaryAggregates', 0, () => {
+      const mk = (seq: number, agentId: string, type: string, state: string): AgentEvent => {
+        const ev = new AgentEvent()
+        ev.seq = seq
+        ev.agentId = agentId
+        ev.type = type as AgentEventType
+        ev.state = state
+        ev.ts = seq * 100
+        return ev
+      }
+      const evs: AgentEvent[] = [
+        mk(3, 'hmh', 'state_changed', 'working'),
+        mk(1, 'hmh', 'state_changed', 'idle'),
+        mk(2, 'acp:x', 'final', '')
+      ]
+      const out = agentsSummary(evs)
+      expect(out.length).assertEqual(2)
+      const r0 = out[0] as Record<string, Object>
+      expect(r0['agentId']).assertEqual('hmh')
+      expect(r0['events']).assertEqual(2)
+      expect(r0['state']).assertEqual('working')
+      const r1 = out[1] as Record<string, Object>
+      expect(r1['agentId']).assertEqual('acp:x')
+      expect(r1['lastType']).assertEqual('final')
+      expect(agentsSummary([]).length).assertEqual(0)
+    })
+    // ---- M8b:gitSubOk(sub 白名单)----
+    it('gitSubWhitelist', 0, () => {
+      expect(gitSubOk('status')).assertTrue()
+      expect(gitSubOk('log')).assertTrue()
+      expect(gitSubOk('push')).assertFalse()
+      expect(gitSubOk('commit')).assertFalse()
+      expect(gitSubOk('')).assertFalse()
     })
   })
 }

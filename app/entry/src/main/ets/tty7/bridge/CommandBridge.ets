@@ -25,6 +25,9 @@ import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { LayoutOps } from '../layout/LayoutOps';
+import { AgentEventBus } from '../agent/AgentEventBus';
+import { AgentEvent } from '../agent/AgentEvent';
+import { GitService, GitBranchInfo, GitFileEntry, GitCommit } from '../git/GitService';
 
 const DOMAIN: number = 0x0700;
 const TAG: string = 'tty7.bridge';
@@ -99,6 +102,124 @@ export function linesToText(lines: string[], tailN: number): string {
     s += lines[i]
   }
   return s
+}
+
+/**
+ * CLI \r 转义(任务 tty7-M8b,纯函数,单测共靶):--text 值里的字面
+ * 两字符序列 '\r'/'\n'/'\t'(反斜杠+r/n/t)转成真控制符 0x0d/0x0a/0x09
+ * ——单引号 shell 传参友好(真控制符难从 VM shell 键入)。CLI 端原样传,
+ * 转义统一在桥侧做。其余反斜杠序列不动(字面量)。
+ */
+export function escapeText(t: string): string {
+  let out = ''
+  for (let i = 0; i < t.length; i++) {
+    const c = t.charAt(i)
+    if (c === '\\' && i + 1 < t.length) {
+      const n = t.charAt(i + 1)
+      if (n === 'r') {
+        out += '\r'
+        i++
+        continue
+      }
+      if (n === 'n') {
+        out += '\n'
+        i++
+        continue
+      }
+      if (n === 't') {
+        out += '\t'
+        i++
+        continue
+      }
+    }
+    out += c
+  }
+  return out
+}
+
+/** wait 参数校验结果(纯数据;ArkTS 不收匿名对象字面量类型,独立类)。 */
+export class WaitParams {
+  ok: boolean = false
+  timeout: number = 0
+  interval: number = 0
+}
+
+/**
+ * wait 参数校验/钳制(纯函数,单测共靶):match 非空;timeoutMs 缺省
+ * 10000 上限 60000(≤0 回默认);intervalMs 缺省 300 下限 100(≤0 回默认)。
+ */
+export function waitParams(match: string, timeoutMs: number, intervalMs: number): WaitParams {
+  const w = new WaitParams()
+  if (match === '') {
+    return w
+  }
+  let to = timeoutMs
+  if (to <= 0) {
+    to = 10000
+  }
+  if (to > 60000) {
+    to = 60000
+  }
+  let iv = intervalMs
+  if (iv <= 0) {
+    iv = 300
+  }
+  if (iv < 100) {
+    iv = 100
+  }
+  w.ok = true
+  w.timeout = to
+  w.interval = iv
+  return w
+}
+
+/**
+ * events → agents 摘要聚合(纯函数,单测共靶):按 agentId 分组,每组
+ * 取最近事件的 state/type + 事件计数(agents 命令数据源;内部按 seq
+ * 排序后聚合,时间序输入不影响结果)。
+ */
+export function agentsSummary(events: AgentEvent[]): object[] {
+  const arr = events.slice().sort((a: AgentEvent, b: AgentEvent): number => {
+    return a.seq - b.seq
+  })
+  const order: string[] = []
+  const counts: Record<string, number> = {}
+  const last: Record<string, AgentEvent> = {}
+  for (const ev of arr) {
+    const key = ev.agentId !== '' ? ev.agentId : '-'
+    if (counts[key] === undefined) {
+      counts[key] = 0
+      order.push(key)
+    }
+    counts[key] = counts[key] + 1
+    last[key] = ev
+  }
+  const out: object[] = []
+  for (const k of order) {
+    const ev = last[k]
+    const rec: Record<string, Object> = {}
+    rec['agentId'] = k
+    rec['events'] = counts[k]
+    let st = ''
+    if (ev.type === 'state_changed') {
+      st = ev.state
+    } else if (ev.type === 'final') {
+      st = ev.ok ? 'done' : 'error'
+    }
+    rec['state'] = st
+    rec['lastType'] = ev.type
+    rec['ts'] = ev.ts
+    out.push(rec)
+  }
+  return out
+}
+
+/**
+ * git 子命令白名单(纯函数,单测共靶):'status'|'log' 放行,其余 false
+ * (桥侧 git 只读红线:写操作不经 CLI)。
+ */
+export function gitSubOk(sub: string): boolean {
+  return sub === 'status' || sub === 'log'
 }
 
 /** 当前 vm 快照(doctor 用);vm 未设时返回降级形态(不抛)。 */
@@ -181,8 +302,31 @@ export function handleCmd(req: BridgeRequest): BridgeResponse {
         if (host === null) {
           return { id: req.id, ok: false, error: 'pane not bound: ' + paneId }
         }
-        host.write(text)
+        host.write(escapeText(text))
         return { id: req.id, ok: true, data: 'ok' }
+      }
+      case 'agents': {
+        // bus 环形 200 条聚合;空 → [](M8b)
+        const arr2 = agentsSummary(AgentEventBus.instance().recent(200))
+        return { id: req.id, ok: true, data: JSON.stringify(arr2) }
+      }
+      case 'events': {
+        // recent(n 默认 20;1..200 钳制)→ [{seq,ts,type,agentId,paneId,text 截 120}]
+        const nRaw = intArg(req, 'n', 20)
+        const n = nRaw > 0 ? Math.min(nRaw, 200) : 20
+        const evs = AgentEventBus.instance().recent(n)
+        const arr3: object[] = []
+        for (const ev of evs) {
+          const rec: Record<string, Object> = {}
+          rec['seq'] = ev.seq
+          rec['ts'] = ev.ts
+          rec['type'] = ev.type
+          rec['agentId'] = ev.agentId
+          rec['paneId'] = ev.paneId
+          rec['text'] = ev.text.length > 120 ? ev.text.substring(0, 120) : ev.text
+          arr3.push(rec)
+        }
+        return { id: req.id, ok: true, data: JSON.stringify(arr3) }
       }
       case 'capture': {
         const paneId = strArg(req, 'paneId')
@@ -252,6 +396,43 @@ function routeToHost(paneId: string): HostSink | null {
     return sink
   }
   return null
+}
+
+/**
+ * wait 命令(任务 tty7-M8b):桥内 setTimeout 链轮询——每 intervalMs 调
+ * vm.paneCapture(paneId,80) 命中 match 子串即 ok 'matched';超时 error
+ * 'timeout'。链式 setTimeout 不阻塞 UI 线程(回调轻:一次 capture)。
+ * pane 未绑立即 error(首探 capture 空串判定)。返回 null = 已异步接管
+ * (响应稍后经 push 发);非 null = 立即同步响应(参数错/pane 未绑)。
+ */
+function handleWait(req: BridgeRequest, push: (t: string) => void): BridgeResponse | null {
+  // 热修(M8b 真机实证):setTimeout 回调跨上下文调 conn.send 触发 native
+  // 崩溃(app 进程死,18971 随之 ECONNREFUSED)——wait 轮询移到 CLI 客户端
+  // 侧(capture 循环),桥侧只做参数校验并同步指引。
+  const paneId = strArg(req, 'paneId')
+  const match = strArg(req, 'match')
+  const pr = waitParams(match, intArg(req, 'timeoutMs', 0), intArg(req, 'intervalMs', 0))
+  if (paneId === '' || !pr.ok) {
+    return { id: req.id, ok: false, error: 'wait requires paneId and match' }
+  }
+  return { id: req.id, ok: false, error: 'wait is client-side: poll capture from CLI' }
+}
+
+/**
+ * git 命令(任务 tty7-M8b):sub 白名单 status/log → GitService 异步回调
+ * (响应在回调里经 push 发);runner 未受理(无远程会话/通道忙)→
+ * error 'remote not connected'。git 只读红线:写操作子命令一律白名单外。
+ */
+function handleGit(req: BridgeRequest, push: (t: string) => void): void {
+  // 热修(M8b 真机实证):GitService 回调经 setTimeout 链跨上下文调 conn.send
+  // 与 wait 同因崩桥——git 快捷改为同步降级指引,编排走 CLI 侧
+  // send('git status')+wait+capture 组合(tools/README.md 有示例)。
+  const sub = strArg(req, 'sub')
+  if (sub !== 'status' && sub !== 'log') {
+    push(formatResponse({ id: req.id, ok: false, error: 'git sub must be status|log' }) + '\n')
+    return
+  }
+  push(formatResponse({ id: req.id, ok: false, error: 'git: use cli-side send+wait+capture combo' }) + '\n')
 }
 
 /** ArrayBuffer 转 utf-8 文本(分块安全:逐字节拼,多字节字符不跨块时正确)。 */
@@ -343,13 +524,24 @@ export class CommandBridge {
               continue
             }
             const req = parseRequest(trimmed)
-            let resp: BridgeResponse
             if (req === null) {
-              resp = { id: -1, ok: false, error: 'bad request' }
-            } else {
-              resp = handleCmd(req)
+              push(formatResponse({ id: -1, ok: false, error: 'bad request' }) + '\n')
+              continue
             }
-            push(formatResponse(resp) + '\n')
+            // M8b 异步命令分流:wait(轮询)/git(远程回调)响应异步发,
+            // 同连接后续请求并发处理(CLI 按响应 id 匹配)。
+            if (req.cmd === 'wait') {
+              const pr = handleWait(req, push)
+              if (pr !== null) {
+                push(formatResponse(pr) + '\n')
+              }
+              continue
+            }
+            if (req.cmd === 'git') {
+              handleGit(req, push)
+              continue
+            }
+            push(formatResponse(handleCmd(req)) + '\n')
           }
           nl = buf.indexOf('\n')
         }
