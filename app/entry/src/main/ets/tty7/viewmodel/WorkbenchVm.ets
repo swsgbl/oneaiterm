@@ -22,6 +22,8 @@ import { TabState, SessionSlot } from '../model/TabState';
 import { WorkspaceState } from '../model/WorkspaceState';
 import { restoreWorkbench, saveWorkbench } from '../store/WorkbenchStore';
 import { TermHost } from '../term/TermHost';
+import { RemoteTermHost } from '../remote/RemoteTermHost';
+import { getSharedStore } from '../../store/ConnStore';
 
 /** Sidebar 工作区图标 glyph 池(AppIcons 现有 glyph 集内取;本地常量,不 import UI 模块)。 */
 const WS_GLYPHS: string[] = ['◈', '▣', '☸', '⌗', '∿', '▦', '◷'];
@@ -126,6 +128,16 @@ export class WorkbenchVm {
     TermHost.onDead = (): void => {
       this.termTick += 1
       this.statusText = '会话已结束'
+    }
+    // M6a:远程 SSH 会话死亡(connect 失败/断线/主动关)——清 slot 防幽灵,
+    // termTick 驱动 PaneSurface 条件重评(statusText 由 refreshStatus 统一组装)
+    RemoteTermHost.onDead = (): void => {
+      const b = RemoteTermHost.bound()
+      RemoteTermHost.stop()
+      if (b !== '') {
+        this.unbindSession(b)
+      }
+      this.termTick += 1
     }
   }
 
@@ -336,6 +348,63 @@ export class WorkbenchVm {
     }
   }
 
+  /** SSH 连接选择浮层开关(M6a;>1 条 ssh profile 时 palette 打开)。 */
+  sshPickerOpen: boolean = false
+
+  // ===================== 远程终端会话(M6a,单会话) =====================
+
+  /** 焦点 pane 挂 SSH 远程会话。返回 true 仅代表已发起(connect 异步补判,
+   *  失败经 RemoteTermHost.onDead 异步清 slot);store 未就绪/无记录 → false。 */
+  bindSshSession(connKey: string): boolean {
+    const paneId = this.focusedPane
+    if (paneId === '') {
+      return false
+    }
+    if (RemoteTermHost.bound() === paneId) {
+      this.focusPane(paneId)
+      return true // 幂等(同 bindLocalSession 语义)
+    }
+    // 单会话互斥:远程已绑他 pane → 先解绑;本地在跑 → 让位(provider 兜底)
+    if (RemoteTermHost.bound() !== '') {
+      this.unbindSession(RemoteTermHost.bound())
+      RemoteTermHost.stop()
+    }
+    if (TermHost.bound() !== '') {
+      this.unbindTerm()
+    }
+    if (!RemoteTermHost.start(connKey, 80, 24)) {
+      return false
+    }
+    RemoteTermHost.bind(paneId)
+    this.bindSession(paneId, 'ssh', connKey, 'ssh ' + this.sshConnName(connKey))
+    this.termTick += 1
+    return true
+  }
+
+  /** 连接名查询(store 内存态;查不到回 connKey)。只读,不 load()。 */
+  private sshConnName(connKey: string): string {
+    const store = getSharedStore()
+    if (store === null) {
+      return connKey
+    }
+    for (const c of store.connections) {
+      if (c.id === connKey) {
+        return c.name !== '' ? c.name : connKey
+      }
+    }
+    return connKey
+  }
+
+  /** 结束远程会话(stop 内部关句柄;slot 清 + termTick)。 */
+  unbindRemote(): void {
+    const wasBound = RemoteTermHost.bound()
+    RemoteTermHost.stop()
+    if (wasBound !== '') {
+      this.unbindSession(wasBound)
+    }
+    this.termTick += 1
+  }
+
   // ===================== 本地终端会话(M3a,单会话) =====================
 
   /** 焦点 pane 起本地 shell。规则(任务书):已绑定本 pane → 聚焦即可(幂等);
@@ -363,22 +432,30 @@ export class WorkbenchVm {
     return true
   }
 
-  /** 结束本地会话:PTY 关 + 绑定 pane 的 slot 清 + termTick 驱动水印回归。 */
+  /** 结束本地会话:PTY 关 + 绑定 pane 的 slot 清 + termTick 驱动水印回归。
+   *  M6a:同时结束远程会话(session.end 语义=全停,双宿主幂等)。 */
   unbindTerm(): void {
     const wasBound = TermHost.bound()
     TermHost.stop()
     if (wasBound !== '') {
       this.unbindSession(wasBound) // 内部 refreshStatus:sess 计数归零
     }
-    this.termTick += 1
+    this.unbindRemote()
   }
 
-  /** 绑定 pane 已不在当前树 → 回收 PTY + 清 slot(布局收缩后统一调用)。 */
+  /** 绑定 pane 已不在当前树 → 回收 PTY/远程会话 + 清 slot(布局收缩后统一
+   *  调用;M6a 起双宿主各查各的 bound)。 */
   private reapTermIfGone(): void {
     const b = TermHost.bound()
     if (b !== '' && this.panes.indexOf(b) < 0) {
       TermHost.stop()
       this.unbindSession(b)
+      this.termTick += 1
+    }
+    const rb = RemoteTermHost.bound()
+    if (rb !== '' && this.panes.indexOf(rb) < 0) {
+      RemoteTermHost.stop()
+      this.unbindSession(rb)
       this.termTick += 1
     }
   }

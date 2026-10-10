@@ -13,6 +13,7 @@ import { StatusBar } from './StatusBar';
 import { PaneGrid } from './PaneGrid';
 import { RightPanel } from './RightPanel';
 import { WorkbenchPalette } from './WorkbenchPalette';
+import { SshPicker } from './SshPicker';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
@@ -88,6 +89,16 @@ export struct AppShell {
               themeName: this.themeName,
               onClose: () => {
                 this.vm.paletteOpen = false
+              }
+            })
+          }
+          // M6a:SSH 连接选择浮层(>1 条 ssh profile 时 palette 打开;纯 vm 态驱动)
+          if (this.vm.sshPickerOpen) {
+            SshPicker({
+              vm: this.vm,
+              themeName: this.themeName,
+              onClose: () => {
+                this.vm.sshPickerOpen = false
               }
             })
           }

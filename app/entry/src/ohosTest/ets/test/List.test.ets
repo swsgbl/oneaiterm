@@ -21,6 +21,7 @@ import termHostTest from './TermHost.test.ets'; // +tty7-M3a: TermHost 桥接 + 
 import inputControllerTest from './InputController.test.ets'; // +tty7-M4a: 输入历史 + ghost + Tab 补全
 import agentEventBusTest from './AgentEventBus.test.ets'; // +tty7-M5a: AgentEvent v1 总线 + Hmh 事件桥映射
 import agentApprovalTest from './AgentApproval.test.ets'; // +tty7-M5b: pane 绑定 + 审批卡 + checkpoint 文案
+import remoteWorkspaceTest from './RemoteWorkspace.test.ets'; // +tty7-M6a: 远程 provider + SSH pane 挂接
 
 export default function testsuite() {
   policyEngineTest();
@@ -41,4 +42,5 @@ export default function testsuite() {
   inputControllerTest(); // +tty7-M4a
   agentEventBusTest(); // +tty7-M5a
   agentApprovalTest(); // +tty7-M5b
+  remoteWorkspaceTest(); // +tty7-M6a
 }

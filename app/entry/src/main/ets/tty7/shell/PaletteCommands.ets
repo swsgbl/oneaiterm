@@ -6,6 +6,7 @@
  * WorkbenchVm 属 viewmodel,非业务 service import。
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
+import { getSharedStore, ConnRec } from '../../store/ConnStore';
 
 /** 面板命令项:key 唯一;run 同步轻操作。 */
 export interface PaletteCmd {
@@ -82,6 +83,36 @@ export function paletteCmds(): PaletteCmd[] {
       }
     }
   }
+  // M6a:会话 · SSH 连接(store 未就绪/无 ssh profile → 状态栏提示;单条直连;
+  // 多条打开选择浮层 vm.sshPickerOpen,WorkbenchPalette 渲染列表)
+  const sessionSsh: PaletteCmd = {
+    key: 'session.new.ssh',
+    label: '会话 · SSH 连接',
+    run: (vm: WorkbenchVm) => {
+      const store = getSharedStore()
+      if (store === null) {
+        vm.setStatus('连接库未就绪(先在旧界面打开连接列表)')
+        return
+      }
+      const ssh: ConnRec[] = []
+      for (const c of store.connections) {
+        if (c.type === 'ssh') {
+          ssh.push(c)
+        }
+      }
+      if (ssh.length === 0) {
+        vm.setStatus('无保存的 SSH 连接(旧界面添加)')
+        return
+      }
+      if (ssh.length === 1) {
+        if (!vm.bindSshSession(ssh[0].id)) {
+          vm.setStatus('SSH 会话发起失败')
+        }
+        return
+      }
+      vm.sshPickerOpen = true // >1:浮层选择(不关 palette 的关闭逻辑由浮层自管)
+    }
+  }
   const sessionEnd: PaletteCmd = {
     key: 'session.end',
     label: '会话 · 结束',
@@ -112,6 +143,7 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(closeTab)
   cmds.push(agentPanel)
   cmds.push(sessionLocal)
+  cmds.push(sessionSsh) // +tty7-M6a: pane 挂 SSH 远程会话
   cmds.push(sessionEnd)
   cmds.push(wsNew)
   cmds.push(themeToggle)

@@ -10,6 +10,7 @@ import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
 import { TermHost } from '../term/TermHost';
+import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { TermPaneView } from '../term/TermPaneView';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 
@@ -75,7 +76,16 @@ export struct PaneSurface {
       // 内容区(M3a):绑定本 pane 的本地终端优先;否则 paneId 大字水印。
       // V1 规则:if 表达式直接读 vm 绑定字段 termTick 建立追踪(TermHost.bound()
       // 静态查询不追踪,termTick 变化驱动表达式重评,同 slotsRev 模式)。
-      if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
+      // M6a:本地或远程任一宿主 bound==paneId 均渲染终端;远程分支注入
+      // model/writeFn/resizeFn(渲染键/捕获层/InputController 全复用)
+      if (this.vm.termTick >= 0 && RemoteTermHost.bound() === this.paneId && RemoteTermHost.term() !== null) {
+        TermPaneView({
+          paneId: this.paneId,
+          model: RemoteTermHost.term(),
+          writeFn: (t: string): void => { RemoteTermHost.write(t) },
+          resizeFn: (c: number, r: number): void => { RemoteTermHost.resize(c, r) }
+        })
+      } else if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
         TermPaneView({ paneId: this.paneId })
       } else {
         Column() {

@@ -42,6 +42,12 @@ const KC_ESCAPE: number = 2070
 @Component
 export struct TermPaneView {
   paneId: string = ''
+  /** M6a:外部注入终端模型(远程 SSH pane;缺省回落 TermHost 本地)。 */
+  model: TermModel | null = null
+  /** M6a:外部注入写口(远程;缺省 TermHost.write+drainOnce 本地语义)。 */
+  writeFn: ((t: string) => void) | null = null
+  /** M6a:外部注入尺寸口(远程;缺省 TermHost.resize)。 */
+  resizeFn: ((c: number, r: number) => void) | null = null
   @State tick: number = 0
   @State winRows: TermLine[] = []
   @State winTop: number = 0
@@ -85,7 +91,7 @@ export struct TermPaneView {
   }
 
   private modelOrNull(): TermModel | null {
-    return TermHost.term()
+    return this.model !== null ? this.model : TermHost.term()
   }
 
   /** 渲染链:自链式 setTimeout,重挂放 finally(照抄 TerminalPage 链式纪律)。 */
@@ -145,11 +151,15 @@ export struct TermPaneView {
     if (text.length === 0) {
       return
     }
-    TermHost.write(text)
-    try {
-      TermHost.drainOnce()
-    } catch (e) {
-      // 排空失败不阻塞输入
+    if (this.writeFn !== null) {
+      this.writeFn(text) // M6a 远程:SSH 回调推送,免本地排水
+    } else {
+      TermHost.write(text)
+      try {
+        TermHost.drainOnce()
+      } catch (e) {
+        // 排空失败不阻塞输入
+      }
     }
     this.tick += 1
     this.refreshWindow()
@@ -345,7 +355,11 @@ export struct TermPaneView {
     }
     this.cols = cols
     this.rows = rows
-    TermHost.resize(cols, rows)
+    if (this.resizeFn !== null) {
+      this.resizeFn(cols, rows) // M6a 远程
+    } else {
+      TermHost.resize(cols, rows)
+    }
     this.refreshWindow()
   }
 
