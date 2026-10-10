@@ -26,6 +26,9 @@ export class RemoteTermHost {
   static onOpen: (() => void) | null = null
   /** 最近一次错误原因(诊断用;不含凭据——只有 connKey 与错误文本)。 */
   static lastError: string = ''
+  /** 数据旁路订阅口(+tty7-M7a:feed TermModel 的同时复制给 tap;
+   *  单订阅口,置 null 摘除;runner 标记法收集用,不碰渲染)。 */
+  private static tap: ((text: string) => void) | null = null
 
   /** 启动远程会话:SshWorkspaceProvider.open 成功建句柄即 true(连接异步)。 */
   static start(connKey: string, cols: number, rows: number): boolean {
@@ -66,6 +69,14 @@ export class RemoteTermHost {
       const m = RemoteTermHost.model
       if (m !== null) {
         m.feed(t)
+      }
+      const tap = RemoteTermHost.tap // +tty7-M7a: 旁路复制(不碰渲染)
+      if (tap !== null) {
+        try {
+          tap(t)
+        } catch (e) {
+          // tap 异常不得杀主链
+        }
       }
     }
     h.onClosed = (): void => {
@@ -109,6 +120,11 @@ export class RemoteTermHost {
     }
   }
 
+  /** 数据旁路订阅(+tty7-M7a:runner 标记法收集口;单订阅,null 摘除)。 */
+  static tapData(fn: ((text: string) => void) | null): void {
+    RemoteTermHost.tap = fn
+  }
+
   /** 全清:关句柄 + model 置空 + 解绑。未 start 时安全 no-op。
    *  注意:不置空 onDead(与 TermHost 不同)——vm 的 onDead 回调内部会调
    *  stop(),置空会丢后续远程会话的死亡通知(connect 失败 → 幽灵 slot);
@@ -121,5 +137,6 @@ export class RemoteTermHost {
     }
     RemoteTermHost.model = null
     RemoteTermHost.boundPane = ''
+    RemoteTermHost.tap = null // +tty7-M7a: 会话终结摘旁路(tap 悬空防幽灵回调)
   }
 }

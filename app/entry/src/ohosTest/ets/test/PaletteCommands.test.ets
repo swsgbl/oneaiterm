@@ -102,6 +102,21 @@ export default function paletteCommandsTest() {
       expect(vm.rightPanelOpen).assertFalse()
     })
 
+    // ===== 5b. panel.git (+tty7-M7a): 开抽屉 + 落 Git 页 =====
+    it('git_panel_cmd_opens_drawer_on_git_tab', 0, () => {
+      const vm = new WorkbenchVm()
+      expect(vm.rightTab).assertEqual('agent')
+      const cmd = cmdByKey('panel.git')
+      expect(cmd !== null).assertTrue()
+      ;(cmd as PaletteCmd).run(vm)
+      expect(vm.rightPanelOpen).assertTrue()
+      expect(vm.rightTab).assertEqual('git')
+      // 已开时再点:面板保持开,页签仍 git(不翻关)
+      ;(cmd as PaletteCmd).run(vm)
+      expect(vm.rightPanelOpen).assertTrue()
+      expect(vm.rightTab).assertEqual('git')
+    })
+
     // ===== 6. theme.toggle 切换 AppStorage =====
     it('theme_cmd_toggles_appstorage_theme', 0, () => {
       AppStorage.setOrCreate('ut.theme', 'dark')

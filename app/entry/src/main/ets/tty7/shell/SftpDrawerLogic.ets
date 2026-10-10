@@ -19,10 +19,13 @@ export class DrawerEntry {
   isDir: boolean = false
 }
 
-/** 页签归一:'agent'/'sftp' 白名单,其余(含 '')回 'agent'。 */
+/** 页签归一:'agent'/'sftp'/'git' 白名单,其余(含 '')回 'agent'。 */
 export function drawerTabOf(next: string): string {
   if (next === 'sftp') {
     return 'sftp'
+  }
+  if (next === 'git') { // +tty7-M7a: Git 页签
+    return 'git'
   }
   return 'agent'
 }

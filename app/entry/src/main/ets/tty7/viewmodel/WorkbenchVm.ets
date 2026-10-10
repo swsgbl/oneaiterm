@@ -43,6 +43,9 @@ export class WorkbenchVm {
   focusedPane: string = ''
   /** RightPanel(M1d agent 面板)开关桩。 */
   rightPanelOpen: boolean = false
+  /** 右面板当前页签(+tty7-M7a:'agent'|'sftp'|'git';从 RightPanel
+   *  组件内 @State 提升为 vm 字段——palette 命令可指定落页)。 */
+  rightTab: string = 'agent'
   /** 命令面板开关(M1d):单源状态,AppShell/StatusBar 共用(避免双源)。 */
   paletteOpen: boolean = false
   /** 布局版本号:每次 syncFromLayout +1。PaneGrid 用其奇偶交替 if 分支强制
@@ -577,6 +580,12 @@ export class WorkbenchVm {
   toggleRightPanel(): void {
     this.rightPanelOpen = !this.rightPanelOpen
     this.statusText = this.rightPanelOpen ? 'Agent 面板开' : 'Agent 面板关'
+  }
+
+  /** 右面板页签切换(+tty7-M7a:RightPanel pill 点击与 palette 命令
+   *  共用;值经 drawerTabOf 白名单归一)。 */
+  setRightTab(tab: string): void {
+    this.rightTab = tab
   }
 
   /** 命令面板开关翻转(M1d;syncFromLayout 不动它——非布局派生态)。 */

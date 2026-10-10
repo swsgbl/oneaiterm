@@ -21,7 +21,9 @@
  * 现有 SessionService.sshHandle 只读目录浏览(SftpBrowser,独立文件)。
  * 连接态=vm.termTick + SshWorkspaceProvider.active() 纯查询组合(同
  * PaneSurface termTick 模式;断线 onDead → termTick++ → 条件重评回未连接态)。
- * drawerTab 组件内 @State(不进 vm);tab 值经 drawerTabOf 白名单守卫。
+ * M7a:页签扩三页(Agent | SFTP | Git);drawerTab 提升为 vm.rightTab
+ * (palette 'Git · 打开面板' 命令可指定落页);Git 页连接态 GitBrowser
+ * (status/log 只读,写操作留 M7b),未连接态同 SFTP 文案模式。
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
@@ -33,6 +35,7 @@ import { approvalToneOf, approvalSettled, checkpointLabel } from '../agent/Appro
 import { drawerTabOf } from './SftpDrawerLogic';
 import { SshWorkspaceProvider } from '../remote/RemoteWorkspaceProvider';
 import { SftpBrowser } from './SftpBrowser';
+import { GitBrowser } from './GitBrowser'; // +tty7-M7a: Git 只读页
 
 /** delta 单条正文显示上限(溢出省略)。 */
 const TEXT_CAP: number = 200;
@@ -46,14 +49,14 @@ export struct RightPanel {
   @State events: AgentEvent[] = []
   @State input: string = ''
   @State agentState: string = '' // '' = 无事件(默认在线);idle|working|waiting|done|error
-  @State drawerTab: string = 'agent' // M6b:'agent' | 'sftp'(drawerTabOf 白名单守卫)
+  // M7a:drawerTab 提升为 vm.rightTab(palette 命令可指定落页;组件不再自持)
   private subId: number = -1
   private scroller: Scroller = new Scroller()
 
   /** 页签切换(经 drawerTabOf 归一;Agent 事件列表是组件 @State,
    *  if/else 分支切换不销毁重建,列表天然不丢)。 */
   private switchTab(next: string): void {
-    this.drawerTab = drawerTabOf(next)
+    this.vm.setRightTab(drawerTabOf(next)) // +tty7-M7a: 经 vm 单源(白名单守卫)
   }
 
   private th(): AppTheme {
@@ -394,18 +397,25 @@ export struct RightPanel {
       Row({ space: DesignTokens.SPACE_XS }) {
         Text('Agent')
           .fontSize(DesignTokens.FONT_LABEL)
-          .fontColor(this.drawerTab === 'agent' ? this.th().surface : this.th().inkSubtle)
+          .fontColor(this.vm.rightTab === 'agent' ? this.th().surface : this.th().inkSubtle)
           .padding({ left: 10, right: 10, top: 3, bottom: 3 })
           .borderRadius(DesignTokens.RADIUS_MD)
-          .backgroundColor(this.drawerTab === 'agent' ? this.th().brand : Color.Transparent)
+          .backgroundColor(this.vm.rightTab === 'agent' ? this.th().brand : Color.Transparent)
           .onClick(() => this.switchTab('agent'))
         Text('SFTP')
           .fontSize(DesignTokens.FONT_LABEL)
-          .fontColor(this.drawerTab === 'sftp' ? this.th().surface : this.th().inkSubtle)
+          .fontColor(this.vm.rightTab === 'sftp' ? this.th().surface : this.th().inkSubtle)
           .padding({ left: 10, right: 10, top: 3, bottom: 3 })
           .borderRadius(DesignTokens.RADIUS_MD)
-          .backgroundColor(this.drawerTab === 'sftp' ? this.th().brand : Color.Transparent)
+          .backgroundColor(this.vm.rightTab === 'sftp' ? this.th().brand : Color.Transparent)
           .onClick(() => this.switchTab('sftp'))
+        Text('Git') // +tty7-M7a: Git 只读页
+          .fontSize(DesignTokens.FONT_LABEL)
+          .fontColor(this.vm.rightTab === 'git' ? this.th().surface : this.th().inkSubtle)
+          .padding({ left: 10, right: 10, top: 3, bottom: 3 })
+          .borderRadius(DesignTokens.RADIUS_MD)
+          .backgroundColor(this.vm.rightTab === 'git' ? this.th().brand : Color.Transparent)
+          .onClick(() => this.switchTab('git'))
         Blank().layoutWeight(1)
       }
       .width('100%')
@@ -415,7 +425,7 @@ export struct RightPanel {
       // ===== Agent 页:事件流(正序贴底;V1 整体替换驱动 ForEach)。
       //  M6b:与底部输入行同包 'agent' 分支——分支切换不销毁组件,events
       //  (@State)不丢;SFTP 页为并列分支。 =====
-      if (this.drawerTab === 'agent') {
+      if (this.vm.rightTab === 'agent') {
         Scroll(this.scroller) {
         Column() {
           if (this.events.length === 0) {
@@ -464,6 +474,24 @@ export struct RightPanel {
       .padding({ left: DesignTokens.SPACE_MD, right: DesignTokens.SPACE_MD, top: DesignTokens.SPACE_SM, bottom: DesignTokens.SPACE_SM })
       .alignItems(VerticalAlign.Center)
       .border({ width: { top: 1 }, color: this.th().hairline })
+      } else if (this.vm.rightTab === 'git') {
+        // ===== Git 页(+tty7-M7a):连接态 GitBrowser(status/log 只读);
+        //  未连接态同 SFTP 文案模式。条件读 vm.rightTab(@Observed 字段)
+        //  + termTick/active() 纯查询组合(断线 onDead → termTick++ 重评)。 =====
+        if (this.vm.termTick >= 0 && SshWorkspaceProvider.active()) {
+          GitBrowser({ themeName: this.themeName })
+        } else {
+          Column({ space: DesignTokens.SPACE_XS }) {
+            Text('SSH 会话未连接')
+              .fontSize(DesignTokens.FONT_BODY)
+              .fontColor(this.th().inkSubtle)
+            Text('先在 palette 建立 SSH 会话')
+              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontColor(this.th().inkSubtle)
+          }
+          .width('100%')
+          .padding({ top: DesignTokens.SPACE_LG })
+        }
       } else if (this.vm.termTick >= 0 && SshWorkspaceProvider.active()) {
         // ===== SFTP 页·连接态:只读目录浏览(SftpBrowser;
         //  条件读 vm.termTick + active() 纯查询——断线 onDead →

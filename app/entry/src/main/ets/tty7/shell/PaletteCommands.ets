@@ -69,6 +69,18 @@ export function paletteCmds(): PaletteCmd[] {
       vm.toggleRightPanel()
     }
   }
+  // +tty7-M7a: Git 面板一键唤起——开抽屉 + 落 Git 页(rightTab 已提升
+  // 为 vm 字段;已开时仅切页)
+  const gitPanel: PaletteCmd = {
+    key: 'panel.git',
+    label: 'Git · 打开面板',
+    run: (vm: WorkbenchVm) => {
+      vm.setRightTab('git')
+      if (!vm.rightPanelOpen) {
+        vm.toggleRightPanel()
+      }
+    }
+  }
   // M2b:会话挂接(M3a 起本地命令为真启动:焦点 pane 起单例 PTY shell)与工作区新建
   const sessionLocal: PaletteCmd = {
     key: 'session.new.local',
@@ -142,6 +154,7 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(newTab)
   cmds.push(closeTab)
   cmds.push(agentPanel)
+  cmds.push(gitPanel) // +tty7-M7a: Git 页签唤起
   cmds.push(sessionLocal)
   cmds.push(sessionSsh) // +tty7-M6a: pane 挂 SSH 远程会话
   cmds.push(sessionEnd)
