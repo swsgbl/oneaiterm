@@ -30,7 +30,7 @@ app 冷启自动生成并持久化 `filesDir/cli_token`(双 UUID 拼接 64 hex =
 
 握手失败立即断连(`bridge auth rejected`);token 值绝不进 hilog。
 
-## 命令全集(M8a 六命令 + M8b 四命令)
+## 命令全集(M8a 六 + M8b 四 + tty7-PA 管理动词九 + send --keys)
 
 | 命令 | 参数 | 说明 |
 |---|---|---|
@@ -44,6 +44,16 @@ app 冷启自动生成并持久化 `filesDir/cli_token`(双 UUID 拼接 64 hex =
 | `events` | `[--n 20]`(1..200 钳制) | 总线最近 n 条事件 `[{seq,ts,type,agentId,paneId,text(截 120)}]` |
 | `wait` | `--paneId p1 --match CLI-OK [--timeout 8000] [--interval 300]` | 桥内轮询 capture(默认超时 10000ms 上限 60000;间隔默认 300ms 下限 100),命中回 `matched`,超时 error `timeout`;pane 未绑立即 error |
 | `git` | `--sub status\|log [--cwd .]` | 只读 git 快捷(经 SSH 远程会话 RemoteCommandRunner;cwd 走 SFTP 路径转义闸);`sub` 白名单 status/log,写操作不经 CLI;未连接远程 → error `remote not connected` |
+| `ws.new` | `[--name my]` | 新建工作区(空 tab 入栈并切换)→ `{wsId,name}` |
+| `ws.close` | - | 关当前工作区(至少留 1 守卫)→ `{closed:wsId}` |
+| `ws.tree` | - | 当前工作区树 → `{id,name,activeTab,tabs:[{tabId,title,layout:{focusedPaneId,root 递归}}]}`;split 节点 `{type:'split',dir,ratio,children[]}`,pane 叶 `{type:'pane',paneId,slotKind,title}`(轴/ratio 为 SplitNode 真值) |
+| `tab.new` | - | 新建 tab(切到它)→ `{tabId,title}` |
+| `tab.close` | `[--index N]`(缺省当前) | 关 tab(至少留 1 守卫)→ `{closed:title}` |
+| `tab.rename` | `--title X [--index N]` | 重命名(空 title 拒;走 persist 链落盘)→ `{tabId,title}` |
+| `pane.split` | `[--dir h\|v]`(缺省 h) | 对焦点叶 split → `{paneId}`(新 pane id) |
+| `pane.close` | `[--paneId pN]`(缺省焦点) | 关 pane(联动清 slot/回收宿主)→ `{closed:paneId}` |
+| `status` | - | 桥/vm/工作台快照 `{bridge,port,vm,workspaces,activeWs,activeTabs,panes,termLocal,termRemote,uptimeMs}` |
+| `send --keys` | `--paneId p1 --keys enter,tab,C-c` | 键名串(逗号分隔)→ 转义字节:text 有则先发,keys 再发,两者都无 error;命名键 `enter escape tab up down right left home end backspace delete space pgup pgdn`;和弦 `C-a..C-z`(`\x01..\x1a`)、`C-@..C-_` 按码表(Ctrl 不分大小写);未知键名整串拒绝(绝不半发) |
 
 退出码:ok=0,命令 error=1,连接失败/超时=2。doctor/list 系列 data
 为 JSON 字符串,CLI pretty-print;capture 原样文本。
@@ -59,6 +69,16 @@ node --jitless oneaiterm-cli.js wait --paneId p1 --match CLI-OK --timeout 8000
 # 观察 agent 事件流
 node --jitless oneaiterm-cli.js agents
 node --jitless oneaiterm-cli.js events --n 50
+
+# tty7-PA 管理链:工作区/tab/pane 增删改 + 树 + 键名发送
+node --jitless oneaiterm-cli.js ws.new --name scratch
+node --jitless oneaiterm-cli.js tab.new
+node --jitless oneaiterm-cli.js pane.split --dir v
+node --jitless oneaiterm-cli.js ws.tree
+node --jitless oneaiterm-cli.js pane.close
+node --jitless oneaiterm-cli.js tab.rename --title build
+node --jitless oneaiterm-cli.js send --paneId p1 --keys enter,tab,C-c
+node --jitless oneaiterm-cli.js status
 ```
 
 ## 沙箱限制:procs / ports 为何缺席

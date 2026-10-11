@@ -193,12 +193,18 @@ export class WorkbenchVm {
 
   // ===================== 工作区(M2b) =====================
 
-  /** 新建工作区:空工作区(单 tab 空模型)入栈并切换。 */
+  /** 新建工作区:空工作区(单 tab 空模型)入栈并切换(委托命名版,行为不变)。 */
   newWorkspace(): void {
+    this.newWorkspaceNamed('')
+  }
+
+  /** 新建工作区(命名版,任务 tty7-PA:ws.new;name '' → 默认名)。
+   *  返回新 wsId——桥需要 id 回传;原 newWorkspace 逻辑整体搬入。 */
+  newWorkspaceNamed(name: string): string {
     this.wsSeq += 1
     const ws = new WorkspaceState()
     ws.wsId = 'w' + this.wsSeq.toString()
-    ws.name = 'workspace-' + this.wsSeq.toString()
+    ws.name = name !== '' ? name : 'workspace-' + this.wsSeq.toString()
     ws.glyph = WS_GLYPHS[(this.wsSeq - 1) % WS_GLYPHS.length]
     this.tabSeq += 1
     const t = new TabState()
@@ -212,6 +218,7 @@ export class WorkbenchVm {
     this.activeTab = 0
     this.syncFromLayout(t.layout)
     this.statusText = '新工作区 ' + ws.name
+    return ws.wsId
   }
 
   /** 切工作区:activeWs=i、tabs 引用整体替换、activeTab 取工作区记忆值、sync + persist。 */
@@ -512,10 +519,31 @@ export class WorkbenchVm {
     }
   }
 
+  /** tabs 引用回写当前工作区(任务 tty7-PA 实勘修复:newTab/closeTab 用
+   *  concat/slice 整体替换 this.tabs 后,workspaces[activeWs].tabs 仍指旧
+   *  数组——违反文件头"同引用投影"约定,ws.tree/persist 读 workspaces 拿
+   *  到陈旧 tabs;一切整体替换处后调此方法恢复不变量)。 */
+  private projectTabsToWs(): void {
+    if (this.activeWs >= 0 && this.activeWs < this.workspaces.length) {
+      this.workspaces[this.activeWs].tabs = this.tabs
+    }
+  }
+
+  /** tab 重命名(任务 tty7-PA:tab.rename;越界/空 title 拒,走 persist 链落盘)。 */
+  renameTab(i: number, title: string): boolean {
+    if (i < 0 || i >= this.tabs.length || title === '') {
+      return false
+    }
+    this.tabs[i].title = title
+    this.persist()
+    return true
+  }
+
   // ===================== 布局(M1c) =====================
 
-  /** 新建 pane:空布局→single(首 pane);否则对焦点叶 split,新 id=p{现存最大序号+1}。 */
-  newPane(dir: SplitDir): void {
+  /** 新建 pane 并返回新 pane id(任务 tty7-PA:pane.split 桥要新 id)。
+   *  空布局→single(首 pane);否则对焦点叶 split,新 id=p{现存最大序号+1}。 */
+  newPaneId(dir: SplitDir): string {
     const ids = LayoutOps.panes(this.layout)
     let max = 0
     for (const id of ids) {
@@ -530,13 +558,19 @@ export class WorkbenchVm {
     const fresh = 'p' + this.paneSeq.toString()
     if (ids.length === 0) {
       this.syncFromLayout(LayoutOps.single(fresh))
-      return
+      return fresh
     }
     let host = this.layout.focusedPaneId
     if (host === '') {
       host = ids[0]
     }
     this.syncFromLayout(LayoutOps.split(this.layout, host, dir, fresh))
+    return fresh
+  }
+
+  /** 新建 pane(任务 tty7-PA:委托 newPaneId;签名与行为不变)。 */
+  newPane(dir: SplitDir): void {
+    this.newPaneId(dir)
   }
 
   /** 关闭 pane(close 内建焦点迁移与父层折叠;联动清理被删 pane 的会话槽)。 */
@@ -577,6 +611,7 @@ export class WorkbenchVm {
     t.tabId = 't' + this.tabSeq.toString()
     t.title = 'tty7-' + this.tabSeq.toString()
     this.tabs = this.tabs.concat([t])
+    this.projectTabsToWs()
     this.activeTab = this.tabs.length - 1
     this.syncFromLayout(t.layout)
     this.statusText = '新标签 tty7-' + this.tabSeq.toString()
@@ -588,6 +623,7 @@ export class WorkbenchVm {
       return
     }
     this.tabs = this.tabs.slice(0, i).concat(this.tabs.slice(i + 1))
+    this.projectTabsToWs()
     if (this.activeTab >= this.tabs.length) {
       this.activeTab = this.tabs.length - 1
     } else if (i < this.activeTab) {

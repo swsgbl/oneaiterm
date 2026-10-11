@@ -10,10 +10,19 @@ import {
   agentsSummary,
   gitSubOk,
   tokenTimeEqual,
-  joinUuidHex
+  joinUuidHex,
+  keysToBytes,
+  treeToJson,
+  splitDirOf,
+  indexArg,
+  renameOk,
+  statusSnapshot
 } from '../../../main/ets/tty7/bridge/CommandBridge';
 import { gitAuditRecord } from '../../../main/ets/tty7/git/GitService';
 import { AgentEvent, AgentEventType } from '../../../main/ets/tty7/agent/AgentEvent';
+import { LayoutOps } from '../../../main/ets/tty7/layout/LayoutOps';
+import { SessionSlot } from '../../../main/ets/tty7/model/TabState';
+import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
 
 export default function commandBridgeTest() {
   describe('CommandBridge', () => {
@@ -171,6 +180,117 @@ export default function commandBridgeTest() {
       expect(bad.resultDigest).assertEqual('boom')
       const bad2 = gitAuditRecord('unstage', '/w', 'a', false, '')
       expect(bad2.resultDigest).assertEqual('failed')
+    })
+    // ---- tty7-PA:treeToJson(2x2 树递归 JSON 形状 + slot 元数据)----
+    it('treeToJsonRecursive', 0, () => {
+      let m = LayoutOps.single('p1')
+      m = LayoutOps.split(m, 'p1', 'h', 'p2')
+      m = LayoutOps.split(m, 'p1', 'v', 'p3')
+      const slot = new SessionSlot()
+      slot.paneId = 'p3'
+      slot.kind = 'ssh'
+      slot.title = 'ssh dev'
+      const slotOf = (pid: string): SessionSlot | null => {
+        return pid === 'p3' ? slot : null
+      }
+      const root = treeToJson(m.root, slotOf)
+      expect(root['type']).assertEqual('split')
+      expect(root['dir']).assertEqual('h')
+      expect(root['ratio']).assertEqual(0.5)
+      const ch = root['children'] as object[]
+      expect(ch.length).assertEqual(2)
+      const left = ch[0] as Record<string, Object>
+      expect(left['type']).assertEqual('split')
+      expect(left['dir']).assertEqual('v')
+      const lch = left['children'] as object[]
+      expect(lch.length).assertEqual(2)
+      const l2 = lch[1] as Record<string, Object>
+      expect(l2['type']).assertEqual('pane')
+      expect(l2['paneId']).assertEqual('p3')
+      expect(l2['slotKind']).assertEqual('ssh')
+      expect(l2['title']).assertEqual('ssh dev')
+      const right = ch[1] as Record<string, Object>
+      expect(right['paneId']).assertEqual('p2')
+      expect(right['slotKind']).assertEqual('')
+    })
+    // ---- tty7-PA:keysToBytes(命名键全表 + C-x 和弦 + 未知拒)----
+    it('keysToBytesTable', 0, () => {
+      expect(keysToBytes('enter')).assertEqual('\r')
+      expect(keysToBytes('escape')).assertEqual('\x1b')
+      expect(keysToBytes('tab')).assertEqual('\t')
+      expect(keysToBytes('up')).assertEqual('\x1b[A')
+      expect(keysToBytes('down')).assertEqual('\x1b[B')
+      expect(keysToBytes('right')).assertEqual('\x1b[C')
+      expect(keysToBytes('left')).assertEqual('\x1b[D')
+      expect(keysToBytes('home')).assertEqual('\x1b[H')
+      expect(keysToBytes('end')).assertEqual('\x1b[F')
+      expect(keysToBytes('backspace')).assertEqual('\x7f')
+      expect(keysToBytes('delete')).assertEqual('\x1b[3~')
+      expect(keysToBytes('space')).assertEqual(' ')
+      expect(keysToBytes('pgup')).assertEqual('\x1b[5~')
+      expect(keysToBytes('pgdn')).assertEqual('\x1b[6~')
+      expect(keysToBytes('C-a')).assertEqual('\x01')
+      expect(keysToBytes('C-z')).assertEqual('\x1a')
+      expect(keysToBytes('C-c')).assertEqual('\x03')
+      expect(keysToBytes('C-C')).assertEqual('\x03')
+      expect(keysToBytes('C-@')).assertEqual('\x00')
+      expect(keysToBytes('C-_')).assertEqual('\x1f')
+      expect(keysToBytes('enter,tab')).assertEqual('\r\t')
+      expect(keysToBytes(' enter , tab ')).assertEqual('\r\t')
+      expect(keysToBytes('nope')).assertEqual('')
+      expect(keysToBytes('enter,nope')).assertEqual('')
+      expect(keysToBytes('C-1')).assertEqual('')
+      expect(keysToBytes('')).assertEqual('')
+    })
+    // ---- tty7-PA:tab.rename 参数校验(空 title 拒 + index 解析)----
+    it('renameIndexGuards', 0, () => {
+      expect(renameOk('')).assertFalse()
+      expect(renameOk('work')).assertTrue()
+      expect(indexArg(-1, 0, 2)).assertEqual(0)
+      expect(indexArg(1, 0, 2)).assertEqual(1)
+      expect(indexArg(5, 0, 2)).assertEqual(-1)
+      expect(indexArg(-1, 0, 0)).assertEqual(-1)
+      expect(indexArg(0, 0, 1)).assertEqual(0)
+    })
+    // ---- tty7-PA:pane.split dir 白名单(缺省 h,白名单外拒)----
+    it('splitDirWhitelist', 0, () => {
+      expect(splitDirOf('')).assertEqual('h')
+      expect(splitDirOf('h')).assertEqual('h')
+      expect(splitDirOf('v')).assertEqual('v')
+      expect(splitDirOf('x')).assertEqual('')
+      expect(splitDirOf('H')).assertEqual('')
+      expect(splitDirOf('hv')).assertEqual('')
+    })
+    // ---- tty7-PA:status 快照降级(vm 未设)----
+    it('statusDegradesWithoutVm', 0, () => {
+      const s = statusSnapshot()
+      expect(s['bridge']).assertEqual(0)
+      expect(s['vm']).assertEqual(0)
+      expect(s['port']).assertEqual(18971)
+      const r = handleCmd({ id: 9, cmd: 'ws.tree' })
+      expect(r.ok).assertFalse()
+      expect(r.error).assertEqual('vm-not-set')
+    })
+    // ---- tty7-PA:newWorkspaceNamed + 投影不变量 + renameTab(真档链)----
+    it('wsNewNamedAndProjection', 0, () => {
+      const vm = new WorkbenchVm()
+      const id = vm.newWorkspaceNamed('pa-x')
+      expect(id).assertEqual('w2')
+      expect(vm.workspaces[vm.activeWs].name).assertEqual('pa-x')
+      // 投影不变量:newTab 后 workspaces[activeWs].tabs 必须同引用
+      vm.newTab()
+      expect(vm.workspaces[vm.activeWs].tabs === vm.tabs).assertTrue()
+      expect(vm.workspaces[vm.activeWs].tabs.length).assertEqual(2)
+      // newPaneId 返回新 pane 且入树;renameTab 走 persist 链(不抛即过)
+      const pid = vm.newPaneId('v')
+      expect(vm.panes.indexOf(pid) >= 0).assertTrue()
+      expect(vm.renameTab(0, 'renamed')).assertTrue()
+      expect(vm.tabs[0].title).assertEqual('renamed')
+      expect(vm.renameTab(0, '')).assertFalse()
+      // 缺省名回退
+      const id2 = vm.newWorkspaceNamed('')
+      expect(vm.workspaces[vm.activeWs].name).assertEqual('workspace-3')
+      expect(id2).assertEqual('w3')
     })
   })
 }

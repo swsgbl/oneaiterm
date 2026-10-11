@@ -58,7 +58,7 @@ if (!cmd) {
 }
 
 // 数字 flag 数字化(bridge 侧 intArg 要 number;非数字丢弃走桥默认)
-for (const k of ['lines', 'n', 'timeout', 'interval']) {
+for (const k of ['lines', 'n', 'timeout', 'interval', 'index']) {
   if (args[k] !== undefined) {
     const v = parseInt(args[k], 10);
     if (Number.isFinite(v) && String(v) === String(args[k]).trim()) {
