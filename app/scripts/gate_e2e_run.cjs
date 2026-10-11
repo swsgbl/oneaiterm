@@ -64,7 +64,7 @@ if (!/online/.test(online)) finish(false, 'device not reachable');
 log('[e2e] 1/3 cold start ' + BUNDLE);
 sh('aa force-stop ' + BUNDLE);
 sleep(2000);
-log('[launch] ' + sh('aa start -b ' + BUNDLE + ' -a ' + ABILITY).trim());
+log('[launch] ' + sh('aa start -b ' + BUNDLE + ' -a ' + ABILITY + ' --ps shell legacy').trim());
 sleep(9000);
 
 let nodes = dump('s1-main');
@@ -107,7 +107,7 @@ sh('busybox echo ' + pb64 + ' | busybox base64 -d > /data/local/tmp/e2e-conn.jso
 const script =
   '#!/system/bin/sh\n' +
   'aa start -b ' + BUNDLE + ' -a ' + ABILITY +
-  ' --ps connectNow m8r10-e2e --ps importText "$(busybox cat /data/local/tmp/e2e-conn.json)"\n';
+  ' --ps shell legacy --ps connectNow m8r10-e2e --ps importText "$(busybox cat /data/local/tmp/e2e-conn.json)"\n';
 const b64 = Buffer.from(script, 'utf8').toString('base64');
 sh('busybox echo ' + b64 + ' | busybox base64 -d > /data/local/tmp/e2estart.sh');
 log('[launch-gold] ' + sh('aa force-stop ' + BUNDLE + ' ; sh /data/local/tmp/e2estart.sh', 40000).trim());

@@ -25,6 +25,7 @@ import { TermModel } from '../../components/TermModel';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { getSharedStore } from '../../store/ConnStore';
+import { PaneDropTargets } from '../model/PaneDropTargets';
 
 /** Sidebar 工作区图标 glyph 池(AppIcons 现有 glyph 集内取;本地常量,不 import UI 模块)。 */
 const WS_GLYPHS: string[] = ['◈', '▣', '☸', '⌗', '∿', '▦', '◷'];
@@ -558,6 +559,15 @@ export class WorkbenchVm {
     this.syncFromLayout(LayoutOps.resize(this.layout, splitNodeId, ratio))
   }
 
+  /** 两 pane 互换位置(任务 tty7-M1e;树结构不变只换叶身份)。
+   *  经 syncFromLayout 单源链:rev++ 驱动 PaneGrid rev-parity 分支重建,
+   *  持久化自动带上;focused/zoomedPaneId 保持(LayoutOps.swapPane 语义:
+   *  身份互换焦点跟随身份)。同 id/任一不在树 → LayoutOps 守卫直返拷贝,
+   *  sync 仍走(rev 变但树等价,无害)。 */
+  swapPanes(idA: string, idB: string): void {
+    this.syncFromLayout(LayoutOps.swapPane(this.layout, idA, idB))
+  }
+
   // ===================== Tab(M2a) =====================
 
   /** 新建 tab:空模型根叶(切到即见"空白工作区"引导),标题 tty7-N,置为 active。 */
@@ -601,6 +611,29 @@ export class WorkbenchVm {
     if (this.panes.indexOf(id) >= 0 && id !== this.focusedPane) {
       this.syncFromLayout(LayoutOps.focus(this.layout, id))
     }
+  }
+
+  /** 拖拽落点判定(M1e onDragEnd 兜底通道,纯查询):
+   *  PaneSurface onAreaChange 把各 pane 全窗口矩形注册进 PaneDropTargets,
+   *  这里取落点 (wx,wy) 所在且非拖源自身的 pane id(命中即首个,重叠时
+   *  取面积最小者更准;当前布局无重叠,线性首个够用);无命中回 ''。 */
+  dropTargetAt(winX: number, winY: number, excludePaneId: string): string {
+    const rects = PaneDropTargets.all()
+    let best = ''
+    let bestArea = Number.MAX_VALUE
+    for (const r of rects) {
+      if (r.paneId === excludePaneId) {
+        continue
+      }
+      if (winX >= r.x && winX <= r.x + r.w && winY >= r.y && winY <= r.y + r.h) {
+        const a = r.w * r.h
+        if (best === '' || a < bestArea) {
+          best = r.paneId
+          bestArea = a
+        }
+      }
+    }
+    return best
   }
 
   // ===================== 面板/杂项(M1d) =====================

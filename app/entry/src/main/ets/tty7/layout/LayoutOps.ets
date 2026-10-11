@@ -210,6 +210,23 @@ export class LayoutOps {
     return m
   }
 
+  /** 两叶互换身份(树结构不变,只换叶 paneId;任务 tty7-M1e)。
+   *  任一 id 不存在或相同 → 原模型拷贝。focused/zoomedPaneId 不动:
+   *  pane 身份互换后焦点跟随身份(内容到哪焦点 id 就在哪)。
+   *  实现:深拷贝后三拍换名(A→tmp→B→A→tmp→B),避免交叉覆盖;
+   *  '__swap_tmp__' 为保留前缀,pane id 生成器只产 'p'+数字,无撞名。 */
+  static swapPane(model: LayoutTreeModel, idA: string, idB: string): LayoutTreeModel {
+    const m = LayoutOps.cloneModel(model)
+    if (idA === idB || idA === '' || idB === '' ||
+      LayoutOps.findLeaf(m.root, idA) === null || LayoutOps.findLeaf(m.root, idB) === null) {
+      return m
+    }
+    LayoutOps.renameLeaf(m.root, idA, '__swap_tmp__')
+    LayoutOps.renameLeaf(m.root, idB, idA)
+    LayoutOps.renameLeaf(m.root, '__swap_tmp__', idB)
+    return m
+  }
+
   // ===================== 内部工具（均为纯函数） =====================
 
   private static unitRect(): Rect {
@@ -436,6 +453,20 @@ export class LayoutOps {
     const nv = map.get(leaf.paneId)
     if (nv !== undefined) {
       leaf.paneId = nv
+    }
+  }
+
+  /** swapPane 三拍换名单步:深拷贝树上原位改 paneId(不改结构)。 */
+  private static renameLeaf(node: LayoutNode, from: string, to: string): void {
+    if (node instanceof SplitNode) {
+      for (const c of node.children) {
+        LayoutOps.renameLeaf(c, from, to)
+      }
+      return
+    }
+    const leaf = node as PaneLeaf
+    if (leaf.paneId === from) {
+      leaf.paneId = to
     }
   }
 

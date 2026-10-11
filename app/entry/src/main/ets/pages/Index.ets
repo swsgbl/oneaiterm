@@ -84,7 +84,9 @@ struct Index {
   @StorageLink('ut.openSftp') @Watch('onOpenSftp') openSftpSignal: string = ''
   @StorageLink('ut.closeTab') @Watch('onCloseTab') closeTabSignal: string = ''
   // +tty7-M1b: tty7 工作台外壳模式(''=旧界面原样;'tty7'=整页 AppShell)
-  @State shellMode: string = ''
+  // 2026-10-11 用户指令:默认 GUI 切换为 tty7 工作台布局(旧界面经 AppShell
+  // «返回钮与 --ps shell legacy want 通道仍可达;E2E gate 走 legacy 通道)
+  @State shellMode: string = 'tty7'
   // +tty7-M1b: tty7 外壳 ViewModel(纯桩,生命周期与 Index 同;@State 驱动 @ObjectLink)
   @State tty7Vm: WorkbenchVm = new WorkbenchVm()
 
@@ -105,9 +107,13 @@ struct Index {
     } catch (e) {
       this.guideShow = true // 拿不到路径宁可弹(有跳过钮)
     }
-    // +tty7-M1b: --ps shell tty7 直启工作台外壳(dev channel)
-    if (WantParams.getShellMode() === 'tty7') {
+    // +tty7-M1b: --ps shell tty7 直启工作台外壳(dev channel);
+    // 2026-10-11 起默认即 tty7,--ps shell legacy 显式回旧界面(E2E/维护通道)
+    const wantShell = WantParams.getShellMode()
+    if (wantShell === 'tty7') {
       this.shellMode = 'tty7'
+    } else if (wantShell === 'legacy') {
+      this.shellMode = ''
     }
     // M8-relay14 dev channel: --ps agentPrompt/--ps agentEngine
     if (WantParams.getAgentPrompt() !== '') {

@@ -27,6 +27,7 @@ import gitServiceTest from './GitService.test.ets'; // +tty7-M7a: git 解析纯�
 import gitWriteTest from './GitWrite.test.ets'; // +tty7-M7b: 写命令构造/quoteMsg 双闸/XY 分类/pushDry 解析
 import commandBridgeTest from './CommandBridge.test.ets'; // +tty7-M8a/M8b/M9: CLI 桥纯函数(parse/format/doctor/token 恒时比较)
 import termScrollbackTest from './TermScrollback.test.ets'; // +tty7-M3c: scrollback 尾截 + 终端搜索纯函数
+// +tty7-M1e: LayoutOps.swapPane 用例并入 LayoutTree.test.ets(任务书允许可并入,layoutTreeTest 注册即执行)
 
 export default function testsuite() {
   policyEngineTest();
@@ -53,4 +54,5 @@ export default function testsuite() {
   gitWriteTest(); // +tty7-M7b
   commandBridgeTest(); // +tty7-M8a +tty7-M8b +tty7-M9
   termScrollbackTest(); // +tty7-M3c
+  // +tty7-M1e: swap 用例并入 layoutTreeTest(上面已调用,不重复注册)
 }

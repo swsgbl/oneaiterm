@@ -230,5 +230,66 @@ export default function layoutTreeTest() {
       expect(m2.focusedPaneId).assertEqual('A')
       expect(m2.zoomedPaneId).assertEqual('')
     })
+    // ===== 9. swapPane（tty7-M1e 拖拽重排核心）=====
+    it('swap_diagonal_leaves_preorder_and_shape', 0, () => {
+      const m2 = build2x2() // 先序 A,C,B,D
+      const m = LayoutOps.swapPane(m2, 'A', 'D')
+      expect(LayoutOps.panes(m).join(',')).assertEqual('D,C,B,A')
+      // 树形状不变:根仍 h,两列仍 v,各叶位同构
+      const sp = m.root as SplitNode
+      expect(sp.dir).assertEqual('h')
+      expect((sp.children[0] as SplitNode).dir).assertEqual('v')
+      expect((sp.children[1] as SplitNode).dir).assertEqual('v')
+      expect(((sp.children[0] as SplitNode).children[0] as PaneLeaf).paneId).assertEqual('D')
+      expect(((sp.children[1] as SplitNode).children[1] as PaneLeaf).paneId).assertEqual('A')
+      // 再换回:先序复原
+      const back = LayoutOps.swapPane(m, 'A', 'D')
+      expect(LayoutOps.panes(back).join(',')).assertEqual('A,C,B,D')
+    })
+
+    it('swap_sibling_leaves_same_parent', 0, () => {
+      let m = LayoutOps.single('A')
+      m = LayoutOps.split(m, 'A', 'h', 'B')
+      const s = LayoutOps.swapPane(m, 'A', 'B')
+      expect(LayoutOps.panes(s).join(',')).assertEqual('B,A')
+      const sp = s.root as SplitNode
+      expect((sp.children[0] as PaneLeaf).paneId).assertEqual('B')
+      expect((sp.children[1] as PaneLeaf).paneId).assertEqual('A')
+    })
+
+    it('swap_unknown_id_returns_equal_copy', 0, () => {
+      const m2 = build2x2()
+      const c1 = LayoutOps.swapPane(m2, 'A', 'Z')
+      expect(LayoutOps.panes(c1).join(',')).assertEqual('A,C,B,D')
+      const c2 = LayoutOps.swapPane(m2, 'Z', 'A')
+      expect(LayoutOps.panes(c2).join(',')).assertEqual('A,C,B,D')
+      // 拷贝非同引用(纯函数约定)但内容等价
+      expect(c1 === m2).assertFalse()
+      expect(c1.root === m2.root).assertFalse()
+      // 同 id 自换 = 无操作拷贝
+      const c3 = LayoutOps.swapPane(m2, 'A', 'A')
+      expect(LayoutOps.panes(c3).join(',')).assertEqual('A,C,B,D')
+    })
+
+    it('swap_keeps_focused_and_zoomed_ids', 0, () => {
+      const m2 = build2x2()
+      const f = LayoutOps.focus(m2, 'C')
+      const z = LayoutOps.zoom(f, 'C')
+      const s = LayoutOps.swapPane(z, 'A', 'D')
+      expect(s.focusedPaneId).assertEqual('C')
+      expect(s.zoomedPaneId).assertEqual('C')
+      // focus 落在被换叶上:身份互换焦点跟随身份,保持原 id
+      const f2 = LayoutOps.focus(m2, 'A')
+      const s2 = LayoutOps.swapPane(f2, 'A', 'D')
+      expect(s2.focusedPaneId).assertEqual('A')
+    })
+
+    it('swap_never_mutates_input', 0, () => {
+      const m2 = build2x2()
+      LayoutOps.swapPane(m2, 'A', 'D')
+      LayoutOps.swapPane(m2, 'C', 'B')
+      expect(LayoutOps.panes(m2).join(',')).assertEqual('A,C,B,D')
+      expect(m2.focusedPaneId).assertEqual('A')
+    })
   })
 }
