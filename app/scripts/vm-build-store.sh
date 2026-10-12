@@ -57,6 +57,15 @@ if [ ! -d "$PROJ/entry/oh_modules/@ohos/libssh" ]; then
   fi
 fi
 echo "[build] timeout 280 pack_hap_store.sh $PROJ (log: $LOG)"
+# stale-abc hard reset (RD-POC measured live: sync_vm.py preserves mtimes,
+# so flipping RD_POC back produces a source tree whose PaneSurface.ets
+# mtime is OLDER than the cached loader_out abc from the previous build
+# -> CompileArkTS incremental SKIPS -> the java-fallback C++ pack ships
+# the stale false-tree abc. Same reset as vm-build-test.sh:65-71.)
+rm -rf "$PROJ/entry/build/store/intermediates/loader_out"
+rm -rf "$PROJ/entry/build/store/intermediates/loader"
+rm -f "$PROJ/out_release.hap" \
+      "$PROJ/entry/build/store/outputs/store/entry-store-unsigned.hap"
 rm -f "$LOG"
 set +e
 timeout 280 "$DST" "$PROJ" > "$LOG" 2>&1
