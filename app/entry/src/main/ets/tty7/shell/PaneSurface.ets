@@ -147,10 +147,15 @@ export struct PaneSurface {
           model: RemoteTermHost.term(),
           writeFn: (t: string): void => { RemoteTermHost.write(t) },
           resizeFn: (c: number, r: number): void => { RemoteTermHost.resize(c, r) },
-          onDone: (): void => { this.onCmdDone(this.paneId) } // tty7-PB:完成通知
+          onDone: (): void => { this.onCmdDone(this.paneId) }, // tty7-PB:完成通知
+          wantFocus: this.vm.focusedPane === this.paneId // 输入热修:仅焦点 pane 拉焦
         })
       } else if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
-        TermPaneView({ paneId: this.paneId, onDone: (): void => { this.onCmdDone(this.paneId) } })
+        TermPaneView({
+          paneId: this.paneId,
+          onDone: (): void => { this.onCmdDone(this.paneId) },
+          wantFocus: this.vm.focusedPane === this.paneId
+        })
       } else {
         Column() {
           Text(this.paneId)

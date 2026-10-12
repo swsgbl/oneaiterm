@@ -49,6 +49,10 @@ const KC_ESCAPE: number = 2070
 @Component
 export struct TermPaneView {
   paneId: string = ''
+  /** 输入热修(2026-10-12):仅焦点 pane 挂载时拉焦( PaneSurface 传入
+   *  vm.focusedPane === paneId)。无条件拉焦会让非焦点 pane 的重挂载
+   *  抢走焦点——焦点 pane 打字全丢。 */
+  wantFocus: boolean = false
   /** M6a:外部注入终端模型(远程 SSH pane;缺省回落 TermHost 本地)。 */
   model: TermModel | null = null
   /** M6a:外部注入写口(远程;缺省 TermHost.write+drainOnce 本地语义)。 */
@@ -84,7 +88,14 @@ export struct TermPaneView {
   private renderTimer: number = -1
   private lastCapture: string = ''
   /** keyEvent 回车时间戳(onSubmit 去重基准;IME 正常时防双 \r)。 */
+  /** 输入热修(2026-10-12):最近一次系统 inputText(onChange)到达时刻;
+   *  仅 .onChange 回调处打点——onKeyEvent 兜底路径程序调 onCaptureChange
+   *  不打点,否则兜底自我标记 IME 活跃,让路判定失效。 */
+  private lastInputTextMs: number = 0
   private lastKeyEnterMs: number = 0
+  /** 输入热修(2026-10-12):提交时捕获层显示值(显示不清的 SDK 行为下
+   *  的残留对齐锚,见 onCaptureChange)。 */
+  private pendingSubmitDisplay: string = ''
   /** M4a 输入控制器(捕获层与 TermHost.write 之间,差分/ghost/Tab/回溯)。 */
   private ctrl: InputController = new InputController()
   /** M4b: full-screen mode mirror (TermModel.altScreen) for arrow passthrough. */
@@ -114,6 +125,17 @@ export struct TermPaneView {
     this.startRenderLoop()
     this.refreshWindow()
     this.startSearchWatch() // M3c:palette 搜索信号
+    // 输入热修(2026-10-12):仅焦点 pane 挂载时主动拉焦(真键盘/IME 输入
+    // 必须 TextInput 持焦点才可达;无条件拉焦=非焦点 pane 抢焦)。
+    // 延迟到布局完成后一拍——aboutToAppear 阶段 requestFocus 静默失效
+    // (实勘:挂载即拉不打字仍全丢)。
+    if (this.wantFocus) {
+      setTimeout(() => {
+        if (this.wantFocus) {
+          this.keepCaptureFocus()
+        }
+      }, 50)
+    }
   }
 
   aboutToDisappear(): void {
@@ -245,7 +267,7 @@ export struct TermPaneView {
     this.hitCur = 0
     this.recomputeHits(true)
     try {
-      this.getUIContext().getFocusController().requestFocus('tty7TermSearch')
+      this.getUIContext().getFocusController().requestFocus('tty7TermSearch_' + this.paneId)
     } catch (e) {
       // 焦点控制器不可用:降级为手动点击搜索框
     }
@@ -372,9 +394,16 @@ export struct TermPaneView {
    * :3264);Tab/↑↓ 后系统焦点转移副作用会把输入焦点带走 → 处理完主动拉回,
    * 不重点击即可连续输入/回车。requestFocus 不存在的旧场景静默降级(不杀输入)。
    */
+  /** 捕获层焦点 id(paneId 唯一化:多 pane 同 id 会让 requestFocus 命中
+   *  任意实例——后挂载的无会话 pane 抢走焦点,焦点 pane 打字全丢,
+   *  2026-10-12「无法输入」根因)。 */
+  private captureId(): string {
+    return 'tty7TermCapture_' + this.paneId
+  }
+
   private keepCaptureFocus(): void {
     try {
-      this.getUIContext().getFocusController().requestFocus('tty7TermCapture')
+      this.getUIContext().getFocusController().requestFocus(this.captureId())
     } catch (e) {
       // 焦点控制器不可用:降级为靠 focusOnTouch(用户点击恢复)
     }
@@ -474,20 +503,71 @@ export struct TermPaneView {
    */
   private onCaptureChange(v: string): void {
     if (v.indexOf('\n') >= 0) { this.applyAction(this.ctrl.onPasteBlock(v)); return } // M4b paste
+    // 输入热修(2026-10-12):显示值回写——IME 活路径下 inputText 只改
+    // TextInput 显示,组件字段不跟随(V1 构造参数),不回写则提交时
+    // pendingSubmitDisplay 恒空,残留对齐失效(datepwd 实勘)。
+    this.capture = v
+    // 输入热修(2026-10-12):提交后显示残留对齐——本 SDK 的 TextInput 在
+    // onSubmit 后不自动清显示(V1 下 text 参数不跟随 @State),显示残留
+    // 提交词;后续 inputText 以「残留+新增后缀」形态到达,直接整行差分
+    // 会把残留一起重写给 PTY(date 后打 pwd → datepwd 实勘)。遇此前缀
+    // 形态只把新增后缀喂差分;DEL/整改形态则清登记走原差分兜底。
+    if (this.pendingSubmitDisplay.length > 0) {
+      if (v === this.pendingSubmitDisplay) {
+        this.lastCapture = v
+        return // 框架回放原值:无新增,无操作
+      }
+      if (v.startsWith(this.pendingSubmitDisplay)) {
+        const a = this.ctrl.onInput(v.substring(this.pendingSubmitDisplay.length))
+        this.lastCapture = v
+        this.pendingSubmitDisplay = ''
+        this.applyAction(a)
+        return
+      }
+      this.pendingSubmitDisplay = ''
+    }
     const a = this.ctrl.onInput(v)
     this.lastCapture = v
     this.applyAction(a)
   }
 
+  /** 输入热修(2026-10-12):IME 活性探测。IME 正常环境(inputText 通道通)
+   *  字母/DEL/ENTER 由 onChange+onSubmit 单路径送达;本机 VM IME 损坏环境
+   *  inputText 恒不达,onKeyEvent 兜底直写。两环境共存的双写/吞字根因:
+   *  IME 活时兜底成第二写源(echo→echoecho 实勘),IME 坏时 inputText 半
+   *  接管吞字。判据:onChange(仅系统 inputText 到达处打点)2 秒内活跃
+   *  → onKeyEvent 字符/DEL/ENTER 让路。
+   */
+  private imeAlive(): boolean {
+    return Date.now() - this.lastInputTextMs < 2000
+  }
+
   /** 回车:onSubmit 独占 → 控制器 onEnter('\r' + 历史 push + 行复位清 ghost)。 */
   private onCaptureSubmit(): void {
+    // 双路径去重:keyEvent 直发与 onSubmit 系统派发在同一 ENTER 上都会到达
+    // (LPDBG 实勘 4ms 内双 \r——TextInput 持焦点时两条都活)。旧界面走
+    // 「keyEvent 让位」单路径;本机 VM IME 损坏时 onSubmit 不触发,keyEvent
+    // 路径必须保留 → 入口时间戳幂等统一拦截(400ms 与旧三修口径一致)。
+    if (Date.now() - this.lastKeyEnterMs < 400) {
+      return
+    }
+    this.lastKeyEnterMs = Date.now()
     const a = this.ctrl.onEnter()
     // keyEvent 路径框架不清字段(原依赖 submit 的框架清空),自清受控值;
     // IME 正常时框架再清 onChange('') 幂等无操作。
+    // 输入热修(2026-10-12):登记提交时显示值——显示不清的 SDK 行为下,
+    // 后续 onChange 以「残留+后缀」形态到达时只差分后缀(见 onCaptureChange)。
+    this.pendingSubmitDisplay = this.capture
     this.capture = ''
-    this.lastCapture = ''
+    this.lastCapture = this.pendingSubmitDisplay
     this.applyAction(a)
     this.startDoneProbe() // tty7-PB:提交后启动完成探测(重置计时)
+    // 输入热修(2026-10-12):提交后拉回焦点——onSubmit/submit 链会把系统
+    // 焦点带走(实勘:date 后连续 pwd 全丢,重点击才恢复)。同步调用在
+    // onSubmit 上下文静默失效(实勘),延迟到事件处理完成后一拍。
+    setTimeout(() => {
+      this.keepCaptureFocus()
+    }, 50)
   }
 
   /** 硬件键映射(方向/回车/删除/Esc + ASCII 可打印;Tab 与 ↑↓ 由控制器接管)。 */
@@ -548,21 +628,30 @@ export struct TermPaneView {
     // 热修(M4a 验收实证):ASCII 可打印/DEL 必须走受控字段+onChange→Controller
     // 统一入口(直写 writeTerm 绕过差分/ghost/Tab 基线,IME 路径在本机 VM
     // 已坏,inputText 无法兜底);转义序列与 \r 保持直写。
-    // 热修(M4a 验收实证):onSubmit 走 IME 通道,本机 VM IME 损坏时永不触发
-    // → Enter 死路。keyEvent 直发 onCaptureSubmit,onSubmit 以时间戳去重
-    // (400ms 内的 onSubmit 视为同一回车,防双 \r)。
+    // 输入热修(2026-10-12):IME 活性让路——IME 正常时这三类键由 inputText/
+    // onSubmit 单路径送达(onKeyEvent 兜底会双写:echo→echoecho 实勘),
+    // 恒不达(坏 IME)时兜底独活。onSubmit 双路径到达由 onCaptureSubmit
+    // 入口 400ms 幂等统一去重(防双 \r)。
     if (ev.keyCode === KC_ENTER) {
-      this.lastKeyEnterMs = Date.now()
+      if (this.imeAlive()) {
+        return false // IME 活:onSubmit 独走(入口幂等兜底防漏)
+      }
       this.onCaptureSubmit()
       return true
     }
     const s = this.mapKey(ev.keyCode, ev)
     if (s.length === 1 && s.charCodeAt(0) >= 0x20 && s.charCodeAt(0) < 0x7f) {
+      if (this.imeAlive()) {
+        return false // IME 活:inputText/onChange 独走
+      }
       this.capture = this.capture + s
       this.onCaptureChange(this.capture) // 程序赋值不保证触发 onChange;幂等兜底
       return true
     }
     if (ev.keyCode === KC_DEL) {
+      if (this.imeAlive()) {
+        return false // IME 活:inputText 删字符→onChange 差分回写 \x7f
+      }
       if (this.capture.length > 0) {
         this.capture = this.capture.substring(0, this.capture.length - 1)
         this.onCaptureChange(this.capture)
@@ -733,7 +822,7 @@ export struct TermPaneView {
 
       // 全幅透明捕获层:承接一切输入;hitTestBehavior Default 保住下方滚动
       TextInput({ text: this.capture, placeholder: '' })
-        .id('tty7TermCapture') // M4b: FocusController.requestFocus target
+        .id(this.captureId()) // M4b: requestFocus 目标(paneId 唯一化,防跨 pane 抢焦)
         .width('100%')
         .height('100%')
         .fontSize(1)
@@ -746,13 +835,11 @@ export struct TermPaneView {
         .focusOnTouch(true)
         .hitTestBehavior(HitTestMode.Default)
         .onChange((v: string) => {
+          this.lastInputTextMs = Date.now() // IME 活性打点(仅系统 inputText 到达处)
           this.onCaptureChange(v)
         })
         .onSubmit(() => {
-          if (Date.now() - this.lastKeyEnterMs < 400) {
-            return // keyEvent 已处理同一回车(防双 \r)
-          }
-          this.onCaptureSubmit()
+          this.onCaptureSubmit() // 双路径到达由 onCaptureSubmit 入口幂等去重
         })
         .onKeyEvent((ev: KeyEvent) => {
           return this.onTermKey(ev)
@@ -762,7 +849,7 @@ export struct TermPaneView {
       if (this.searching) {
         Row({ space: 6 }) {
           TextInput({ text: this.searchText, placeholder: '搜索...' })
-            .id('tty7TermSearch') // requestFocus 目标(keyEvent 主通道)
+            .id('tty7TermSearch_' + this.paneId) // requestFocus 目标(paneId 唯一化)
             .focusable(true)
             .focusOnTouch(true)
             .layoutWeight(1)
