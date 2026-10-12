@@ -73,20 +73,38 @@
 - git 命令注入面:quoteCwd/quotePath/quoteMsg 三重转义闸(引号/
   反斜杠/元字符拒绝或包裹)。
 
-## 4. 已知限制与 M9 后路线
+## 4. 已知限制与官方仓库 parity 架构差异
 
+产品内限制:
 - **PTY 多实例**:TermHost 单例(一本地 pane);多本地终端需 PTY
   多实例化(路线项)。
 - **无 XComponent native 渲染**:当前文本渲染链;native GPU 渲染留路线。
-- **scrollback 无选区/搜索**:仅回滚浏览。
 - **procs/ports 沙箱不可达**:应用沙箱无 /proc 权限(README 已述)。
-- **live-ssh 全链冒烟待指挥官**:需真 profile/sshd 环境(Device Smoke)。
 - **IME/VM 环境历史问题**:KaihongOS VM 输入法损坏历史,UI 驱动走
-  CLI send 注入。
-- **M9 后路线**:PTY 多实例 → XComponent native 渲染 → scrollback
-  选区/搜索 → live-ssh/live-git Device Smoke → Release Gate 收口。
+  CLI send 注入;输入链(keyEvent→受控字段→提交→历史)本身健常。
+- **exec/run**:CLI 侧可用 send+wait+capture 组合编排;run(PTY 执行+
+  退出码透传)受沙箱单 PTY 限制未单列。
+
+与官方 tty7(github.com/l0ng-ai/tty7)的**架构性差异**(同构近似,
+不实现——.verify/tty7/PARITY-AUDIT.md 逐项对照):
+- **machine/server 组**:官方有桌面 daemon 多机拓扑;我们为单 app+
+  本机桥(127.0.0.1:18971),status 已把 server 概念映射为 bridge+vm
+  快照。
+- **run**:官方 PTY 执行+退出码透传;我们 exec 语义由 CLI 组合编排
+  (send+wait+capture),单 PTY 沙箱限制。
+- **tab 休眠**:官方休眠 tab 释放内存;我们 app 生命周期内 tab 常驻
+  (ArkUI 组件树生命周期差异)。
+- **持久会话/保活**:官方 server 拥有会话跨 UI 重启;我们布局/槽持久
+  化(WorkbenchStore)+PTY 冷启不保活(app 沙箱无后台常驻保证)。
+- **文件树面板**:官方 side panel 有文件树/find in files;我们
+  SFTP 浏览器覆盖远程侧,本地侧沙箱文件访问受限(棒 C 候选)。
+
+**M9 后路线**:PTY 多实例 → XComponent native 渲染 → scrollback
+选区(M3c 搜索已交付)→ 文件树面板(棒 C)→ issues/PR 集成(远期)。
 
 ## 5. 命令参考
 
-CLI 工具用法与命令全集见 `tools/README.md`(token 获取/握手/10 命令/
-send+wait+capture 编排示例)。
+CLI 工具用法与命令全集见 `tools/README.md`(token 获取/握手/19 命令:
+doctor/status/events/agents/workspace.list/ws.tree/ws.new/ws.close/
+tab.list/tab.new/tab.close/tab.rename/pane.list/pane.split/pane.close/
+send[--text/--keys]/capture/wait/git 组;send+wait+capture 编排示例)。
