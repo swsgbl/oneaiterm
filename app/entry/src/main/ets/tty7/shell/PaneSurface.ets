@@ -12,6 +12,8 @@ import { AppIcons } from '../../common/AppIcons';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { TermPaneView } from '../term/TermPaneView';
+// tty7-RD-POC: Web 加载系统 ttyd(ArkWeb;ADR-0002 PoC 棒)
+import { TermWebView } from '../term/TermWebView';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { AgentEventBus } from '../agent/AgentEventBus';
 import { buildFinishedAttention } from './ParityUi';
@@ -21,6 +23,14 @@ import { PaneDropTargets, PaneRectEntry, PaneDragState } from '../model/PaneDrop
 
 const M1E_TAG: string = 'tty7.M1e'
 const M1E_DOMAIN: number = 0x0301
+
+/**
+ * tty7-RD-POC(A2 全局开关,验收判据 A4):true=本地 pane 内容区渲染
+ * TermWebView(Web 加载系统 ttyd 127.0.0.1:27681);false=回旧 TermPaneView
+ * 自绘路径(降级开关,编译期常量——指挥官验收后决定去留)。远程 SSH
+ * pane 分支不受此开关影响(RD-PoC 只验本地)。
+ */
+const RD_POC: boolean = true
 
 /** 拖拽数据类型(M1e):自定义类型 'tty7.pane-drag'(非 TEXT 家族)——
  *  规避 TextInput 捕获层对 general.plain-text 的默认 drop 消费(文本拖入
@@ -151,11 +161,20 @@ export struct PaneSurface {
           wantFocus: this.vm.focusedPane === this.paneId // 输入热修:仅焦点 pane 拉焦
         })
       } else if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
-        TermPaneView({
-          paneId: this.paneId,
-          onDone: (): void => { this.onCmdDone(this.paneId) },
-          wantFocus: this.vm.focusedPane === this.paneId
-        })
+        // tty7-RD-POC: PoC 期本地分支渲染 TermWebView(Web+ttyd,ADR-0002);
+        // PTY 仍由 TermHost 起着(会话生命周期不动,两者并存)。
+        // RD_POC=false 回旧自绘 TermPaneView 路径(验收 A4 降级开关)。
+        if (RD_POC) {
+          TermWebView({
+            paneId: this.paneId
+          })
+        } else {
+          TermPaneView({
+            paneId: this.paneId,
+            onDone: (): void => { this.onCmdDone(this.paneId) },
+            wantFocus: this.vm.focusedPane === this.paneId
+          })
+        }
       } else {
         Column() {
           Text(this.paneId)
