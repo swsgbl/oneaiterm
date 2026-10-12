@@ -11,6 +11,10 @@
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { paletteCmds, PaletteCmd } from './PaletteCommands';
+import { InputHistory } from '../term/InputHistory';
+import { TermHost } from '../term/TermHost';
+import { RemoteTermHost } from '../remote/RemoteTermHost';
+import { recentMatches } from './ParityUi';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 
@@ -42,6 +46,31 @@ export struct WorkbenchPalette {
     return out
   }
 
+  /** tty7-PB:最近命令条目(query 前缀过滤,截最近 5;同命令过滤口径)。 */
+  private visibleRecent(): string[] {
+    return recentMatches(InputHistory.recent(), this.query)
+  }
+
+  /** tty7-PB:焦点 pane 宿主写口(bound 的 TermHost/RemoteTermHost;
+   *  未绑会话 null——条目置灰不可点)。 */
+  private focusTermWrite(): ((t: string) => void) | null {
+    const f = this.vm.focusedPane
+    if (f !== '' && RemoteTermHost.bound() === f) {
+      return (t: string): void => { RemoteTermHost.write(t) }
+    }
+    if (f !== '' && TermHost.bound() === f) {
+      return (t: string): void => {
+        TermHost.write(t)
+        try {
+          TermHost.drainOnce()
+        } catch (e) {
+          // 排空失败不阻塞
+        }
+      }
+    }
+    return null
+  }
+
   build() {
     Stack() {
       // 全幅遮罩:点击空白关闭(独立兄弟层,面板点击不冒泡到遮罩)
@@ -69,6 +98,30 @@ export struct WorkbenchPalette {
 
         Scroll() {
           Column({ space: DesignTokens.SPACE_XS }) {
+            // tty7-PB:最近命令区块(最近 5 条 InputHistory;空历史不渲染)。
+            // 灰底/inkSubtle 与命令区区分;点击=发送到焦点 pane 终端
+            // (write(text+'\r'),非 palette 命令语义);未绑会话置灰不可点。
+            ForEach(this.visibleRecent(), (r: string, i: number) => {
+              Text(r)
+                .fontSize(DesignTokens.FONT_BODY)
+                .fontColor(this.focusTermWrite() !== null ? this.th().inkSubtle : this.th().iconMuted)
+                .width('100%')
+                .height(34)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .padding({ left: DesignTokens.SPACE_MD, right: DesignTokens.SPACE_MD })
+                .borderRadius(DesignTokens.RADIUS_SM)
+                .backgroundColor(this.th().hover)
+                .onClick(() => {
+                  const w = this.focusTermWrite()
+                  if (w === null) {
+                    this.vm.setStatus('无绑定会话(先新建本地/SSH 会话)')
+                    return
+                  }
+                  w(r + '\r')
+                  this.onClose()
+                })
+            }, (r: string, i: number) => 'rec#' + i.toString())
             ForEach(this.visibleCmds(), (c: PaletteCmd) => {
               Text(c.label)
                 .fontSize(DesignTokens.FONT_BODY)

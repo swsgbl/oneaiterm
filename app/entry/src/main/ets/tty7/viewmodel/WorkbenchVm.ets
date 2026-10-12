@@ -26,6 +26,7 @@ import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { getSharedStore } from '../../store/ConnStore';
 import { PaneDropTargets } from '../model/PaneDropTargets';
+import { trimBlankTail } from '../shell/ParityUi';
 
 /** Sidebar 工作区图标 glyph 池(AppIcons 现有 glyph 集内取;本地常量,不 import UI 模块)。 */
 const WS_GLYPHS: string[] = ['◈', '▣', '☸', '⌗', '∿', '▦', '◷'];
@@ -335,10 +336,13 @@ export class WorkbenchVm {
     if (model === null) {
       return ''
     }
-    const src: string[] = []
+    const all: string[] = []
     for (const ln of model.lines) {
-      src.push(model.textOf(ln))
+      all.push(model.textOf(ln))
     }
+    // tty7-PB 热修:先剪尾空行(垫底 blank 不算"最近输出";新会话提示符在
+    // 屏顶时尾 N 行全空 → capture 空串 → 桥误报 pane not bound——PBCAP 实勘)
+    const src = trimBlankTail(all)
     const n = lines > 0 ? Math.min(lines, src.length) : src.length
     let out = ''
     for (let i = src.length - n; i < src.length; i++) {

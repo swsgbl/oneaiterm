@@ -13,6 +13,8 @@ import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { TermPaneView } from '../term/TermPaneView';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
+import { AgentEventBus } from '../agent/AgentEventBus';
+import { buildFinishedAttention } from './ParityUi';
 import { unifiedDataChannel } from '@kit.ArkData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PaneDropTargets, PaneRectEntry, PaneDragState } from '../model/PaneDropTargets';
@@ -144,10 +146,11 @@ export struct PaneSurface {
           paneId: this.paneId,
           model: RemoteTermHost.term(),
           writeFn: (t: string): void => { RemoteTermHost.write(t) },
-          resizeFn: (c: number, r: number): void => { RemoteTermHost.resize(c, r) }
+          resizeFn: (c: number, r: number): void => { RemoteTermHost.resize(c, r) },
+          onDone: (): void => { this.onCmdDone(this.paneId) } // tty7-PB:完成通知
         })
       } else if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
-        TermPaneView({ paneId: this.paneId })
+        TermPaneView({ paneId: this.paneId, onDone: (): void => { this.onCmdDone(this.paneId) } })
       } else {
         Column() {
           Text(this.paneId)
@@ -209,6 +212,17 @@ export struct PaneSurface {
       r.h = Number(n.height)
       PaneDropTargets.update(r)
     })
+  }
+
+  /** tty7-PB:命令完成通知两层落点(探测 done 回调):
+   *  a. StatusBar——vm.setStatus('✓ 命令完成 · paneId')(现有通道);
+   *  b. RightPanel 开着时 emit attention 事件到 AgentEventBus
+   *     (type 'attention' kind 'finished' paneId——Agent 面板可见)。 */
+  private onCmdDone(paneId: string): void {
+    this.vm.setStatus('✓ 命令完成 · ' + paneId)
+    if (this.vm.rightPanelOpen) {
+      AgentEventBus.instance().emit(buildFinishedAttention(paneId))
+    }
   }
 
   /** 拖源可用:zoom 态禁拖(单叶无换位对象);多 pane 才有换位意义。 */

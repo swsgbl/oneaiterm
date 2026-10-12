@@ -20,6 +20,7 @@
 import { TermModel, TermLine, lineToSpans, SpanRun, TERM_DEFAULT_BG, TERM_DEFAULT_FG } from '../../components/TermModel';
 import { TermHost } from './TermHost';
 import { InputController, InputAction } from './InputController';
+import { DoneProbeState, probeSubmit, probeTick, PROBE_TICK_MS, trimBlankTail } from '../shell/ParityUi';
 import { searchHits, nextHit, shouldStick, SCROLLBACK_MAX } from './TermScrollback';
 
 const TERM_FONT_SIZE: number = 13
@@ -54,6 +55,14 @@ export struct TermPaneView {
   writeFn: ((t: string) => void) | null = null
   /** M6a:外部注入尺寸口(远程;缺省 TermHost.resize)。 */
   resizeFn: ((c: number, r: number) => void) | null = null
+  /** tty7-PB:命令完成回调(探测到提示符回归时 PaneSurface 注入:
+   *  vm.setStatus ✓ 通知 + RightPanel 开时 emit attention;缺省 no-op)。 */
+  onDone: () => void = () => {
+  }
+  /** tty7-PB:完成探测状态机(纯;onCaptureSubmit 重置,探测链消费)。 */
+  private probe: DoneProbeState = new DoneProbeState()
+  /** tty7-PB:完成探测链句柄(-1 未挂)。 */
+  private probeTimer: number = -1
   @State tick: number = 0
   /** M3c:渲染源 = lines 尾部最多 SCROLLBACK_MAX 行(winRows 窗口快照语义废弃)。 */
   @State viewRows: TermLine[] = []
@@ -119,6 +128,11 @@ export struct TermPaneView {
     if (this.searchWatch >= 0) {
       clearTimeout(this.searchWatch)
       this.searchWatch = -1
+    }
+    // tty7-PB:完成探测链销毁清(pane close/unmount 红线)
+    if (this.probeTimer >= 0) {
+      clearTimeout(this.probeTimer)
+      this.probeTimer = -1
     }
   }
 
@@ -384,6 +398,63 @@ export struct TermPaneView {
     this.refreshWindow()
   }
 
+  // ===================== tty7-PB:命令完成探测 =====================
+
+  /** 提交后启动/重置探测(期间新提交重置计时——去抖);链已在跑则仅重置
+   *  状态机(不叠链;轻——每拍只 capture 尾 3 行)。 */
+  private startDoneProbe(): void {
+    probeSubmit(this.probe, Date.now())
+    if (this.probeTimer >= 0) {
+      return
+    }
+    const tickFn = (): void => {
+      this.probeTimer = -1
+      try {
+        const lines = this.tailTexts(3)
+        const r = probeTick(this.probe, lines, Date.now())
+        if (r === 'done') {
+          try {
+            this.onDone()
+          } catch (e) {
+            // 回调异常不杀链(通知失败静默)
+          }
+          return // done:链止(下次 submit 重启)
+        }
+        if (r === 'giveup') {
+          return // 上限放弃:链止
+        }
+      } catch (e) {
+        // 探测异常不杀链
+      } finally {
+        if (this.probeTimer < 0 && this.probe.active) {
+          this.probeTimer = setTimeout(tickFn, PROBE_TICK_MS)
+        }
+      }
+    }
+    this.probeTimer = setTimeout(tickFn, PROBE_TICK_MS)
+  }
+
+  /** pane 尾部 N 行纯文本(modelOrNull 源;无模型空数组)。
+   *  tty7-PB 热修:先剪尾空行——短输出命令后提示符在中部、垫底 blank
+   *  会让 isPromptBack 恒 false → done 通知永不触发。 */
+  private tailTexts(n: number): string[] {
+    const m = this.modelOrNull()
+    if (m === null) {
+      return []
+    }
+    const all: string[] = []
+    for (const ln of m.lines) {
+      all.push(m.textOf(ln))
+    }
+    const src = trimBlankTail(all)
+    const take = Math.min(n, src.length)
+    const out: string[] = []
+    for (let i = src.length - take; i < src.length; i++) {
+      out.push(src[i])
+    }
+    return out
+  }
+
   /** 统一执行控制器动作:writeText → setField(fieldText+基线) → ghost。 */
   private applyAction(a: InputAction): void {
     if (a.writeText.length > 0) {
@@ -416,6 +487,7 @@ export struct TermPaneView {
     this.capture = ''
     this.lastCapture = ''
     this.applyAction(a)
+    this.startDoneProbe() // tty7-PB:提交后启动完成探测(重置计时)
   }
 
   /** 硬件键映射(方向/回车/删除/Esc + ASCII 可打印;Tab 与 ↑↓ 由控制器接管)。 */
