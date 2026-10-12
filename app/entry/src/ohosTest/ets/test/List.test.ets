@@ -28,6 +28,7 @@ import gitWriteTest from './GitWrite.test.ets'; // +tty7-M7b: 写命令构造/qu
 import commandBridgeTest from './CommandBridge.test.ets'; // +tty7-M8a/M8b/M9: CLI 桥纯函数(parse/format/doctor/token 恒时比较) +tty7-PA: 管理动词(ws/tab/pane/tree/status/keys)
 import termScrollbackTest from './TermScrollback.test.ets'; // +tty7-M3c: scrollback 尾截 + 终端搜索纯函数
 import parityUiTest from './ParityUi.test.ets'; // +tty7-PB: palette 最近命令区 + 命令完成通知纯函数
+import termReachTest from './TermReach.test.ets'; // +tty7-RD-1: ttyd 可达探测缓存/退避/异常不抛
 // +tty7-M1e: LayoutOps.swapPane 用例并入 LayoutTree.test.ets(任务书允许可并入,layoutTreeTest 注册即执行)
 
 export default function testsuite() {
@@ -56,5 +57,6 @@ export default function testsuite() {
   commandBridgeTest(); // +tty7-M8a +tty7-M8b +tty7-M9 +tty7-PA
   termScrollbackTest(); // +tty7-M3c
   parityUiTest(); // +tty7-PB
+  termReachTest(); // +tty7-RD-1
   // +tty7-M1e: swap 用例并入 layoutTreeTest(上面已调用,不重复注册)
 }

@@ -12,8 +12,9 @@ import { AppIcons } from '../../common/AppIcons';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { TermPaneView } from '../term/TermPaneView';
-// tty7-RD-POC: Web 加载系统 ttyd(ArkWeb;ADR-0002 PoC 棒)
+// tty7-RD-1: Web 加载系统 ttyd(ArkWeb;ADR-0002 运行时探测分流)
 import { TermWebView } from '../term/TermWebView';
+import { probeTtyd, reachState } from '../term/TermReach';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { AgentEventBus } from '../agent/AgentEventBus';
 import { buildFinishedAttention } from './ParityUi';
@@ -23,14 +24,6 @@ import { PaneDropTargets, PaneRectEntry, PaneDragState } from '../model/PaneDrop
 
 const M1E_TAG: string = 'tty7.M1e'
 const M1E_DOMAIN: number = 0x0301
-
-/**
- * tty7-RD-POC(A2 全局开关,验收判据 A4):true=本地 pane 内容区渲染
- * TermWebView(Web 加载系统 ttyd 127.0.0.1:27681);false=回旧 TermPaneView
- * 自绘路径(降级开关,编译期常量——指挥官验收后决定去留)。远程 SSH
- * pane 分支不受此开关影响(RD-PoC 只验本地)。
- */
-const RD_POC: boolean = true
 
 /** 拖拽数据类型(M1e):自定义类型 'tty7.pane-drag'(非 TEXT 家族)——
  *  规避 TextInput 捕获层对 general.plain-text 的默认 drop 消费(文本拖入
@@ -51,14 +44,66 @@ export struct PaneSurface {
   @State dragOver: boolean = false
   /** M1e:本组件 onDragStart 携带的 paneId(onDragEnd 兜底换位用)。 */
   private dragPaneId: string = ''
+  /** tty7-RD-1: 本 pane ttyd 可达三态(null=探测中;true=web;false=旧自绘)。 */
+  @State ttydOk: boolean | null = null
+  /** tty7-RD-1: 退避重探链句柄(-1 未挂;pane 销毁清)。 */
+  private reachTimer: number = -1
 
   private th(): AppTheme {
     return themeByName(this.themeName)
   }
 
+  /** tty7-RD-1: 探测入口:退避窗口内直接消费会话缓存,不发网络。 */
+  private probeReach(): void {
+    const now = Date.now()
+    if (!reachState.probe(now)) {
+      this.ttydOk = reachState.ok === true
+      return
+    }
+    probeTtyd().then((ok: boolean) => {
+      this.ttydOk = ok
+      if (!ok) {
+        this.scheduleReachRetry()
+      }
+    }).catch(() => {
+      // probeTtyd 设计上绝不抛;此处防御兜底
+      this.ttydOk = false
+      this.scheduleReachRetry()
+    })
+  }
+
+  /** tty7-RD-1: 失败退避重试链(TermReach 1s/5s/30s;pane 销毁即断)。 */
+  private scheduleReachRetry(): void {
+    if (this.reachTimer !== -1) {
+      clearTimeout(this.reachTimer)
+    }
+    const wait = reachState.nextProbeAt - Date.now()
+    this.reachTimer = setTimeout(() => {
+      this.reachTimer = -1
+      this.probeReach()
+    }, wait > 0 ? wait : 100)
+  }
+
+  /** tty7-RD-1: TermWebView 主文档加载失败兜底:invalidate 会话缓存
+   *  (可达→unknown 立即重探)并本 pane 先降级旧自绘路径。 */
+  private onTtydUnreachable(): void {
+    reachState.invalidate(Date.now())
+    this.ttydOk = false
+    this.scheduleReachRetry()
+  }
+
   /** 组件销毁清理:矩形注册表剔除本 pane(close/树重建后防幽灵矩形)。 */
+  /** tty7-RD-1: pane 出现即探测 ttyd(会话缓存命中时零网络)。 */
+  aboutToAppear(): void {
+    this.probeReach()
+  }
+
   aboutToDisappear(): void {
     PaneDropTargets.unregister(this.paneId)
+    if (this.reachTimer !== -1) {
+      clearTimeout(this.reachTimer)
+      this.reachTimer = -1
+    }
   }
 
   build() {
@@ -161,12 +206,29 @@ export struct PaneSurface {
           wantFocus: this.vm.focusedPane === this.paneId // 输入热修:仅焦点 pane 拉焦
         })
       } else if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
-        // tty7-RD-POC: PoC 期本地分支渲染 TermWebView(Web+ttyd,ADR-0002);
-        // PTY 仍由 TermHost 起着(会话生命周期不动,两者并存)。
-        // RD_POC=false 回旧自绘 TermPaneView 路径(验收 A4 降级开关)。
-        if (RD_POC) {
+        // tty7-RD-1: 运行时探测分流(替代 PoC 期 RD_POC 编译常量):
+        //  ttydOk=null 探测中(paneId 水印占位);true 渲染 TermWebView
+        //  (Web+ttyd);false 降级旧自绘 TermPaneView(onDone/wantFocus 接线
+        //  保留)。TermHost 会话生命周期不动(PTY 并行,RD-2 重映射)。
+        if (this.ttydOk === null) {
+          Column() {
+            Text(this.paneId)
+              .fontSize(20)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.th().inkSubtle)
+              .opacity(0.55)
+            Text('ttyd 探测中…')
+              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontColor(this.th().inkSubtle)
+              .opacity(0.7)
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+        } else if (this.ttydOk) {
           TermWebView({
-            paneId: this.paneId
+            paneId: this.paneId,
+            onUnreachable: (): void => { this.onTtydUnreachable() }
           })
         } else {
           TermPaneView({

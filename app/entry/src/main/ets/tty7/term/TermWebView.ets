@@ -1,13 +1,15 @@
 /**
- * tty7-RD-POC: Web 组件加载系统 ttyd(xterm.js 页面)的最小 PoC 组件。
+ * tty7-RD: Web 组件加载系统 ttyd(xterm.js 页面;ADR-0002 运行时探测分流。
+ * RD-PoC 期组件;RD-1 起 onErrorReceive 主文档失败回调 onUnreachable,
+ * 宿主(PaneSurface)据此 invalidate 探测缓存并降级到 TermPaneView。
  * 依据 docs/ADR-0002-system-terminal.md——渲染/输入/PTY 全归系统栈:
  *   - Web 组件(ArkWeb)加载 http://127.0.0.1:27681/(ttyd 自带 xterm.js);
  *   - javaScriptOnDocumentStart 注入暗色适配(body/xterm 黑底+贴边);
  *   - onControllerAttached/onPageEnd/onErrorReceive 打 hilog(tag RDPOC,
  *     域 0xFF00)留页面加载状态证据;
  *   - PoC 不做注入桥/不做 resize 转发——winsize 由 xterm 自动适配。
- * PTY 仍由 TermHost 并行起着(PaneSurface 本地分支渲染期临时替换,
- * RD_POC 常量开关,指挥官验收后决定去留)。
+ * RD-1:PaneSurface 运行时探测可达(ttydOk=true)渲染本组件;TermHost
+ * 会话生命周期不动(PTY 并行,CLI 桥 capture/wait 语义靠它,RD-2 重映射)。
  */
 import { webview } from '@kit.ArkWeb';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -45,6 +47,9 @@ export struct TermWebView {
   /** 页面加载状态(loading/loaded/error——PoC 证据 + 兜底提示渲染)。 */
   @State pageState: string = 'loading'
   @State pageErr: string = ''
+  /** RD-1: 主文档加载失败回调(PaneSurface 注入:invalidate 缓存+降级)。 */
+  onUnreachable: () => void = () => {
+  }
 
   build() {
     Stack() {
@@ -74,6 +79,7 @@ export struct TermWebView {
             if (e.request.isMainFrame()) {
               this.pageState = 'error'
               this.pageErr = info
+              this.onUnreachable() // RD-1: 页面级失败兜底降级通知宿主
             }
           } catch (err) {
             // isMainFrame 不可用:保持 loaded 判定(仅记日志)
