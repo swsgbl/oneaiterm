@@ -320,9 +320,10 @@ export struct ConnManagePanel {
       rec.password = v.pass // 留空=不改;非空覆盖(save 加密落盘)
     }
     store.upsertConn(rec)
-    const saveErr = store.save()
-    if (saveErr !== '') {
-      return saveErr
+    // save() 语义:成功返回序列化 JSON(非空),失败返回 ''(ConnStore.ets:454)
+    const saved = store.save()
+    if (saved === '') {
+      return '写入磁盘失败'
     }
     this.reload()
     this.hint = '已保存 ' + rec.name
