@@ -36,6 +36,7 @@ import { drawerTabOf } from './SftpDrawerLogic';
 import { SshWorkspaceProvider } from '../remote/RemoteWorkspaceProvider';
 import { SftpBrowser } from './SftpBrowser';
 import { GitBrowser } from './GitBrowser'; // +tty7-M7a: Git 只读页
+import { ConnManagePanel } from './ConnManagePanel'; // +tty7-LEG-1: 连接档案管理
 
 /** delta 单条正文显示上限(溢出省略)。 */
 const TEXT_CAP: number = 200;
@@ -416,6 +417,13 @@ export struct RightPanel {
           .borderRadius(DesignTokens.RADIUS_MD)
           .backgroundColor(this.vm.rightTab === 'git' ? this.th().brand : Color.Transparent)
           .onClick(() => this.switchTab('git'))
+        Text('连接') // +tty7-LEG-1: 连接档案管理页签
+          .fontSize(DesignTokens.FONT_LABEL)
+          .fontColor(this.vm.rightTab === 'conn' ? this.th().surface : this.th().inkSubtle)
+          .padding({ left: 10, right: 10, top: 3, bottom: 3 })
+          .borderRadius(DesignTokens.RADIUS_MD)
+          .backgroundColor(this.vm.rightTab === 'conn' ? this.th().brand : Color.Transparent)
+          .onClick(() => this.switchTab('conn'))
         Blank().layoutWeight(1)
       }
       .width('100%')
@@ -492,6 +500,11 @@ export struct RightPanel {
           .width('100%')
           .padding({ top: DesignTokens.SPACE_LG })
         }
+      } else if (this.vm.rightTab === 'conn') {
+        // ===== +tty7-LEG-1: 连接档案管理页(列表/新建/编辑/删除/一键连接;
+        //  服务层 ConnectionStore 零改动,密码 save() 内 enc:v1 加密)。
+        //  必须在 SFTP 兜底分支(不查 tab)之前 =====
+        ConnManagePanel({ vm: this.vm, themeName: this.themeName })
       } else if (this.vm.termTick >= 0 && SshWorkspaceProvider.active()) {
         // ===== SFTP 页·连接态:只读目录浏览(SftpBrowser;
         //  条件读 vm.termTick + active() 纯查询——断线 onDead →

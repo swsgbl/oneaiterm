@@ -83,6 +83,17 @@ export function paletteCmds(): PaletteCmd[] {
       }
     }
   }
+  // +tty7-LEG-1: 连接档案管理一键唤起(旧 ConnList 功能面收拢的入口)
+  const connPanel: PaletteCmd = {
+    key: 'panel.conn',
+    label: '连接 · 管理档案',
+    run: (vm: WorkbenchVm) => {
+      vm.setRightTab('conn')
+      if (!vm.rightPanelOpen) {
+        vm.toggleRightPanel()
+      }
+    }
+  }
   // M2b:会话挂接(M3a 起本地命令为真启动:焦点 pane 起单例 PTY shell)与工作区新建
   const sessionLocal: PaletteCmd = {
     key: 'session.new.local',
@@ -212,5 +223,6 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(cliStatus) // +tty7-M8a
   cmds.push(termSearch) // +tty7-M3c: 终端搜索浮层信号
   cmds.push(themeToggle)
+  cmds.push(connPanel) // +tty7-LEG-1: 连接档案管理面板
   return cmds
 }
