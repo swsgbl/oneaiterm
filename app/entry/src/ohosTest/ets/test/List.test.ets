@@ -32,7 +32,8 @@ import termReachTest from './TermReach.test.ets'; // +tty7-RD-1: ttyd 可达探�
 import connManageTest from './ConnManage.test.ets'; // +tty7-LEG-1: 连接档案表单校验
 import telnetSessionTest from './TelnetSession.test.ets'; // +tty7-LEG-2: telnet 会话宿主
 import agentPanelTest from './AgentPanel.test.ets'; // +tty7-LEG-2: 引擎/prompt 守卫
-import ttydSessionTest from './TtydSession.test.ets'; // +tty7-RD-2: ttyd 输出流镜像纯函数
+import ttydSessionTest from './TtydSession.test.ets';
+import tunnelCmdTest from './TunnelCmd.test.ets'; // +tty7-RD-2: ttyd 输出流镜像纯函数
 // +tty7-M1e: LayoutOps.swapPane 用例并入 LayoutTree.test.ets(任务书允许可并入,layoutTreeTest 注册即执行)
 
 export default function testsuite() {
@@ -66,6 +67,7 @@ export default function testsuite() {
   telnetSessionTest(); // +tty7-LEG-2
   agentPanelTest(); // +tty7-LEG-2
   ttydSessionTest(); // +tty7-RD-2
+  tunnelCmdTest(); // +tty7-LEG-3b
   agentPanelTest(); // +tty7-LEG-2
   // +tty7-M1e: swap 用例并入 layoutTreeTest(上面已调用,不重复注册)
 }

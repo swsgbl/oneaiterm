@@ -9,6 +9,7 @@ import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { getSharedStore, ConnRec } from '../../store/ConnStore';
 import { ensureSharedStore } from '../remote/ConnStoreBootstrap';
 import { CommandBridge } from '../bridge/CommandBridge';
+import { TunnelService } from '../../service/TunnelService';
 
 /** 面板命令项:key 唯一;run 同步轻操作。 */
 export interface PaletteCmd {
@@ -18,6 +19,32 @@ export interface PaletteCmd {
 }
 
 /** 命令注册表(每次调用返回新数组,消费方不可缓存共享引用)。 */
+/** 隧道规格解析(纯;单测靶):localPort:remoteHost:remotePort;
+ * 端口 1-65535、主机非空才合法;返回 null=非法。 */
+export class TunnelSpec {
+  localPort: number = 0
+  remoteHost: string = ' '
+  remotePort: number = 0
+}
+
+export function parseTunnelSpec(raw: string): TunnelSpec | null {
+  const parts = raw.split(':')
+  if (parts.length !== 3) {
+    return null
+  }
+  const lp = Number(parts[0])
+  const rp = Number(parts[2])
+  const host = parts[1].trim()
+  if (!(lp >= 1 && lp <= 65535) || !(rp >= 1 && rp <= 65535) || host.length === 0) {
+    return null
+  }
+  const s = new TunnelSpec()
+  s.localPort = lp
+  s.remoteHost = host
+  s.remotePort = rp
+  return s
+}
+
 export function paletteCmds(): PaletteCmd[] {
   const cmds: PaletteCmd[] = []
   const splitH: PaletteCmd = {
@@ -140,6 +167,43 @@ export function paletteCmds(): PaletteCmd[] {
       vm.sshPickerOpen = true // >1:浮层选择(不关 palette 的关闭逻辑由浮层自管)
     }
   }
+  // +tty7-LEG-3b: 隧道(-L)三命令——句柄源 SessionService(tty7 SSH 底层同源,
+  // provider.open→SessionService.connect 实证);默认规格 ut.tunnel.spec
+  // (缺省 9432:127.0.0.1:3306,M8-relay4 MySQL 场景);参数进阶走桥/CLI。
+  const tunnelStart: PaletteCmd = {
+    key: 'tunnel.start',
+    label: '隧道 · 启动(默认 9432→远程3306)',
+    run: (vm: WorkbenchVm) => {
+      const spec = parseTunnelSpec(AppStorage.get<string>('ut.tunnel.spec') ?? '9432:127.0.0.1:3306')
+      if (spec === null) {
+        vm.setStatus('隧道规格无效(local:host:remote)')
+        return
+      }
+      vm.setStatus('隧道启动中 ' + spec.localPort + '→' + spec.remoteHost + ':' + spec.remotePort)
+      TunnelService.start(spec.localPort, spec.remoteHost, spec.remotePort).then((): void => {
+        vm.setStatus(TunnelService.active() ? '隧道已启动 :' + spec.localPort : '隧道启动失败(需先连 SSH)')
+      })
+    }
+  }
+  const tunnelStop: PaletteCmd = {
+    key: 'tunnel.stop',
+    label: '隧道 · 停止',
+    run: (vm: WorkbenchVm) => {
+      TunnelService.stop()
+      vm.setStatus('隧道已停止')
+    }
+  }
+  const tunnelStatus: PaletteCmd = {
+    key: 'tunnel.status',
+    label: '隧道 · 状态',
+    run: (vm: WorkbenchVm) => {
+      if (TunnelService.active()) {
+        vm.setStatus('隧道运行中 · 已转发 ' + TunnelService.totalForwarded() + ' 连接')
+      } else {
+        vm.setStatus('隧道未运行')
+      }
+    }
+  }
   const sessionEnd: PaletteCmd = {
     key: 'session.end',
     label: '会话 · 结束',
@@ -258,5 +322,8 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(termSearch) // +tty7-M3c: 终端搜索浮层信号
   cmds.push(themeToggle)
   cmds.push(connPanel) // +tty7-LEG-1: 连接档案管理面板
+  cmds.push(tunnelStart) // +tty7-LEG-3b: 隧道三命令(启动/停止/状态)
+  cmds.push(tunnelStop)
+  cmds.push(tunnelStatus)
   return cmds
 }
