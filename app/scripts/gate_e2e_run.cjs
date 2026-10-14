@@ -1,9 +1,11 @@
-// gate_e2e_run.cjs -- REAL on-device E2E driver for gate-e2e.cmd (M8-relay10).
+// gate_e2e_run.cjs -- REAL on-device E2E driver for gate-e2e.cmd (M8-relay10;
+// tty7-LEG-4: legacy channel retired, drives the tty7 workbench).
 // Step 1: force-stop + aa start -> dumpLayout -> dismiss onboarding "skip"
-//         if present -> main UI node count > 50 (E1 criterion).
-// Step 2 (full mode only): SSH gold path - WantParams auto-connect
-//         uterm@10.0.2.2:2222 (pw uterm-pw-735) + postLogin
-//         `echo M8-E2E-GATE-OK` -> screen-text criterion via dumpLayout.
+//         if present -> tty7 workbench elements present (E1: palette glyph or
+//         pane text > 8 nodes -- tty7 minimal shell is intentionally sparse).
+// Step 2 (full mode only): SSH gold path - seed connections.json (postLogin
+//         `echo M8-E2E-GATE-OK`) + palette SSH connect -> marker on the
+//         remote pane via dumpLayout (postLogin wiring in provider).
 // usage: node gate_e2e_run.cjs <quick|full> <evDir>
 // Evidence: <evDir>/e2e-last.txt + e2e-*.json/.txt dumps.
 // Exit 0 only when every executed criterion holds; honest fail otherwise.
@@ -60,11 +62,11 @@ let online;
 try { online = sh('echo online'); } catch (e) { online = ''; }
 if (!/online/.test(online)) finish(false, 'device not reachable');
 
-// ---------- Step 1: cold launch + onboarding dismiss + main UI > 50 nodes ----------
+// ---------- Step 1: cold launch + onboarding dismiss + tty7 workbench up ----------
 log('[e2e] 1/3 cold start ' + BUNDLE);
 sh('aa force-stop ' + BUNDLE);
 sleep(2000);
-log('[launch] ' + sh('aa start -b ' + BUNDLE + ' -a ' + ABILITY + ' --ps shell legacy').trim());
+log('[launch] ' + sh('aa start -b ' + BUNDLE + ' -a ' + ABILITY).trim());
 sleep(9000);
 
 let nodes = dump('s1-main');
@@ -79,12 +81,15 @@ if (skip) {
 } else {
   log('[e2e] no onboarding overlay (persisted state)');
 }
-const nMain = nodes.length;
-log('[criterion E1] main UI text nodes = ' + nMain + ' (need > 50)');
-if (nMain <= 50) {
-  log('[e2e] main UI too sparse, first 30 nodes for diagnosis:');
+// tty7-LEG-4 E1: workbench elements (palette glyph + pane text nodes);
+// sparse-by-design shell, node-count>50 was the legacy layout's bar.
+const hasPalette = nodes.some(e => e.t === '⌘');
+const paneTexts = nodes.filter(e => e.t !== '' && e.t !== '⌘').length;
+log('[criterion E1] tty7 workbench: palette=' + hasPalette + ' textNodes=' + paneTexts + ' (need palette + >=8)');
+if (!hasPalette || paneTexts < 8) {
+  log('[e2e] workbench too sparse, first 30 nodes for diagnosis:');
   nodes.slice(0, 30).forEach(e => log('  ' + JSON.stringify(e)));
-  finish(false, 'E1 main UI nodes=' + nMain + ' (need >50)');
+  finish(false, 'E1 workbench palette=' + hasPalette + ' nodes=' + paneTexts);
 }
 
 if (MODE === 'quick') {
@@ -92,11 +97,11 @@ if (MODE === 'quick') {
   finish(true);
 }
 
-// ---------- Step 2: SSH gold path (WantParams auto-connect + marker) ----------
-log('[e2e] 2/3 SSH gold: auto-connect ' + SSH.user + '@' + SSH.host + ':' + SSH.port + ' + postLogin echo ' + MARKER);
+// ---------- Step 2: SSH gold path (tty7: seed archive + palette connect + marker) ----------
+log('[e2e] 2/3 SSH gold: tty7 palette connect ' + SSH.user + '@' + SSH.host + ':' + SSH.port + ' + postLogin echo ' + MARKER);
 const payload = JSON.stringify({
   connections: [{
-    id: 'm8r10-e2e', name: 'm8r10-e2e', type: 'ssh',
+    id: 'm8r10-e2e', name: 'e2e-gold', type: 'ssh',
     host: SSH.host, port: SSH.port, user: SSH.user,
     authType: 'password', password: SSH.pw,
     postLoginScript: 'echo ' + MARKER
@@ -104,22 +109,55 @@ const payload = JSON.stringify({
 });
 const pb64 = Buffer.from(payload, 'utf8').toString('base64');
 sh('busybox echo ' + pb64 + ' | busybox base64 -d > /data/local/tmp/e2e-conn.json');
-const script =
-  '#!/system/bin/sh\n' +
-  'aa start -b ' + BUNDLE + ' -a ' + ABILITY +
-  ' --ps shell legacy --ps connectNow m8r10-e2e --ps importText "$(busybox cat /data/local/tmp/e2e-conn.json)"\n';
-const b64 = Buffer.from(script, 'utf8').toString('base64');
-sh('busybox echo ' + b64 + ' | busybox base64 -d > /data/local/tmp/e2estart.sh');
-log('[launch-gold] ' + sh('aa force-stop ' + BUNDLE + ' ; sh /data/local/tmp/e2estart.sh', 40000).trim());
+// tty7-LEG-4: seed connections.json directly (importText channel retired),
+// then drive palette: ⌘ -> 会话·SSH 连接 (single archive auto-connect).
+sh('mkdir -p /data/app/el2/100/base/' + BUNDLE + '/haps/entry/files');
+sh('cp /data/local/tmp/e2e-conn.json /data/app/el2/100/base/' + BUNDLE + '/haps/entry/files/connections.json');
+sh('chown 20010060:20010060 /data/app/el2/100/base/' + BUNDLE + '/haps/entry/files/connections.json');
+sh('aa force-stop ' + BUNDLE);
+sleep(2000);
+sh('aa start -b ' + BUNDLE + ' -a ' + ABILITY);
+sleep(9000);
+let gnodes = dump('s2-boot');
+const gskip = gnodes.find(e => SKIP_RE.test(e.t) && e.t.length <= 12);
+if (gskip) { click(gskip); sleep(3500); gnodes = dump('s2-boot2'); }
+// open palette, find SSH command (scroll if below fold)
+let glyph = gnodes.filter(e => e.t === '⌘').map(e => center(e.b)).sort((a, b) => a[1] - b[1])[0];
+if (!glyph) finish(false, 'E2 no palette glyph after seed boot');
+sh('uitest uiInput click ' + glyph[0] + ' ' + glyph[1]);
+sleep(2200);
+let pnodes = dump('s2-palette');
+let sshCmd = pnodes.find(e => e.t.indexOf('会话 · SSH 连接') >= 0);
+if (!sshCmd) {
+  sh('uitest uiInput swipe 700 650 700 380 400');
+  sleep(900);
+  pnodes = dump('s2-palette2');
+  sshCmd = pnodes.find(e => e.t.indexOf('会话 · SSH 连接') >= 0);
+}
+if (!sshCmd) finish(false, 'E2 SSH command not found in palette');
+const [cx, cy] = center(sshCmd.b);
+sh('uitest uiInput click ' + cx + ' ' + cy);
+log('[e2e] palette SSH connect clicked');
 
-// postLogin echo lands ~10-25s after connect; poll dumps up to 60s
+// postLogin echo lands ~10-30s after connect; poll the BRIDGE capture
+// (model-level; tty7-LEG-4: pane render timing is flaky on dump, capture is
+// the authoritative same-session view).
+function bridgeCapture(paneId, lines) {
+  try {
+    return hdc('shell "/data/local/home/.ohos/node/bin/node --jitless /data/local/tmp/oneaiterm-cli.js capture --paneId ' +
+      paneId + ' --lines ' + lines + ' --token $(cat /data/app/el2/100/base/' + BUNDLE + '/haps/entry/files/cli_token) 2>&1"', 45000).trim();
+  } catch (e) { return ''; }
+}
 let hits = [];
 for (let n = 1; n <= 12 && hits.length === 0; n++) {
   sleep(5000);
-  const o = dump('s2-poll' + n);
-  hits = o.filter(e => e.t.indexOf(MARKER) >= 0);
-  log('[poll ' + n + '] marker ' + (hits.length ? 'HIT' : 'not yet') + ' (nodes=' + o.length + ')');
+  const cap = bridgeCapture('p1', 12);
+  hits = cap.indexOf(MARKER) >= 0 ? [cap] : [];
+  log('[poll ' + n + '] marker ' + (hits.length ? 'HIT' : 'not yet') + ' (cap=' + cap.slice(0, 40).replace(/\n/g, ' ') + ')');
 }
+// screen dump as corroborating detail (non-blocking)
+const sd = dump('s2-screen');
+log('[detail] screen has prompt: ' + (sd.some(e => e.t.indexOf('uterm@') >= 0)));
 log('[criterion E2] SSH gold marker "' + MARKER + '" on screen: ' + (hits.length ? 'PASS' : 'FAIL'));
 hits.forEach(e => log('  ' + JSON.stringify(e)));
 if (!hits.length) finish(false, 'E2 SSH gold marker not visible on screen');

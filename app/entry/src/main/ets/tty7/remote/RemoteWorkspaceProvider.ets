@@ -225,6 +225,18 @@ export class SshWorkspaceProvider {
         }
         onEvent('open', id.toString())
         h.startWatch()
+        // +tty7-LEG-4: post-login script(banner 落定后延时发;照抄旧
+        // TerminalPage 语义——E2E SSH 金标准的 marker 机制依赖此)
+        const postScript = conn !== null ? conn.postLoginScript : ''
+        if (postScript.length > 0) {
+          setTimeout(() => {
+            try {
+              SessionService.write(postScript + '\r')
+            } catch (e2) {
+              // 脚本发送失败不杀会话
+            }
+          }, 1200)
+        }
       })
       .catch((e: Object): void => {
         const msg = e instanceof Error ? e.message : String(e)
