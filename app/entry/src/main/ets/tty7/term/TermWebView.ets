@@ -62,6 +62,38 @@ function darkInjectJs(): string {
  * __tty7rd.write(b64):解码 → Uint8Array('0' 前缀)→ 原始 socket.send
  * (经保存的 realSend,绕开 wrap 防递归计数错位)。
  */
+/** term.write 钩子(RD-2b 输出镜像主通道;独立幂等,补装/注入两用)。 */
+function termHookJs(): string {
+  const L: string[] = [
+    '(function(){',
+    'var dec=new TextDecoder();',
+    'var tries=0;',
+    'var iv=setInterval(function(){',
+    '  tries++;',
+    '  var t=window.term;',
+    '  if(t&&typeof t.write==="function"&&!t.__tty7tw){',
+    '    t.__tty7tw=1;',
+    '    var ow=t.write.bind(t);',
+    '    t.write=function(d){',
+    '      try{',
+    '        if(window.__tty7rdProxy){',
+    '          var s=d;',
+    '          if(d&&typeof d!=="string"){',
+    '            try{s=dec.decode(new Uint8Array(d.buffer||d));}catch(e2){s=null;}',
+    '          }',
+    '          if(s){window.__tty7rdProxy.push(s);}',
+    '        }',
+    '      }catch(e){}',
+    '      return ow(d);',
+    '    };',
+    '    clearInterval(iv);',
+    '  }else if(tries>400){clearInterval(iv);}',
+    '},25);',
+    '})()'
+  ]
+  return L.join('\n')
+}
+
 function hookInjectJs(): string {
   const lines: string[] = [
     '(function(){',
@@ -158,7 +190,8 @@ function hookInjectJs(): string {
     'window.WebSocket=WrappedWS;',
     '})();'
   ]
-  return lines.join('\n')
+  // term.write 钩子拼接(RD-2b 输出镜像主通道;独立幂等可补装)
+  return lines.join('\n') + '\n' + termHookJs()
 }
 
 /** proxy 方法名清单(registerJavaScriptProxy methodList)。 */
@@ -311,13 +344,22 @@ export struct TermWebView {
             this.controller.runJavaScript(
               'JSON.stringify({installed:!!window.__tty7rdInstalled,rd:!!window.__tty7rd,' +
               'ws:!!window.__tty7ws,proxy:!!window.__tty7rdProxy,' +
-              'term:!!window.term,ready:window.__tty7ws?window.__tty7ws.readyState:-1})',
+              'term:!!window.term,termw:!!(window.term&&window.term.__tty7tw),' +
+              'ready:window.__tty7ws?window.__tty7ws.readyState:-1})',
               (err: Error, result: string): void => {
                 hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'hookstate pane=%{public}s %{public}s',
                   this.paneId, result)
               })
           } catch (err) {
             hilog.warn(RDPOC_DOMAIN, RDPOC_TAG, 'hookstate fail pane=%{public}s', this.paneId)
+          }
+          // RD-2b: onPageEnd 补装 term 钩子(documentStart 迟到时 ws 层已漏;
+          // term.write 装好后即捕获全部后续输出。termHookJs 自带 __tty7tw
+          // 幂等守卫,重复执行无害)
+          try {
+            this.controller.runJavaScript(termHookJs())
+          } catch (err) {
+            // 补装失败不阻塞(注入版轮询大概率已装)
           }
         })
         .onErrorReceive((e: OnErrorReceiveEvent) => {
