@@ -62,33 +62,32 @@ function darkInjectJs(): string {
  * __tty7rd.write(b64):解码 → Uint8Array('0' 前缀)→ 原始 socket.send
  * (经保存的 realSend,绕开 wrap 防递归计数错位)。
  */
-/** term.write 钩子(RD-2b 输出镜像主通道;独立幂等,补装/注入两用)。 */
-function termHookJs(): string {
+/**
+ * term.write 同步直装(RD-2b 终局:pageEnd 时刻 window.term 必在——诊断版
+ * 实证 installed:now/wrote:ok/PROBE 全链通;轮询版闭包在本 ArkWeb 不驻留,
+ * 弃用。幂等 __tty7tw 守卫,重复执行无害;push 走 __tty7rdProxy)。
+ */
+function syncTermHookJs(): string {
   const L: string[] = [
     '(function(){',
+    'var t=window.term;',
+    'if(!t||typeof t.write!=="function"||t.__tty7tw){return "skip";}',
+    't.__tty7tw=1;',
     'var dec=new TextDecoder();',
-    'var tries=0;',
-    'var iv=setInterval(function(){',
-    '  tries++;',
-    '  var t=window.term;',
-    '  if(t&&typeof t.write==="function"&&!t.__tty7tw){',
-    '    t.__tty7tw=1;',
-    '    var ow=t.write.bind(t);',
-    '    t.write=function(d){',
-    '      try{',
-    '        if(window.__tty7rdProxy){',
-    '          var s=d;',
-    '          if(d&&typeof d!=="string"){',
-    '            try{s=dec.decode(new Uint8Array(d.buffer||d));}catch(e2){s=null;}',
-    '          }',
-    '          if(s){window.__tty7rdProxy.push(s);}',
-    '        }',
-    '      }catch(e){}',
-    '      return ow(d);',
-    '    };',
-    '    clearInterval(iv);',
-    '  }else if(tries>400){clearInterval(iv);}',
-    '},25);',
+    'var ow=t.write.bind(t);',
+    't.write=function(d){',
+    '  try{',
+    '    if(window.__tty7rdProxy){',
+    '      var s=d;',
+    '      if(d&&typeof d!=="string"){',
+    '        try{s=dec.decode(new Uint8Array(d.buffer||d));}catch(e2){s=null;}',
+    '      }',
+    '      if(s){window.__tty7rdProxy.push(s);}',
+    '    }',
+    '  }catch(e){}',
+    '  return ow(d);',
+    '};',
+    'return "armed";',
     '})()'
   ]
   return L.join('\n')
@@ -190,8 +189,8 @@ function hookInjectJs(): string {
     'window.WebSocket=WrappedWS;',
     '})();'
   ]
-  // term.write 钩子拼接(RD-2b 输出镜像主通道;独立幂等可补装)
-  return lines.join('\n') + '\n' + termHookJs()
+  // ws 层为主;term 钩子由 pageEnd 同步直装(documentStart 时 term 未建)
+  return lines.join('\n')
 }
 
 /** proxy 方法名清单(registerJavaScriptProxy methodList)。 */
@@ -342,10 +341,14 @@ export struct TermWebView {
           // RD-2 诊断:页面钩子实况(注入是否生效/ws 是否被拦)
           try {
             this.controller.runJavaScript(
-              'JSON.stringify({installed:!!window.__tty7rdInstalled,rd:!!window.__tty7rd,' +
-              'ws:!!window.__tty7ws,proxy:!!window.__tty7rdProxy,' +
-              'term:!!window.term,termw:!!(window.term&&window.term.__tty7tw),' +
-              'ready:window.__tty7ws?window.__tty7ws.readyState:-1})',
+              '(function(){var t=window.term;if(!t){return ' + JSON.stringify('{"noterm":1}') + ';}' +
+              'var r={tw:!!t.__tty7tw,typeofw:typeof t.write};' +
+              'if(!t.__tty7tw){t.__tty7tw=1;var dec2=new TextDecoder();var ow=t.write.bind(t);' +
+              't.write=function(d){try{if(window.__tty7rdProxy){var s=(typeof d==="string")?d:' +
+              '(d&&d.buffer?dec2.decode(new Uint8Array(d)):null);' +
+              'if(s){window.__tty7rdProxy.push(s);}}}catch(e){}return ow(d);};r.installed="now";}' +
+              'try{t.write("PROBE\\r\\n");r.wrote="ok";}catch(e){r.wrote="err";}' +
+              'return JSON.stringify(r);})()',
               (err: Error, result: string): void => {
                 hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'hookstate pane=%{public}s %{public}s',
                   this.paneId, result)
@@ -353,13 +356,12 @@ export struct TermWebView {
           } catch (err) {
             hilog.warn(RDPOC_DOMAIN, RDPOC_TAG, 'hookstate fail pane=%{public}s', this.paneId)
           }
-          // RD-2b: onPageEnd 补装 term 钩子(documentStart 迟到时 ws 层已漏;
-          // term.write 装好后即捕获全部后续输出。termHookJs 自带 __tty7tw
-          // 幂等守卫,重复执行无害)
+          // RD-2b 终局: pageEnd 同步直装 term 钩子(诊断实证该时刻 term 必在
+          // 且同步装成功/PROBE 全链通;轮询版闭包不驻留已弃用)
           try {
-            this.controller.runJavaScript(termHookJs())
+            this.controller.runJavaScript(syncTermHookJs())
           } catch (err) {
-            // 补装失败不阻塞(注入版轮询大概率已装)
+            // 补装失败不阻塞
           }
         })
         .onErrorReceive((e: OnErrorReceiveEvent) => {
