@@ -147,6 +147,39 @@ export function paletteCmds(): PaletteCmd[] {
       vm.unbindTerm()
     }
   }
+  // +tty7-LEG-2: Telnet 会话(单条直连;多条提示走连接面板;无档案提示)
+  const sessionTelnet: PaletteCmd = {
+    key: 'session.new.telnet',
+    label: '会话 · Telnet 连接',
+    run: (vm: WorkbenchVm) => {
+      const store = ensureSharedStore()
+      if (store === null) {
+        vm.setStatus('连接库未就绪(先在连接面板新建档案)')
+        return
+      }
+      const tel: ConnRec[] = []
+      for (const c of store.connections) {
+        if (c.type === 'telnet') {
+          tel.push(c)
+        }
+      }
+      if (tel.length === 0) {
+        vm.setStatus('无 telnet 档案(连接面板新建,type=Telnet)')
+        return
+      }
+      if (tel.length === 1) {
+        if (!vm.bindTelnetSession(tel[0].id)) {
+          vm.setStatus('telnet 会话发起失败')
+        }
+        return
+      }
+      vm.setRightTab('conn')
+      if (!vm.rightPanelOpen) {
+        vm.toggleRightPanel()
+      }
+      vm.setStatus('多条 telnet 档案——连接面板选择')
+    }
+  }
   const wsNew: PaletteCmd = {
     key: 'ws.new',
     label: '工作区 · 新建',
@@ -218,6 +251,7 @@ export function paletteCmds(): PaletteCmd[] {
   cmds.push(gitCommit) // +tty7-M7b
   cmds.push(sessionLocal)
   cmds.push(sessionSsh) // +tty7-M6a: pane 挂 SSH 远程会话
+  cmds.push(sessionTelnet) // +tty7-LEG-2: pane 挂 Telnet 会话
   cmds.push(sessionEnd)
   cmds.push(wsNew)
   cmds.push(cliStatus) // +tty7-M8a

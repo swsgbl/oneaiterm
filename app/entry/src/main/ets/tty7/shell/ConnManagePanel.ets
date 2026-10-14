@@ -276,11 +276,14 @@ export struct ConnManagePanel {
   }
 
   private reload(): void {
-    const store = getSharedStore()
+    let store = getSharedStore()
     if (store === null) {
       ensureSharedStore() // 惰性引导(同 session.new.ssh 2026-10-11 热修)
-      this.conns = []
-      return
+      store = getSharedStore() // 引导后必须重取——否则首挂载恒空列表(load #1 实勘)
+      if (store === null) {
+        this.conns = []
+        return
+      }
     }
     this.conns = store.connections.slice()
   }
@@ -373,8 +376,9 @@ export struct ConnManagePanel {
   }
 
   private connect(rec: ConnRec): void {
-    if (rec.type !== 'ssh') {
-      this.hint = 'telnet 连接 LEG-2 接通(档案已可管理)'
+    if (rec.type === 'telnet') {
+      // tty7-LEG-2: telnet 通路已接(异步连接,状态栏反馈)
+      this.hint = this.vm.bindTelnetSession(rec.id) ? '已发起 telnet 连接 ' + rec.name : '连接发起失败'
       return
     }
     this.hint = this.vm.bindSshSession(rec.id) ? '已发起连接 ' + rec.name : '连接发起失败'
@@ -400,7 +404,7 @@ export struct ConnManagePanel {
         .fontColor(this.th().surface)
         .padding({ left: 10, right: 10, top: 3, bottom: 3 })
         .borderRadius(DesignTokens.RADIUS_MD)
-        .backgroundColor(rec.type === 'ssh' ? this.th().brand : this.th().hover)
+        .backgroundColor(this.th().brand) // ssh/telnet 均可连(tty7-LEG-2)
         .onClick(() => this.connect(rec))
       Text('编')
         .fontSize(DesignTokens.FONT_LABEL)

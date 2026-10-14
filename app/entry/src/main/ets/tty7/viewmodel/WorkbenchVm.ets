@@ -24,6 +24,7 @@ import { restoreWorkbench, saveWorkbench } from '../store/WorkbenchStore';
 import { TermModel } from '../../components/TermModel';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
+import { TelTermHost } from '../remote/TelTermHost'; // +tty7-LEG-2: telnet 会话宿主
 import { getSharedStore } from '../../store/ConnStore';
 import { PaneDropTargets } from '../model/PaneDropTargets';
 import { trimBlankTail } from '../shell/ParityUi';
@@ -152,6 +153,20 @@ export class WorkbenchVm {
     // 文案不叠加)。错误原因经 RemoteTermHost.lastError 查询,不在此展开。
     RemoteTermHost.onOpen = (): void => {
       this.statusText = 'ssh 已连接'
+    }
+    // +tty7-LEG-2: telnet 会话死亡/建立反馈(镜像 ssh 通道;文案 telnet 前缀)
+    TelTermHost.onDead = (): void => {
+      const b = TelTermHost.bound()
+      const why = this.telnetErrorBrief()
+      TelTermHost.stop()
+      if (b !== '') {
+        this.unbindSession(b)
+      }
+      this.termTick += 1
+      this.statusText = why !== '' ? 'telnet 失败:' + why : 'telnet 已断开'
+    }
+    TelTermHost.onOpen = (): void => {
+      this.statusText = 'telnet 已连接 ' + TelTermHost.endpoint()
     }
   }
 
@@ -402,6 +417,8 @@ export class WorkbenchVm {
 
   /** SSH 连接选择浮层开关(M6a;>1 条 ssh profile 时 palette 打开)。 */
   sshPickerOpen: boolean = false
+  /** Telnet 连接选择浮层开关(+tty7-LEG-2;>1 条 telnet profile 时 palette 打开)。 */
+  telnetPickerOpen: boolean = false
 
   // ===================== 远程终端会话(M6a,单会话) =====================
 
@@ -461,6 +478,64 @@ export class WorkbenchVm {
     this.termTick += 1
   }
 
+  // ===================== Telnet 会话(+tty7-LEG-2,单会话) =====================
+
+  /** 焦点 pane 挂 telnet 会话(镜像 bindSshSession 语义:幂等/互斥/异步补判;
+   *  失败经 TelTermHost.onDead 清 slot)。store 未就绪/无记录 → false。 */
+  bindTelnetSession(connKey: string): boolean {
+    const paneId = this.focusedPane
+    if (paneId === '') {
+      return false
+    }
+    if (TelTermHost.bound() === paneId) {
+      this.focusPane(paneId)
+      return true // 幂等
+    }
+    // 单会话互斥:telnet 已绑他 pane → 先解绑;ssh/local 在跑 → 让位
+    if (TelTermHost.bound() !== '') {
+      this.unbindSession(TelTermHost.bound())
+      TelTermHost.stop()
+    }
+    if (RemoteTermHost.bound() !== '') {
+      this.unbindRemote()
+    }
+    if (TermHost.bound() !== '') {
+      this.unbindTerm()
+    }
+    const store = getSharedStore()
+    if (store === null) {
+      return false
+    }
+    const rec = store.connections.find((c): boolean => c.id === connKey && c.type === 'telnet')
+    if (rec === undefined) {
+      return false
+    }
+    if (!TelTermHost.start(rec.host, rec.port, 80, 24)) {
+      return false
+    }
+    TelTermHost.bind(paneId)
+    this.bindSession(paneId, 'telnet', connKey, 'telnet ' + (rec.name !== '' ? rec.name : rec.host))
+    this.termTick += 1
+    this.statusText = 'telnet 连接中…'
+    return true
+  }
+
+  /** 结束 telnet 会话(镜像 unbindRemote)。 */
+  unbindTelnet(): void {
+    const wasBound = TelTermHost.bound()
+    TelTermHost.stop()
+    if (wasBound !== '') {
+      this.unbindSession(wasBound)
+    }
+    this.termTick += 1
+  }
+
+  /** 最近一次 telnet 错误摘要(前 60 字,无错回 '')。 */
+  telnetErrorBrief(): string {
+    const e = TelTermHost.lastError
+    return e.length > 60 ? e.substring(0, 60) : e
+  }
+
   /** 最近一次远程错误摘要(M6b:live-ssh 反馈;前 60 字,无错回 '')。
    *  纯查询 RemoteTermHost.lastError,不重连不碰句柄。 */
   remoteErrorBrief(): string {
@@ -496,7 +571,8 @@ export class WorkbenchVm {
   }
 
   /** 结束本地会话:PTY 关 + 绑定 pane 的 slot 清 + termTick 驱动水印回归。
-   *  M6a:同时结束远程会话(session.end 语义=全停,双宿主幂等)。 */
+   *  M6a:同时结束远程会话(session.end 语义=全停,双宿主幂等)。
+   *  tty7-LEG-2:telnet 宿主同停(三宿主幂等)。 */
   unbindTerm(): void {
     const wasBound = TermHost.bound()
     TermHost.stop()
@@ -504,6 +580,7 @@ export class WorkbenchVm {
       this.unbindSession(wasBound) // 内部 refreshStatus:sess 计数归零
     }
     this.unbindRemote()
+    this.unbindTelnet()
   }
 
   /** 绑定 pane 已不在当前树 → 回收 PTY/远程会话 + 清 slot(布局收缩后统一

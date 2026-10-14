@@ -11,6 +11,7 @@ import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
+import { TelTermHost } from '../remote/TelTermHost'; // +tty7-LEG-2: telnet 会话宿主
 import { TermPaneView } from '../term/TermPaneView';
 // tty7-RD-1: Web 加载系统 ttyd(ArkWeb;ADR-0002 运行时探测分流)
 import { TermWebView } from '../term/TermWebView';
@@ -204,6 +205,16 @@ export struct PaneSurface {
           resizeFn: (c: number, r: number): void => { RemoteTermHost.resize(c, r) },
           onDone: (): void => { this.onCmdDone(this.paneId) }, // tty7-PB:完成通知
           wantFocus: this.vm.focusedPane === this.paneId // 输入热修:仅焦点 pane 拉焦
+        })
+      } else if (this.vm.termTick >= 0 && TelTermHost.bound() === this.paneId && TelTermHost.term() !== null) {
+        // tty7-LEG-2: telnet 会话 pane(model 注入渲染;80x24 固定网格,
+        // resizeFn 省略——缺省 TermHost.resize 内部 model 守卫无害)
+        TermPaneView({
+          paneId: this.paneId,
+          model: TelTermHost.term(),
+          writeFn: (t: string): void => { TelTermHost.write(t) },
+          onDone: (): void => { this.onCmdDone(this.paneId) },
+          wantFocus: this.vm.focusedPane === this.paneId
         })
       } else if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
         // tty7-RD-1: 运行时探测分流(替代 PoC 期 RD_POC 编译常量):
