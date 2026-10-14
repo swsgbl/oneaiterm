@@ -15,11 +15,17 @@ import { LayoutTreeModel } from '../layout/LayoutTree';
 /** pane↔会话 绑定槽(M2a 仅占位元数据;M2b 挂真会话)。 */
 export class SessionSlot {
   paneId: string = ''
-  /** 会话种类:'local'|'ssh'|'stub'(M2a 恒 'stub')。 */
+  /** 会话种类:'local'|'ssh'|'telnet'|'stub'(M2a 恒 'stub';+tty7-LEG-2 扩 telnet)。 */
   kind: string = 'stub'
   /** 连接键名(M2b 用;秘密绝不进此结构)。 */
   connKey: string = ''
   title: string = ''
+}
+
+/** 会话种类白名单查询(+tty7-LEG-2;bindSession 本身直通,此函数供
+ *  消费方/单测校验 kind 合法性:'local'|'ssh'|'telnet'|'stub')。 */
+export function slotKindValid(kind: string): boolean {
+  return kind === 'local' || kind === 'ssh' || kind === 'telnet' || kind === 'stub'
 }
 
 /** Tab 状态:独立布局树 + 会话槽表。 */

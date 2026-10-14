@@ -119,6 +119,18 @@ struct Index {
     if (WantParams.getAgentPrompt() !== '') {
       this.aiDockOpen = true
     }
+    // +tty7-LEG-2: tty7 模式下 prompt 直驱 Agent 面板(开右栏+落 Agent 页;
+    // 文本经 AppStorage 'ut.agent.prompt' 信号,RightPanel 挂载后自链轮询消费;
+    // 引擎同 'ut.agent.engine'。legacy 模式仍走 AIDock 上面的旧通道)。
+    if (this.shellMode === 'tty7' && WantParams.getAgentPrompt() !== '') {
+      this.tty7Vm.rightPanelOpen = true
+      this.tty7Vm.rightTab = 'agent'
+      AppStorage.setOrCreate('ut.agent.prompt', WantParams.getAgentPrompt())
+      const eng = WantParams.getAgentEngine()
+      if (eng !== '') {
+        AppStorage.setOrCreate('ut.agent.engine', eng)
+      }
+    }
     // --ps termCmd '<cmd>': 自动打开本地终端并注入命令(openLocalTerminal 内写 PTY)。
     // 延迟触发:aboutToAppear 时共享 store 尚未初始化,直接调用会早退(实测)。
     if (WantParams.getTermCmd() !== '') {

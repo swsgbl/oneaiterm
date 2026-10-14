@@ -99,18 +99,24 @@ export class HmhEventBridge {
   }
 
   /**
-   * 面板发送任务:hmh 引擎一条龙(createSession→subscribe→prompt),
+   * 面板发送任务:三引擎一条龙(createSession→subscribe→prompt),
    * 事件经 map 进总线。结果:'ok'|'no_engine'(未配置,不假成功)|'reject:码'|
    * 'fail:原因'。任务文本原样透传(不加包装)。
+   * +tty7-LEG-2: 可选 engine 参数('hmh'|'local'|'acp',默认 'hmh');
+   *  acp 暂无可用 agent 配置时报 no_engine(与 hmh 同语义,不假成功)。
    */
-  static async sendTask(text: string, paneId: string = ''): Promise<string> {
+  static async sendTask(text: string, paneId: string = '', engine: string = 'hmh'): Promise<string> {
     const t = text.trim()
     if (t === '') {
       return 'empty'
     }
+    const eng = engine === 'local' || engine === 'acp' ? engine : 'hmh'
     const filesDir = AppStorage.get<string>('ut.filesDir') ?? ''
     const settings = AgentSettingsStore.read(filesDir)
-    if (settings.engines.hmh.baseUrl === '') {
+    if (eng === 'hmh' && settings.engines.hmh.baseUrl === '') {
+      return 'no_engine'
+    }
+    if (eng === 'acp' && settings.engines.acp.length === 0) {
       return 'no_engine'
     }
     HmhEventBridge.attach()
@@ -119,7 +125,7 @@ export class HmhEventBridge {
     const runId = 'r' + HmhEventBridge.runSeq.toString()
     const adapter = AgentAdapter.instance()
     const cfg = new AgentSessionConfig()
-    cfg.engine = 'hmh'
+    cfg.engine = eng as 'local' | 'hmh' | 'acp'
     cfg.title = t.substring(0, 40)
     try {
       const h = await adapter.createSession(cfg)
@@ -140,7 +146,7 @@ export class HmhEventBridge {
       if (paneId !== '') {
         const anchor = new AgentEvent()
         anchor.runId = runId
-        anchor.agentId = 'hmh'
+        anchor.agentId = eng
         anchor.paneId = paneId
         anchor.type = 'run_started'
         anchor.state = 'working'

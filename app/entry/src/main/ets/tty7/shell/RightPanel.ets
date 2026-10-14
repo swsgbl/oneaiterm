@@ -37,6 +37,7 @@ import { SshWorkspaceProvider } from '../remote/RemoteWorkspaceProvider';
 import { SftpBrowser } from './SftpBrowser';
 import { GitBrowser } from './GitBrowser'; // +tty7-M7a: Git 只读页
 import { ConnManagePanel } from './ConnManagePanel'; // +tty7-LEG-1: 连接档案管理
+import { engineLabel, engineOfKey, promptGuard } from '../agent/AgentPanelLogic'; // +tty7-LEG-2: 三引擎 pill/守卫
 
 /** delta 单条正文显示上限(溢出省略)。 */
 const TEXT_CAP: number = 200;
@@ -49,6 +50,8 @@ export struct RightPanel {
   @Prop themeName: string = 'dark'
   @State events: AgentEvent[] = []
   @State input: string = ''
+  /** +tty7-LEG-2: 引擎选择('hmh'|'local'|'acp';默认 hmh;pill 行单选)。 */
+  @State engine: string = 'hmh'
   @State agentState: string = '' // '' = 无事件(默认在线);idle|working|waiting|done|error
   // M7a:drawerTab 提升为 vm.rightTab(palette 命令可指定落页;组件不再自持)
   private subId: number = -1
@@ -68,6 +71,18 @@ export struct RightPanel {
     // 挂载回放:取总线历史(面板级+全部;pane 过滤 M5b)
     this.events = AgentEventBus.instance().recent(50)
     this.agentState = this.lastState(this.events)
+    // +tty7-LEG-2: want 直驱预填(--ps agentPrompt;AppStorage 信号消费后即清,
+    // 不自动发送——用户过目后回车,防误触)。引擎同 'ut.agent.engine'。
+    const pre = AppStorage.get<string>('ut.agent.prompt') ?? ''
+    if (pre !== '') {
+      this.input = pre.length > 120 ? pre.substring(0, 120) : pre
+      AppStorage.setOrCreate('ut.agent.prompt', '')
+    }
+    const preEng = AppStorage.get<string>('ut.agent.engine') ?? ''
+    if (preEng !== '') {
+      this.engine = engineOfKey(preEng)
+      AppStorage.setOrCreate('ut.agent.engine', '')
+    }
     this.subId = AgentEventBus.instance().subscribe((ev: AgentEvent): void => {
       // V1 规则:整体替换触发 ForEach 刷新(>200 砍头)
       this.events = this.events.concat([ev]).slice(-PANEL_MAX)
@@ -192,15 +207,15 @@ export struct RightPanel {
     return s.substring(0, TEXT_CAP) + '…'
   }
 
-  /** 发送:经 HmhEventBridge(hmh 引擎);未配置→提示不假成功;成功→只清输入。
+  /** 发送:经 HmhEventBridge(三引擎,+tty7-LEG-2);未配置→提示不假成功;成功→只清输入。
    *  M5b:传 vm.focusedPane(pane 绑定;无引擎时 sendTask 返回 no_engine
-   *  不产事件,pane 零标记——零回归)。 */
+   *  不产事件,pane 零标记——零回归)。promptGuard 守卫(空/全空格不发)。 */
   private send(): void {
-    const t = this.input.trim()
+    const t = promptGuard(this.input)
     if (t === '') {
       return
     }
-    HmhEventBridge.sendTask(t, this.vm.focusedPane).then((r: string): void => {
+    HmhEventBridge.sendTask(t, this.vm.focusedPane, engineOfKey(this.engine)).then((r: string): void => {
       if (r === 'no_engine') {
         this.vm.setStatus('AI 引擎未配置')
       } else if (r.indexOf('reject:') === 0 || r.indexOf('fail:') === 0) {
@@ -455,32 +470,55 @@ export struct RightPanel {
       .align(Alignment.Bottom)
       .padding({ left: DesignTokens.SPACE_MD, right: DesignTokens.SPACE_MD })
 
-      // ===== 底部输入行:TextInput + 发送钮 =====
-      Row({ space: DesignTokens.SPACE_SM }) {
-        TextInput({ placeholder: '向 Agent 发任务…', text: this.input })
-          .fontSize(DesignTokens.FONT_BODY)
-          .fontColor(this.th().ink)
-          .placeholderColor(this.th().inkSubtle)
-          .backgroundColor(this.th().inputBg)
-          .border({ width: 1, color: this.th().hairline })
-          .borderRadius(DesignTokens.RADIUS_MD)
-          .height(32)
-          .layoutWeight(1)
-          .onChange((v: string) => {
-            this.input = v
-          })
-          .onSubmit(() => this.send())
-        Text('发送')
-          .fontSize(DesignTokens.FONT_BODY)
-          .fontColor(this.th().surface)
-          .padding({ left: 10, right: 10, top: 7, bottom: 7 })
-          .borderRadius(DesignTokens.RADIUS_MD)
-          .backgroundColor(this.th().brand)
-          .onClick(() => this.send())
+      // ===== 底部输入行(+tty7-LEG-2: 引擎 pill 行 + TextInput + 发送钮) =====
+      Column({ space: DesignTokens.SPACE_XS }) {
+        // 引擎选择 pill 行(单选;HMH|本地|ACP;选中 brand 底)
+        Row({ space: DesignTokens.SPACE_XS }) {
+          ForEach(['hmh', 'local', 'acp'], (k: string) => {
+            Text(engineLabel(k))
+              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontColor(this.engine === k ? this.th().surface : this.th().inkSubtle)
+              .padding({ left: 8, right: 8, top: 2, bottom: 2 })
+              .borderRadius(DesignTokens.RADIUS_LG)
+              .backgroundColor(this.engine === k ? this.th().brand : this.th().inputBg)
+              .border({ width: 1, color: this.engine === k ? this.th().brand : this.th().hairline })
+              .onClick(() => {
+                this.engine = k
+              })
+          }, (k: string) => k + ':' + (this.engine === k ? 'on' : 'off'))
+          Blank()
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+
+        Row({ space: DesignTokens.SPACE_SM }) {
+          TextInput({ placeholder: '问 AI…', text: this.input })
+            .fontSize(DesignTokens.FONT_BODY)
+            .fontColor(this.th().ink)
+            .placeholderColor(this.th().inkSubtle)
+            .backgroundColor(this.th().inputBg)
+            .border({ width: 1, color: this.th().hairline })
+            .borderRadius(DesignTokens.RADIUS_MD)
+            .height(32)
+            .layoutWeight(1)
+            .onChange((v: string) => {
+              this.input = v
+            })
+            .onSubmit(() => this.send())
+          Text('发送')
+            .fontSize(DesignTokens.FONT_BODY)
+            .fontColor(this.th().surface)
+            .padding({ left: 10, right: 10, top: 7, bottom: 7 })
+            .borderRadius(DesignTokens.RADIUS_MD)
+            .backgroundColor(this.th().brand)
+            .onClick(() => this.send())
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
       }
       .width('100%')
       .padding({ left: DesignTokens.SPACE_MD, right: DesignTokens.SPACE_MD, top: DesignTokens.SPACE_SM, bottom: DesignTokens.SPACE_SM })
-      .alignItems(VerticalAlign.Center)
+      .alignItems(HorizontalAlign.Center) // Column 上下文(HorizontalAlign;hmh 遗留笔误修复)
       .border({ width: { top: 1 }, color: this.th().hairline })
       } else if (this.vm.rightTab === 'git') {
         // ===== Git 页(+tty7-M7a):连接态 GitBrowser(status/log 只读);
