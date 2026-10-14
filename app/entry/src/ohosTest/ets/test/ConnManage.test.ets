@@ -3,7 +3,8 @@
  * 靶: ConnManagePanel 导出的纯函数 connFormValid/defaultPortFor。
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { connFormValid, defaultPortFor } from '../../../main/ets/tty7/shell/ConnManagePanel';
+import { ConnRec } from '../../../main/ets/store/ConnStore';
+import { connFormValid, defaultPortFor, favoriteFirst } from '../../../main/ets/tty7/shell/ConnManagePanel';
 
 export default function connManageTest() {
   describe('tty7ConnManage', () => {
@@ -30,6 +31,32 @@ export default function connManageTest() {
       expect(defaultPortFor('ssh')).assertEqual(22)
       expect(defaultPortFor('telnet')).assertEqual(23)
       expect(defaultPortFor('')).assertEqual(22)
+    })
+
+    it('favorite_first_stable_partition', 0, () => {
+      const a = new ConnRec()
+      a.favorite = false
+      a.name = 'a'
+      const b = new ConnRec()
+      b.favorite = true
+      b.name = 'b'
+      const c = new ConnRec()
+      c.favorite = false
+      c.name = 'c'
+      const d = new ConnRec()
+      d.favorite = true
+      d.name = 'd'
+      const out = favoriteFirst([a, b, c, d])
+      expect(out.map(x => x.name).join('')).assertEqual('bdac') // 收藏前置+组内原序
+      const x2 = new ConnRec()
+      x2.favorite = false
+      x2.name = 'x'
+      const y2 = new ConnRec()
+      y2.favorite = false
+      y2.name = 'y'
+      const none = favoriteFirst([x2, y2])
+      expect(none.map(z => z.name).join('')).assertEqual('xy') // 无收藏原样
+      expect(favoriteFirst([]).length).assertEqual(0)
     })
   })
 }

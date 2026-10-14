@@ -98,6 +98,10 @@
   化(WorkbenchStore)+PTY 冷启不保活(app 沙箱无后台常驻保证)。
 - **文件树面板**:官方 side panel 有文件树/find in files;我们
   SFTP 浏览器覆盖远程侧,本地侧沙箱文件访问受限(棒 C 候选)。
+- **Zmodem(rz/sz)**:协议级依赖 app 侧 PTY 数据流检测(B00/B01 seed
+  滑窗)——web 终端(ttyd)架构下数据流归系统栈,app 无从检测;Zmodem
+  能力保留于降级路径(TermPaneView/PTY 分支),web 分支不支持(架构
+  差异,LEG-4 删除范围不含降级路径)。
 
 **M9 后路线**:PTY 多实例 → XComponent native 渲染 → scrollback
 选区(M3c 搜索已交付)→ 文件树面板(棒 C)→ issues/PR 集成(远期)。

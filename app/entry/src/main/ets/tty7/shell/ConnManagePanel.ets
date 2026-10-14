@@ -40,6 +40,27 @@ export function defaultPortFor(type: string): number {
   return type === 'telnet' ? 23 : 22
 }
 
+/** 收藏置顶排序(纯;单测靶):favorite 在前,同组保持原序(稳定)。 */
+export function favoriteFirst(list: ConnRec[]): ConnRec[] {
+  const fav: ConnRec[] = []
+  const rest: ConnRec[] = []
+  for (const it of list) {
+    if (it.favorite) {
+      fav.push(it)
+    } else {
+      rest.push(it)
+    }
+  }
+  const out: ConnRec[] = []
+  for (const f of fav) {
+    out.push(f)
+  }
+  for (const r of rest) {
+    out.push(r)
+  }
+  return out
+}
+
 /** 表单字段集(dialog 与面板间的传参载体;纯数据)。 */
 export class ConnFormValues {
   id: string = ''
@@ -285,7 +306,7 @@ export struct ConnManagePanel {
         return
       }
     }
-    this.conns = store.connections.slice()
+    this.conns = favoriteFirst(store.connections.slice())
   }
 
   /** dialog 保存回调:落 store + 刷新;返回 ''=成功(错误文案回显 dialog)。 */
@@ -384,6 +405,21 @@ export struct ConnManagePanel {
     this.hint = this.vm.bindSshSession(rec.id) ? '已发起连接 ' + rec.name : '连接发起失败'
   }
 
+  /** LEG-3a: 切换收藏(落盘+刷新置顶排序)。 */
+  private toggleFav(rec: ConnRec): void {
+    const store = getSharedStore()
+    if (store === null) {
+      return
+    }
+    const hit = store.connections.find((c: ConnRec): boolean => c.id === rec.id)
+    if (hit === undefined) {
+      return
+    }
+    hit.favorite = !hit.favorite
+    store.save()
+    this.reload()
+  }
+
   @Builder
   private recRow(rec: ConnRec) {
     Row({ space: DesignTokens.SPACE_SM }) {
@@ -399,6 +435,11 @@ export struct ConnManagePanel {
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
+      // LEG-3a: 收藏星标(置顶排序;★实/☆虚)
+      Text(rec.favorite ? '★' : '☆')
+        .fontSize(DesignTokens.FONT_BODY)
+        .fontColor(rec.favorite ? '#e3b341' : this.th().inkSubtle)
+        .onClick(() => this.toggleFav(rec))
       Text('连')
         .fontSize(DesignTokens.FONT_LABEL)
         .fontColor(this.th().surface)
@@ -476,7 +517,7 @@ export struct ConnManagePanel {
             } else {
               this.recRow(rec)
             }
-          }, (rec: ConnRec) => rec.id)
+          }, (rec: ConnRec) => rec.id + ':' + (rec.favorite ? '1' : '0')) // 收藏态入键:favorite 翻转驱动行重建(V1 键不变不刷新)
           Text('＋ 新建')
             .fontSize(DesignTokens.FONT_LABEL)
             .fontColor(this.th().surface)
