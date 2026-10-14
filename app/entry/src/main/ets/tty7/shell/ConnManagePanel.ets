@@ -126,6 +126,8 @@ struct ConnFormDialog {
             .fontColor(this.th().ink)
             .backgroundColor(this.th().panel)
             .width('100%')
+            .defaultFocus(true) // dialog 打开即聚焦名称字段——否则键盘焦点
+            // 漏给下层 web 终端(用户在表单打的字会进 ttyd 会话,实勘)
             .onChange((x: string) => {
               this.vName = x
             })
