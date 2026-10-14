@@ -36,7 +36,7 @@
 - **CLI 桥**:VM 侧 node 工具(oneaiterm-cli.js)驱动真机工作台,
   E2E 验收的主力通道。
 
-## 2. 里程碑交付清单(M0-M8,git log --oneline 核对)
+## 2. 里程碑交付清单(M0→退役终态,git log --oneline 核对)
 
 | 里程碑 | hash | 交付 |
 |---|---|---|
@@ -58,7 +58,16 @@
 | M7b | `df880de` | git 写操作(stage/unstage/commit/pushDry)+ 转义双闸 |
 | M8a | `6df563f` | CommandBridge CLI 桥首发六命令 |
 | M8b | `1c56c1e` | 桥扩 agents/events/wait/git + M8b 热修(wait/git 桥侧崩点移 CLI) |
-| M9 | (本棒) | 真 token + git 写审计 + 安全自查收口 + 本文档 |
+| M9 | `3b081da` | 真 token + git 写审计 + 安全自查收口 + 本文档 |
+| 收官 | `917d0ba`+`a9cb958` | Release Gate 九环节全绿 + Device Smoke 6/6 + 默认 GUI=tty7 |
+| parity | `0d70cd8`+`a7d7eb5` | 官方仓库对照审计 + PA 棒(CLI 19 命令) + PB 棒(palette 最近区+完成通知+trimBlankTail 热修) |
+| 输入热修 | `dcc9731` | 终端输入链五坑修复(双 \r/IME 让路/提交后焦点/显示残留/pane id 唯一化) |
+| RD(重设计) | `dd1c28d`..`bcc2650` | **ADR-0002 系统终端栈**:Web 组件加载系统 ttyd(xterm.js,渲染/输入/PTY/环境全归系统)——PoC go 门(五项)→运行时探测分流(RD-1)→CLI 桥同会话注入(RD-2,term.write 同步直装) |
+| LEG(退役) | `02a1fb0`..`faa5dfe` | **旧界面退役四棒**:连接档案管理(RightPanel 第4页签+Dialog 表单)→Telnet+AI 三引擎 pill→收藏置顶+隧道 palette 命令+Zmodem 差异注记→**Index 壳化 108 行+删旧四文件 3362 行+E2E 门禁迁 tty7** |
+
+> 终态(2026-10-15,`faa5dfe`):tty7 工作台是唯一界面;全量 Release Gate
+> 9/9 ALL PASSED(typecheck/unit 295/integration/E2E 金链/security/
+> license/SBOM/双 product build/package)——发布就绪。
 
 ## 3. 安全要点(M9 收口)
 
