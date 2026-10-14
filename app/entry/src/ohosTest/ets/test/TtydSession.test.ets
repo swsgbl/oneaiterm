@@ -11,7 +11,8 @@ export default function ttydSessionTest() {
       expect(stripAnsi('\x1b[31mred\x1b[0m')).assertEqual('red')
       expect(stripAnsi('\x1b[2J\x1b[Hclean')).assertEqual('clean')
       expect(stripAnsi('plain')).assertEqual('plain')
-      expect(stripAnsi('a\rb')).assertEqual('b') // 裸 \r 视为行内覆盖近似
+      expect(stripAnsi('a\rb')).assertEqual('a\rb') // 裸 \r 原样保留——
+      // 行内覆盖近似由 splitFeedLines 的行拆分承担,stripAnsi 只删 ANSI 序列
     })
 
     it('split_feed_lines_crlf_lf_cr', 0, () => {
