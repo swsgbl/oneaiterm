@@ -29,10 +29,10 @@ import commandBridgeTest from './CommandBridge.test.ets'; // +tty7-M8a/M8b/M9: C
 import termScrollbackTest from './TermScrollback.test.ets'; // +tty7-M3c: scrollback 尾截 + 终端搜索纯函数
 import parityUiTest from './ParityUi.test.ets'; // +tty7-PB: palette 最近命令区 + 命令完成通知纯函数
 import termReachTest from './TermReach.test.ets'; // +tty7-RD-1: ttyd 可达探测缓存/退避/
-import connManageTest from './ConnManage.test.ets';
-import telnetSessionTest from './TelnetSession.test.ets'; // +tty7-LEG-2: telnet 会话 + Agent 面板纯逻辑
-import agentPanelTest from './AgentPanel.test.ets'; // +tty7-LEG-2: 引擎/prompt 守卫 // +tty7-LEG-1: 连接档案表单校验
-import agentPanelTest from './AgentPanel.test.ets'; // +tty7-LEG-2
+import connManageTest from './ConnManage.test.ets'; // +tty7-LEG-1: 连接档案表单校验
+import telnetSessionTest from './TelnetSession.test.ets'; // +tty7-LEG-2: telnet 会话宿主
+import agentPanelTest from './AgentPanel.test.ets'; // +tty7-LEG-2: 引擎/prompt 守卫
+import ttydSessionTest from './TtydSession.test.ets'; // +tty7-RD-2: ttyd 输出流镜像纯函数
 // +tty7-M1e: LayoutOps.swapPane 用例并入 LayoutTree.test.ets(任务书允许可并入,layoutTreeTest 注册即执行)
 
 export default function testsuite() {
@@ -65,6 +65,7 @@ export default function testsuite() {
   connManageTest(); // +tty7-LEG-1
   telnetSessionTest(); // +tty7-LEG-2
   agentPanelTest(); // +tty7-LEG-2
+  ttydSessionTest(); // +tty7-RD-2
   agentPanelTest(); // +tty7-LEG-2
   // +tty7-M1e: swap 用例并入 layoutTreeTest(上面已调用,不重复注册)
 }

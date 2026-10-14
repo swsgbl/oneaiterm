@@ -24,7 +24,8 @@ import { restoreWorkbench, saveWorkbench } from '../store/WorkbenchStore';
 import { TermModel } from '../../components/TermModel';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
-import { TelTermHost } from '../remote/TelTermHost'; // +tty7-LEG-2: telnet 会话宿主
+import { TelTermHost } from '../remote/TelTermHost';
+import { TtydSession } from '../term/TtydSession';
 import { getSharedStore } from '../../store/ConnStore';
 import { PaneDropTargets } from '../model/PaneDropTargets';
 import { trimBlankTail } from '../shell/ParityUi';
@@ -340,8 +341,16 @@ export class WorkbenchVm {
 
   /** CLI capture 用:pane 尾部可视行文本拼接(任务 tty7-M8a)。
    *  纯查询:经 TermHost/RemoteTermHost.term().lines 取尾 N 行 textOf;
-   *  宿主未绑/model 为空返回空串(桥侧转 error)。 */
+   *  宿主未绑/model 为空返回空串(桥侧转 error)。
+   *  tty7-RD-2:web 分支(TtydSession live)优先——桥 capture 与用户所见
+   *  同一 ttyd 会话;无 web 会话回落 PTY 路径(A4 降级语义)。 */
   paneCapture(paneId: string, lines: number): string {
+    if (TtydSession.isLive(paneId)) {
+      const web = TtydSession.capture(paneId, lines)
+      if (web !== '') {
+        return web
+      }
+    }
     let model: TermModel | null = null
     if (TermHost.bound() === paneId) {
       model = TermHost.term()

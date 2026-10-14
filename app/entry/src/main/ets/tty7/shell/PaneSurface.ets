@@ -237,9 +237,11 @@ export struct PaneSurface {
           .width('100%')
           .justifyContent(FlexAlign.Center)
         } else if (this.ttydOk) {
+          // tty7-RD-2: web 分支接完成通知(桥注入/用户提交 → ✓ 双落点,同 TermPaneView)
           TermWebView({
             paneId: this.paneId,
-            onUnreachable: (): void => { this.onTtydUnreachable() }
+            onUnreachable: (): void => { this.onTtydUnreachable() },
+            onDone: (): void => { this.onCmdDone(this.paneId) }
           })
         } else {
           TermPaneView({

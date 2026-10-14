@@ -32,6 +32,8 @@ import { AgentEvent } from '../agent/AgentEvent';
 import { GitService, GitBranchInfo, GitFileEntry, GitCommit } from '../git/GitService';
 import { LayoutNode, SplitNode, SplitDir, PaneLeaf } from '../layout/LayoutTree';
 import { SessionSlot } from '../model/TabState';
+import { TtydSession } from '../term/TtydSession';
+import { trimBlankTail } from '../shell/ParityUi';
 
 const DOMAIN: number = 0x0700;
 const TAG: string = 'tty7.bridge';
@@ -662,8 +664,19 @@ interface HostSink {
   write: (t: string) => void
 }
 
-/** pane 路由到宿主:先本地后远程(bound 命中且 term 存在);未命中返回 null。 */
+/** pane 路由到宿主(RD-2:ttyd 会话优先——TtydSession live 时走 Web 注入
+ *  (与用户屏同一会话);其余先本地后远程,未命中 null)。 */
 function routeToHost(paneId: string): HostSink | null {
+  if (TtydSession.isLive(paneId)) {
+    const sink: HostSink = {
+      write: (t: string): void => {
+        if (!TtydSession.sendText(paneId, t)) {
+          TermHost.write(t) // 注入通道瞬断兜底(降级 TermHost 会话)
+        }
+      }
+    }
+    return sink
+  }
   if (TermHost.bound() === paneId && TermHost.term() !== null) {
     const sink: HostSink = {
       write: (t: string): void => {
