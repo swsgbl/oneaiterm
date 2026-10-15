@@ -4,14 +4,14 @@
  * 主文档失败回调 onUnreachable,宿主 invalidate 探测缓存并降级 TermPaneView。
  *
  * tty7-RD-2(方案 B,VM 实勘定案——多客户端=独立 shell,桥不能自连 WS):
- *  - javaScriptOnDocumentStart 注入两层脚本:
- *    · darkInject:暗色适配(原有);
- *    · hookInject:wrap window.WebSocket——页面 ttyd 客户端的 socket 被
- *      挂钩:onopen 后 hello(置 live);onmessage('0' 帧)→ proxy.push
- *      (UTF-8 解码后的原始流回传 ArkTS 镜像);send 拦截 INPUT 帧送
- *      __tty7rd.inbox(输入探针 → InputHistory)。
- *  - 桥/引擎写入:TtydSession.sendText → runJavaScript('__tty7rd.write(b64)')
- *    → 同一 socket.send('0'+bytes)——与用户所见完全同一会话(A1 判据)。
+ *  全部挂钩收敛到 term 层(pageEnd 同步直装, ArkTS 侧有限重试——pageEnd
+ *  可能早于前端 bundle 建 window.term;ws 层 wrap 依赖 documentStart 注入
+ *  时序竞速,间歇双喂/漏拦,RD-2b 已弃用):
+ *    · 输出镜像:wrap window.term.write → __tty7rdProxy.push;
+ *    · 输入探针:term.onData(用户键入)→ proxy.input(行完成→ InputHistory);
+ *    · 桥写入:__tty7rd.write(b64) → triggerDataEvent(页内 paste 同机制)
+ *      → ttyd onData → sendData → 同一 socket INPUT 帧(与用户所见同一会话);
+ *    · 活性:armed 时 proxy.hello(markLive;桥路由判定源)。
  *  - 完成探测(PB DoneProbeState 复用):300ms 链 capture 尾 3 行
  *    isPromptBack → '✓ 命令完成 · pane'(onDone 回调,PaneSurface 已接
  *    StatusBar+attention 双落点)。
@@ -51,21 +51,15 @@ function darkInjectJs(): string {
 }
 
 /**
- * RD-2 hook 脚本(document start,先于页面脚本执行):wrap WebSocket。
- * 页面(new WebSocket(url,["tty"]))创建的 socket 被代理:
- *  - onopen(页面注入的 handler 前触发,捕获 this):hello → __tty7rd.hello
- *    → proxy.pushLive(pane);
- *  - onmessage:'0' 前缀帧 = OUTPUT,TextDecoder 解码 → proxy.push(text);
- *    (镜像只要原始流;控制帧 '1'prefs/'2'重构通知忽略)
- *  - send:INPUT 帧('0'+bytes)→ __tty7rd.inbox(text, byBridge)。
- *    byBridge=true(桥注入)不进输入探针;用户手敲 byBridge=false。
- * __tty7rd.write(b64):解码 → Uint8Array('0' 前缀)→ 原始 socket.send
- * (经保存的 realSend,绕开 wrap 防递归计数错位)。
- */
-/**
- * term.write 同步直装(RD-2b 终局:pageEnd 时刻 window.term 必在——诊断版
- * 实证 installed:now/wrote:ok/PROBE 全链通;轮询版闭包在本 ArkWeb 不驻留,
- * 弃用。幂等 __tty7tw 守卫,重复执行无害;push 走 __tty7rdProxy)。
+ * term 层同步直装(RD-2b 终局;幂等 __tty7tw 守卫,重复执行无害):
+ *  - 输出镜像:wrap term.write → proxy.push(镜像原始流);
+ *  - 输入探针:term.onData(用户键入)→ proxy.input(bridging 旁路桥注入);
+ *  - 桥写入:__tty7rd.write(b64) → UTF-8 文本 → triggerDataEvent —— 页内
+ *    paste 同机制(bundle 实勘:coreService.triggerDataEvent(e,!0)),触发
+ *    ttyd onData → sendData → 同一 socket INPUT 帧;不依赖 ws 拦截时序;
+ *  - armed 时 proxy.hello → markLive(桥路由判定源)。
+ * 机制依据(bundle 源码实证):window.term 由前端 bundle 设置;
+ *  term.onData 转发自 coreService.onData。
  */
 function syncTermHookJs(): string {
   const L: string[] = [
@@ -87,114 +81,37 @@ function syncTermHookJs(): string {
     '  }catch(e){}',
     '  return ow(d);',
     '};',
+    'var bridging=false;',
+    'try{t.onData(function(d){',
+    '  try{if(!bridging&&window.__tty7rdProxy){window.__tty7rdProxy.input(d);}}catch(e){}',
+    '});}catch(e){}',
+    'window.__tty7rd={',
+    '  write:function(b64){',
+    '    try{',
+    '      var cs=t._core&&t._core.coreService;',
+    '      if(!cs||typeof cs.triggerDataEvent!=="function"){return false;}',
+    '      var bin=atob(b64),u8=new Uint8Array(bin.length);',
+    '      for(var i=0;i<bin.length;i++){u8[i]=bin.charCodeAt(i);}',
+    '      var txt=dec.decode(u8);',
+    '      bridging=true;',
+    '      try{cs.triggerDataEvent(txt,true);}finally{bridging=false;}',
+    '      return true;',
+    '    }catch(e){return false;}',
+    '  }',
+    '};',
+    'if(window.__tty7rdProxy){window.__tty7rdProxy.hello();}',
     'return "armed";',
     '})()'
   ]
   return L.join('\n')
 }
 
-function hookInjectJs(): string {
-  const lines: string[] = [
-    '(function(){',
-    'if(window.__tty7rdInstalled){return;}',
-    'window.__tty7rdInstalled=true;',
-    'var dec=new TextDecoder();',
-    'var st={sock:null,line:"",busy:false};',
-    'window.__tty7rd={',
-    '  write:function(b64){',
-    '    try{',
-    '      if(!st.sock||st.sock.readyState!==1){return false;}',
-    '      var bin=atob(b64),u8=new Uint8Array(bin.length+1);',
-    '      u8[0]=48;',
-    '      for(var i=0;i<bin.length;i++){u8[i+1]=bin.charCodeAt(i);}',
-    '      var mask=st.realSend?',
-    '        (function(u){st.bridgeWriting=true;try{st.realSend(u);}finally{st.bridgeWriting=false;}}):null;',
-    '      if(mask){mask(u8);}',
-    '      return true;',
-    '    }catch(e){return false;}',
-    '  }',
-    '};',
-    'var RealWS=window.WebSocket;',
-    // 原型级 message 拦截:覆盖所有实例(含注入迟到时页面已建的 ws——
-    // 构造 wrap 拦不到;实勘:feed 仅 2 帧=只拦到重连实例)
-    'var OAE=RealWS.prototype.addEventListener;',
-    'function __tty7frame(ev){',
-    '  if(!window.__tty7rdProxy){return;}',
-    '  var d=ev.data;',
-    '  if(typeof d==="string"){if(d.charCodeAt(0)===48){window.__tty7rdProxy.push(d.substring(1));}return;}',
-    '  if(d&&d instanceof ArrayBuffer){',
-    '    var u8=new Uint8Array(d);',
-    '    if(u8.length>0&&u8[0]===48){window.__tty7rdProxy.push(dec.decode(u8.subarray(1)));}',
-    '  }else if(d&&typeof Blob!=="undefined"&&d instanceof Blob){',
-    '    var fr=new FileReader();',
-    '    fr.onload=function(){',
-    '      try{',
-    '        var v=new Uint8Array(fr.result);',
-    '        if(v.length>0&&v[0]===48&&window.__tty7rdProxy){window.__tty7rdProxy.push(dec.decode(v.subarray(1)));}',
-    '      }catch(e){}',
-    '    };',
-    '    fr.readAsArrayBuffer(d);',
-    '  }else if(d&&d.byteLength!==undefined){',
-    '    var u8b=new Uint8Array(d);',
-    '    if(u8b.length>0&&u8b[0]===48){window.__tty7rdProxy.push(dec.decode(u8b.subarray(1)));}',
-    '  }',
-    '}',
-    'RealWS.prototype.addEventListener=function(type,fn,opts){',
-    '  if(type==="message"){',
-    '    var self=this;',
-    '    var wrapped=function(ev){__tty7frame(ev);return fn.call(self,ev);};',
-    '    return OAE.call(this,type,wrapped,opts);',
-    '  }',
-    '  return OAE.apply(this,arguments);',
-    '};',
-    // onmessage 属性赋值劫持(ttyd 页用属性式;addEventListener 拦不到——实勘)
-    'var OOMP=Object.getOwnPropertyDescriptor(RealWS.prototype,"onmessage");',
-    'if(OOMP&&OOMP.configurable){',
-    '  Object.defineProperty(RealWS.prototype,"onmessage",{',
-    '    configurable:true,enumerable:true,',
-    '    get:function(){return this.__tty7om;},',
-    '    set:function(fn){',
-    '      this.__tty7om=fn;',
-    '      var self=this;',
-    '      OOMP.set.call(this,function(ev){__tty7frame(ev);if(fn){return fn.call(self,ev);}});',
-    '    }',
-    '  });',
-    '}',
-    'function WrappedWS(url,protocols){',
-    '  var w=protocols!==undefined?new RealWS(url,protocols):new RealWS(url);',
-    '  var seenOpen=false;',
-    '  w.addEventListener("open",function(){',
-    '    seenOpen=true;st.sock=w;',
-    '    st.realSend=RealWS.prototype.send;',
-    '    if(window.__tty7rdProxy){window.__tty7rdProxy.hello();}',
-    '  });',
-    '  w.addEventListener("close",function(){',
-    '    if(window.__tty7rdProxy){window.__tty7rdProxy.bye();}',
-    '    if(st.sock===w){st.sock=null;st.realSend=null;}',
-    '  });',
-    '  var origSend=w.send;',
-    '  w.send=function(data){',
-    '    try{',
-    '      if(!st.bridgeWriting&&window.__tty7rdProxy){',
-    '        var u=data instanceof ArrayBuffer?new Uint8Array(data):(data&&data.buffer?new Uint8Array(data.buffer,data.byteOffset,data.byteLength):null);',
-    '        if(u&&u.length>1&&u[0]===48){window.__tty7rdProxy.input(dec.decode(u.subarray(1)));}',
-    '      }',
-    '    }catch(e){}',
-    '    return origSend.apply(this,arguments);',
-    '  };',
-    '  return w;',
-    '}',
-    'WrappedWS.prototype=RealWS.prototype;',
-    'WrappedWS.OPEN=RealWS.OPEN;',
-    'window.WebSocket=WrappedWS;',
-    '})();'
-  ]
-  // ws 层为主;term 钩子由 pageEnd 同步直装(documentStart 时 term 未建)
-  return lines.join('\n')
-}
-
 /** proxy 方法名清单(registerJavaScriptProxy methodList)。 */
 const PROXY_METHODS: string[] = ['push', 'input', 'hello', 'bye']
+
+/** term 钩子直装重试梯参数(10×600ms:覆盖前端 bundle 建 term 的窗口)。 */
+const ARM_MAX_TRIES: number = 10
+const ARM_RETRY_MS: number = 600
 
 @Component
 export struct TermWebView {
@@ -213,6 +130,11 @@ export struct TermWebView {
   /** RD-2: 完成探测状态(PB 复用;桥注入/用户提交均 probeSubmit 重启)。 */
   private probe: DoneProbeState = new DoneProbeState()
   private probeTimer: number = -1
+  /** RD-2b: term 钩子直装重试梯(pageEnd 可能早于前端 bundle 建
+   *  window.term;ArkTS 侧 setTimeout 驱动——页内轮询闭包在本 ArkWeb
+   *  不驻留。幂等 __tty7tw 守卫;armed(hello→markLive)后停)。 */
+  private armTries: number = 0
+  private armTimer: number = -1
 
   /** 注入代理对象(方法名固定;paneId 由组件字段闭包捕获;
    *  ArkTS 禁无类型对象字面量——具名 class 包装)。 */
@@ -237,7 +159,7 @@ export struct TermWebView {
 
       hello(): void {
         TtydSession.markLive(pane, true)
-        hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'rd2 ws hello pane=%{public}s', pane)
+        hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'rd2 armed pane=%{public}s', pane)
       }
 
       bye(): void {
@@ -251,6 +173,25 @@ export struct TermWebView {
       this.controller.registerJavaScriptProxy(proxyObj, '__tty7rdProxy', PROXY_METHODS)
     } catch (e) {
       hilog.warn(RDPOC_DOMAIN, RDPOC_TAG, 'registerProxy fail pane=%{public}s', pane)
+    }
+  }
+
+  /** term 钩子直装(立即一次 + 重试梯;armed 后 isLive=true 停)。 */
+  private armTermHook(): void {
+    if (TtydSession.isLive(this.paneId)) {
+      return
+    }
+    try {
+      this.controller.runJavaScript(syncTermHookJs())
+    } catch (err) {
+      // 页面未就绪等瞬时失败:由重试梯兜
+    }
+    if (this.armTries < ARM_MAX_TRIES) {
+      this.armTries++
+      this.armTimer = setTimeout(() => {
+        this.armTimer = -1
+        this.armTermHook()
+      }, ARM_RETRY_MS)
     }
   }
 
@@ -291,6 +232,10 @@ export struct TermWebView {
 
   aboutToDisappear(): void {
     TtydSession.detach(this.paneId)
+    if (this.armTimer !== -1) {
+      clearTimeout(this.armTimer)
+      this.armTimer = -1
+    }
     if (this.probeTimer !== -1) {
       clearTimeout(this.probeTimer)
       this.probeTimer = -1
@@ -300,19 +245,13 @@ export struct TermWebView {
     }
   }
 
-  /** RD-2: 首挂载后一次性 refresh——javaScriptOnDocumentStart 的注入在本
-   *  ArkWeb 上晚于页面脚本(ws 已建,wrap/patch 拦不到;实勘 feed 仅 2 帧)。
-   *  refresh 使页面重载,注入先于脚本执行,钩子全面生效。一次性守卫防环。 */
-  private refreshed: boolean = false
-
   build() {
     Stack() {
       Web({ src: TTYD_URL, controller: this.controller })
         .width('100%')
         .height('100%')
         .javaScriptOnDocumentStart([
-          { script: darkInjectJs(), scriptRules: ['*'] },
-          { script: hookInjectJs(), scriptRules: ['*'] }
+          { script: darkInjectJs(), scriptRules: ['*'] }
         ])
         .onControllerAttached(() => {
           hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'controllerAttached pane=%{public}s', this.paneId)
@@ -324,45 +263,18 @@ export struct TermWebView {
               hilog.warn(RDPOC_DOMAIN, RDPOC_TAG, 'runJavaScript fail pane=%{public}s', this.paneId)
             }
           })
-          if (!this.refreshed) {
-            this.refreshed = true
-            try {
-              this.controller.refresh()
-              hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'one-shot refresh pane=%{public}s (inject-order fix)', this.paneId)
-            } catch (e) {
-              hilog.warn(RDPOC_DOMAIN, RDPOC_TAG, 'refresh fail pane=%{public}s', this.paneId)
-            }
-          }
+          // RD-2b 终修:一次性 refresh 已移除——它制造第二个页面/term 实例
+          // (屏渲染新实例,镜像钩子挂旧实例,屏/镜分叉——「屏无 PROBE 而
+          // capture 有」实勘);pageEnd 同步直装已覆盖注入时序,refresh 冗余。
         })
         .onPageEnd((e: OnPageEndEvent) => {
           this.pageState = 'loaded'
           hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'pageEnd pane=%{public}s url=%{public}s',
             this.paneId, e.url)
-          // RD-2 诊断:页面钩子实况(注入是否生效/ws 是否被拦)
-          try {
-            this.controller.runJavaScript(
-              '(function(){var t=window.term;if(!t){return ' + JSON.stringify('{"noterm":1}') + ';}' +
-              'var r={tw:!!t.__tty7tw,typeofw:typeof t.write};' +
-              'if(!t.__tty7tw){t.__tty7tw=1;var dec2=new TextDecoder();var ow=t.write.bind(t);' +
-              't.write=function(d){try{if(window.__tty7rdProxy){var s=(typeof d==="string")?d:' +
-              '(d&&d.buffer?dec2.decode(new Uint8Array(d)):null);' +
-              'if(s){window.__tty7rdProxy.push(s);}}}catch(e){}return ow(d);};r.installed="now";}' +
-              'try{t.write("PROBE\\r\\n");r.wrote="ok";}catch(e){r.wrote="err";}' +
-              'return JSON.stringify(r);})()',
-              (err: Error, result: string): void => {
-                hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'hookstate pane=%{public}s %{public}s',
-                  this.paneId, result)
-              })
-          } catch (err) {
-            hilog.warn(RDPOC_DOMAIN, RDPOC_TAG, 'hookstate fail pane=%{public}s', this.paneId)
-          }
-          // RD-2b 终局: pageEnd 同步直装 term 钩子(诊断实证该时刻 term 必在
-          // 且同步装成功/PROBE 全链通;轮询版闭包不驻留已弃用)
-          try {
-            this.controller.runJavaScript(syncTermHookJs())
-          } catch (err) {
-            // 补装失败不阻塞
-          }
+          // RD-2b: term 钩子直装重试梯起步(pageEnd 可能早于前端 bundle 建
+          // window.term——runJavaScript result 恒 null 读不回,靠幂等重试兜)
+          this.armTries = 0
+          this.armTermHook()
         })
         .onErrorReceive((e: OnErrorReceiveEvent) => {
           // 主文档加载失败才置 error;子资源失败只留日志(页面仍可能可用)

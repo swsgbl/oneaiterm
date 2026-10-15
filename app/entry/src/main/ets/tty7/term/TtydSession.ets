@@ -4,11 +4,14 @@
  * 实勘定案(VM 27681,证据见 REPORT-RD-2):
  *  - ttyd 多客户端 = 独立 shell 会话(c2 看不到 c1 写入的命令输出);
  *  - 因此桥**不能自连 WS**(那会是另一个 shell,屏上不可见)——方案 A 弃;
- *  - 方案 B:桥复用 **TermWebView 页面自己的 WS**:
- *    · 输出镜像:注入脚本 wrap WebSocket,onmessage('0' 帧)→ proxy 回传 → feed();
- *    · 桥写入:TtydSession.sendText → sender(runJavaScript)→ 页面 __tty7rd.write
- *      → 同一 socket.send('0'+bytes) —— 屏上可见(A1 同会话判据);
- *    · 输入探针:wrap send 拦截 INPUT 帧,行完成时 type() → InputHistory。
+ *  - 方案 B(term 层,RD-2b 终局——ws wrap 依赖 documentStart 注入时序竞速
+ *    间歇失效,弃用):桥复用 **TermWebView 页面自己的 term/socket**:
+ *    · 输出镜像:注入脚本 wrap window.term.write,onData/输出 → proxy
+ *      回传 → feed();
+ *    · 桥写入:TtydSession.sendText → sender(runJavaScript)→ 页面
+ *      __tty7rd.write → triggerDataEvent → ttyd onData → 同一 socket
+ *      INPUT 帧 —— 屏上可见(A1 同会话判据);
+ *    · 输入探针:term.onData 拦截用户键入,行完成时 → InputHistory。
  *
  * ring 镜像:per-pane 行数组(cap 2000 行 × 每行 2000 字符截断)+ 残行缓冲;
  * capture = stripAnsi → trimBlankTail(ParityUi 复用)→ 尾 N 行拼接。
