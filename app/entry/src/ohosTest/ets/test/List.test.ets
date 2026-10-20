@@ -11,30 +11,30 @@ import capabilityDiscoveryTest from './CapabilityDiscovery.test.ets';
 import approvalCardTest from './ApprovalCard.test.ets';
 import agentAdapterTest from './AgentAdapter.test.ets';
 import approvalManagerTest from './ApprovalManager.test.ets';
-import backspaceKeyTest from './BackspaceKey.test.ets'; // +tty7-M1a: layoutTreeTest (ListTest runner 静态引用本文件，不注册则新套件不执行)
+import backspaceKeyTest from './BackspaceKey.test.ets'; // +M1a: layoutTreeTest (ListTest runner 静态引用本文件，不注册则新套件不执行)
 import layoutTreeTest from './LayoutTree.test.ets';
-import workbenchVmTest from './WorkbenchVm.test.ets'; // +tty7-M1c: Vm 布局集成
-import paletteCommandsTest from './PaletteCommands.test.ets'; // +tty7-M1d: 命令面板注册表
-import workbenchStoreTest from './WorkbenchStore.test.ets'; // +tty7-M2a: 存档序列化/恢复 + 多 Tab 布局独立
-import workbenchVmSessionsTest from './WorkbenchVmSessions.test.ets'; // +tty7-M2b: 会话挂接 + 多工作区 + 存档 v2
-import termHostTest from './TermHost.test.ets'; // +tty7-M3a: TermHost 桥接 + 终端会话生命周期
-import inputControllerTest from './InputController.test.ets'; // +tty7-M4a: 输入历史 + ghost + Tab 补全
-import agentEventBusTest from './AgentEventBus.test.ets'; // +tty7-M5a: AgentEvent v1 总线 + Hmh 事件桥映射
-import agentApprovalTest from './AgentApproval.test.ets'; // +tty7-M5b: pane 绑定 + 审批卡 + checkpoint 文案
-import remoteWorkspaceTest from './RemoteWorkspace.test.ets'; // +tty7-M6a: 远程 provider + SSH pane 挂接
-import sftpDrawerTest from './SftpDrawer.test.ets'; // +tty7-M6b: RightPanel 抽屉页签 + SFTP 路径/排序纯函数
-import gitServiceTest from './GitService.test.ets'; // +tty7-M7a: git 解析纯函数 + runner 行缓冲/回显剔除/标记检测
-import gitWriteTest from './GitWrite.test.ets'; // +tty7-M7b: 写命令构造/quoteMsg 双闸/XY 分类/pushDry 解析
-import commandBridgeTest from './CommandBridge.test.ets'; // +tty7-M8a/M8b/M9: CLI 桥纯函数(parse/format/doctor/token 恒时比较) +tty7-PA: 管理动词(ws/tab/pane/tree/status/keys)
-import termScrollbackTest from './TermScrollback.test.ets'; // +tty7-M3c: scrollback 尾截 + 终端搜索纯函数
-import parityUiTest from './ParityUi.test.ets'; // +tty7-PB: palette 最近命令区 + 命令完成通知纯函数
-import termReachTest from './TermReach.test.ets'; // +tty7-RD-1: ttyd 可达探测缓存/退避/
-import connManageTest from './ConnManage.test.ets'; // +tty7-LEG-1: 连接档案表单校验
-import telnetSessionTest from './TelnetSession.test.ets'; // +tty7-LEG-2: telnet 会话宿主
-import agentPanelTest from './AgentPanel.test.ets'; // +tty7-LEG-2: 引擎/prompt 守卫
+import workbenchVmTest from './WorkbenchVm.test.ets'; // +M1c: Vm 布局集成
+import paletteCommandsTest from './PaletteCommands.test.ets'; // +M1d: 命令面板注册表
+import workbenchStoreTest from './WorkbenchStore.test.ets'; // +M2a: 存档序列化/恢复 + 多 Tab 布局独立
+import workbenchVmSessionsTest from './WorkbenchVmSessions.test.ets'; // +M2b: 会话挂接 + 多工作区 + 存档 v2
+import termHostTest from './TermHost.test.ets'; // +M3a: TermHost 桥接 + 终端会话生命周期
+import inputControllerTest from './InputController.test.ets'; // +M4a: 输入历史 + ghost + Tab 补全
+import agentEventBusTest from './AgentEventBus.test.ets'; // +M5a: AgentEvent v1 总线 + Hmh 事件桥映射
+import agentApprovalTest from './AgentApproval.test.ets'; // +M5b: pane 绑定 + 审批卡 + checkpoint 文案
+import remoteWorkspaceTest from './RemoteWorkspace.test.ets'; // +M6a: 远程 provider + SSH pane 挂接
+import sftpDrawerTest from './SftpDrawer.test.ets'; // +M6b: RightPanel 抽屉页签 + SFTP 路径/排序纯函数
+import gitServiceTest from './GitService.test.ets'; // +M7a: git 解析纯函数 + runner 行缓冲/回显剔除/标记检测
+import gitWriteTest from './GitWrite.test.ets'; // +M7b: 写命令构造/quoteMsg 双闸/XY 分类/pushDry 解析
+import commandBridgeTest from './CommandBridge.test.ets'; // +M8a/M8b/M9: CLI 桥纯函数(parse/format/doctor/token 恒时比较) +PA: 管理动词(ws/tab/pane/tree/status/keys)
+import termScrollbackTest from './TermScrollback.test.ets'; // +M3c: scrollback 尾截 + 终端搜索纯函数
+import parityUiTest from './ParityUi.test.ets'; // +PB: palette 最近命令区 + 命令完成通知纯函数
+import termReachTest from './TermReach.test.ets'; // +RD-1: ttyd 可达探测缓存/退避/
+import connManageTest from './ConnManage.test.ets'; // +LEG-1: 连接档案表单校验
+import telnetSessionTest from './TelnetSession.test.ets'; // +LEG-2: telnet 会话宿主
+import agentPanelTest from './AgentPanel.test.ets'; // +LEG-2: 引擎/prompt 守卫
 import ttydSessionTest from './TtydSession.test.ets';
-import tunnelCmdTest from './TunnelCmd.test.ets'; // +tty7-RD-2: ttyd 输出流镜像纯函数
-// +tty7-M1e: LayoutOps.swapPane 用例并入 LayoutTree.test.ets(任务书允许可并入,layoutTreeTest 注册即执行)
+import tunnelCmdTest from './TunnelCmd.test.ets'; // +RD-2: ttyd 输出流镜像纯函数
+// +M1e: LayoutOps.swapPane 用例并入 LayoutTree.test.ets(任务书允许可并入,layoutTreeTest 注册即执行)
 
 export default function testsuite() {
   policyEngineTest();
@@ -45,29 +45,29 @@ export default function testsuite() {
   approvalCardTest();
   agentAdapterTest();
   approvalManagerTest();
-  backspaceKeyTest(); // +tty7-M1a
+  backspaceKeyTest(); // +M1a
   layoutTreeTest();
-  workbenchVmTest(); // +tty7-M1c
-  paletteCommandsTest(); // +tty7-M1d
-  workbenchStoreTest(); // +tty7-M2a
-  workbenchVmSessionsTest(); // +tty7-M2b
-  termHostTest(); // +tty7-M3a
-  inputControllerTest(); // +tty7-M4a
-  agentEventBusTest(); // +tty7-M5a
-  agentApprovalTest(); // +tty7-M5b
-  remoteWorkspaceTest(); // +tty7-M6a
-  sftpDrawerTest(); // +tty7-M6b
-  gitServiceTest(); // +tty7-M7a
-  gitWriteTest(); // +tty7-M7b
-  commandBridgeTest(); // +tty7-M8a +tty7-M8b +tty7-M9 +tty7-PA
-  termScrollbackTest(); // +tty7-M3c
-  parityUiTest(); // +tty7-PB
-  termReachTest(); // +tty7-RD-1
-  connManageTest(); // +tty7-LEG-1
-  telnetSessionTest(); // +tty7-LEG-2
-  agentPanelTest(); // +tty7-LEG-2
-  ttydSessionTest(); // +tty7-RD-2
-  tunnelCmdTest(); // +tty7-LEG-3b
-  agentPanelTest(); // +tty7-LEG-2
-  // +tty7-M1e: swap 用例并入 layoutTreeTest(上面已调用,不重复注册)
+  workbenchVmTest(); // +M1c
+  paletteCommandsTest(); // +M1d
+  workbenchStoreTest(); // +M2a
+  workbenchVmSessionsTest(); // +M2b
+  termHostTest(); // +M3a
+  inputControllerTest(); // +M4a
+  agentEventBusTest(); // +M5a
+  agentApprovalTest(); // +M5b
+  remoteWorkspaceTest(); // +M6a
+  sftpDrawerTest(); // +M6b
+  gitServiceTest(); // +M7a
+  gitWriteTest(); // +M7b
+  commandBridgeTest(); // +M8a +M8b +M9 +PA
+  termScrollbackTest(); // +M3c
+  parityUiTest(); // +PB
+  termReachTest(); // +RD-1
+  connManageTest(); // +LEG-1
+  telnetSessionTest(); // +LEG-2
+  agentPanelTest(); // +LEG-2
+  ttydSessionTest(); // +RD-2
+  tunnelCmdTest(); // +LEG-3b
+  agentPanelTest(); // +LEG-2
+  // +M1e: swap 用例并入 layoutTreeTest(上面已调用,不重复注册)
 }

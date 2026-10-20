@@ -1,5 +1,5 @@
 /**
- * tty7 M3c:scrollback 渲染 + 终端搜索纯函数单测(ArkTS/hypium)。
+ * M3c:scrollback 渲染 + 终端搜索纯函数单测(ArkTS/hypium)。
  *
  * 覆盖:
  *   1. tailLines:尾部截取(不足/超出/max<=0 守卫)
@@ -9,12 +9,12 @@
  *   5. 注册表:term.search 命令存在 + AppStorage 信号单调 +1
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { tailLines, searchHits, nextHit, shouldStick, SCROLLBACK_MAX } from '../../../main/ets/tty7/term/TermScrollback';
-import { paletteCmds, PaletteCmd } from '../../../main/ets/tty7/shell/PaletteCommands';
-import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
+import { tailLines, searchHits, nextHit, shouldStick, SCROLLBACK_MAX } from '../../../main/ets/workbench/term/TermScrollback';
+import { paletteCmds, PaletteCmd } from '../../../main/ets/workbench/shell/PaletteCommands';
+import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
 
 export default function termScrollbackTest() {
-  describe('tty7TermScrollback', () => {
+  describe('TermScrollback', () => {
     // ===== 1. tailLines 尾部截取 =====
     it('tail_lines_takes_last_max', 0, () => {
       const texts: string[] = []

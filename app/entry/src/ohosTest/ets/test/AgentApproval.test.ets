@@ -1,5 +1,5 @@
 /**
- * tty7 单测:审批卡 + pane 绑定逻辑(任务 tty7-M5b)。
+ * 单测:审批卡 + pane 绑定逻辑(任务 M5b)。
  * 覆盖:
  *   1. map 恒 paneId=''(M5a 占位);bridge.dispatch 统一覆写 paneId 后入 bus
  *   2. activeOnPane:run_started(p1)+未 final → true;final 后 → false
@@ -9,16 +9,16 @@
  *   5. checkpointLabel 会话恢复文案
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { AgentEventBus } from '../../../main/ets/tty7/agent/AgentEventBus';
-import { AgentEvent } from '../../../main/ets/tty7/agent/AgentEvent';
-import { HmhEventBridge } from '../../../main/ets/tty7/agent/HmhEventBridge';
-import { approvalToneOf, approvalSettled, checkpointLabel } from '../../../main/ets/tty7/agent/ApprovalCardLogic';
+import { AgentEventBus } from '../../../main/ets/workbench/agent/AgentEventBus';
+import { AgentEvent } from '../../../main/ets/workbench/agent/AgentEvent';
+import { HmhEventBridge } from '../../../main/ets/workbench/agent/HmhEventBridge';
+import { approvalToneOf, approvalSettled, checkpointLabel } from '../../../main/ets/workbench/agent/ApprovalCardLogic';
 import {
   AgentEvent as AE, ApprovalView
 } from '../../../main/ets/agent/AgentProvider';
 
 export default function agentApprovalTest() {
-  describe('tty7AgentApproval', () => {
+  describe('AgentApproval', () => {
     it('map_keeps_pane_placeholder_and_dispatch_overrides', 0, () => {
       // map 恒 paneId=''(M5a 占位);pane 归属由 dispatch 统一覆写
       const ss = new AE()

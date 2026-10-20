@@ -1,5 +1,5 @@
 /**
- * tty7 命令面板注册表单元测试（任务 tty7-M1d，ArkTS/hypium）。
+ * 命令面板注册表单元测试（任务 M1d，ArkTS/hypium）。
  *
  * PaletteCommands 为纯函数注册表，WorkbenchVm 为 @Observed 纯状态容器，
  * 均可无 UI 直接验证（沿用 WorkbenchVm.test 的真实 import 范式）。
@@ -13,9 +13,9 @@
  *   6. theme.toggle 切换 AppStorage（测试后切回 dark）
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { paletteCmds, PaletteCmd } from '../../../main/ets/tty7/shell/PaletteCommands';
-import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
-import { SplitNode } from '../../../main/ets/tty7/layout/LayoutTree';
+import { paletteCmds, PaletteCmd } from '../../../main/ets/workbench/shell/PaletteCommands';
+import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
+import { SplitNode } from '../../../main/ets/workbench/layout/LayoutTree';
 
 /** 按 key 取命令（找不到返回 null，由调用方断言）。 */
 function cmdByKey(key: string): PaletteCmd | null {
@@ -29,7 +29,7 @@ function cmdByKey(key: string): PaletteCmd | null {
 }
 
 export default function paletteCommandsTest() {
-  describe('tty7PaletteCommands', () => {
+  describe('workbenchPaletteCommands', () => {
     // ===== 1. 注册表完整性 =====
     it('registry_nonempty_with_unique_keys', 0, () => {
       const cmds = paletteCmds()
@@ -102,7 +102,7 @@ export default function paletteCommandsTest() {
       expect(vm.rightPanelOpen).assertFalse()
     })
 
-    // ===== 5b. panel.git (+tty7-M7a): 开抽屉 + 落 Git 页 =====
+    // ===== 5b. panel.git (+M7a): 开抽屉 + 落 Git 页 =====
     it('git_panel_cmd_opens_drawer_on_git_tab', 0, () => {
       const vm = new WorkbenchVm()
       expect(vm.rightTab).assertEqual('agent')

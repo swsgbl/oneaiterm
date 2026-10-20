@@ -1,12 +1,12 @@
 /**
- * tty7-RD-2 TtydSession 纯函数单测(ArkTS/hypium)。
+ * RD-2 TtydSession 纯函数单测(ArkTS/hypium)。
  * 靶: stripAnsi / splitFeedLines(ttyd 输出流的镜像前处理)。
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { stripAnsi, splitFeedLines } from '../../../main/ets/tty7/term/TtydSession';
+import { stripAnsi, splitFeedLines } from '../../../main/ets/workbench/term/TtydSession';
 
 export default function ttydSessionTest() {
-  describe('tty7TtydSession', () => {
+  describe('TtydSession', () => {
     it('strip_ansi_removes_escape_sequences', 0, () => {
       expect(stripAnsi('\x1b[31mred\x1b[0m')).assertEqual('red')
       expect(stripAnsi('\x1b[2J\x1b[Hclean')).assertEqual('clean')

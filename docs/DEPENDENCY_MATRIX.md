@@ -1,4 +1,4 @@
-# DEPENDENCY_MATRIX — 模块依赖矩阵（tty7-M0）
+# DEPENDENCY_MATRIX — 模块依赖矩阵（M0）
 
 读法：行依赖列（→）。`●` 直接 import；`○` 经 AppStorage/静态单例间接耦合；空=无。
 路径缩写：TM=components/TermModel，TP=pages/TerminalPage，SS=service/SessionService，LS=libssh HAR，LT=service/LocalTerminalService，TEL=service/TelnetService，ZM=service/ZmodemService，IDX=pages/Index，AD=agent/AgentAdapter，AP=agent/AgentProvider，LA/HM/AC=engine 三引擎，PE/AM/AW=security 三件，HC=service/HarnessClient，TI=service/ToolsInstaller，CS=store/ConnStore，WP=common/WantParams。
@@ -19,9 +19,9 @@
 
 native 依赖：LT → liblocalpty.so（ptyOpen/ptyWrite/ptyPoll/ptyResize/toolsChmod*，`cpp/types/localpty/Index.d.ts`）；SS/SftpPanel → libssh HAR（NAPI so）；RdpTab → librdpproxy.so（FreeRDP）。
 
-## 关键耦合事实（对 tty7 施工的约束）
+## 关键耦合事实（对 施工的约束）
 
-1. **单会话假设贯穿**：SS 全静态（`SessionService.ets:58-74`），TP 每次挂载 attach 单 view；SFTP 靠 sshHandle() 复用同会话。tty7 多 pane 并发 = 必须先做会话多实例化（M2 核心），且不能破坏 screenText/hasSession 契约。
+1. **单会话假设贯穿**：SS 全静态（`SessionService.ets:58-74`），TP 每次挂载 attach 单 view；SFTP 靠 sshHandle() 复用同会话。工作台多 pane 并发 = 必须先做会话多实例化（M2 核心），且不能破坏 screenText/hasSession 契约。
 2. **首连 tsfn 单例**：native 事件回调进程级唯一（SS 头部注释），多会话需 native 侧同步改造，是 M3 的 hidden dependency。
 3. **AppStorage key 即总线**：ut.term.status/reason、ut.openSftp、ut.closeTab、ut.theme、ut.filesDir、ut.session.id —— 新 Shell 不得换 key 名，只能增。
 4. **渲染热路径单线程**：TM.feed 在 tsfn 回调（主线程）执行，TP 的 ForEach span 粒度重绘靠 tick 计数。XComponent+NativeWindow 方案（01 文档）落地时 TM 的 model 语义保留、渲染面替换。

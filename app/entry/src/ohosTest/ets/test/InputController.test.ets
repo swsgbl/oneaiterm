@@ -1,16 +1,16 @@
 /**
- * tty7 M4a 单测:InputHistory(入史/去重/环形/前缀匹配) + InputController
+ * M4a 单测:InputHistory(入史/去重/环形/前缀匹配) + InputController
  * (差分直写/Tab 补全/历史回溯/ghost 优先级)。
  *
  * InputHistory persist/restore 单测环境无 context 静默降级,不 assert 磁盘
  * (任务书约定);用例间 InputHistory.clear() 复位全局静态,消除顺序耦合。
  */
 import { describe, it, expect, beforeEach } from '@ohos/hypium';
-import { InputHistory } from '../../../main/ets/tty7/term/InputHistory';
-import { InputController } from '../../../main/ets/tty7/term/InputController';
+import { InputHistory } from '../../../main/ets/workbench/term/InputHistory';
+import { InputController } from '../../../main/ets/workbench/term/InputController';
 
 export default function inputControllerTest() {
-  describe('tty7InputController', () => {
+  describe('InputController', () => {
     beforeEach(() => {
       InputHistory.clear() // 全局静态复位,用例隔离
     })

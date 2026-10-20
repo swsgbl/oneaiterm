@@ -1,4 +1,4 @@
-# RISK_REGISTER — 风险登记（tty7-M0，承接 02 文档风险清单并按仓库现实增补）
+# RISK_REGISTER — 风险登记（M0，承接 02 文档风险清单并按仓库现实增补）
 
 状态：open / mitigated（有已知缓解）/ accepted。每条给仓库现实佐证。
 
@@ -20,7 +20,7 @@
 | R7 | 首连 tsfn 回调进程级单例限制多会话 | open | SessionService 头部注释明示「FIRST sessionOpen wins for the whole process」；M3 native 侧需句柄表化，否则多 SSH pane 事件串线 |
 | R8 | AppStorage key 是隐式总线 | open | ut.term.status/reason、ut.openSftp、ut.closeTab、ut.filesDir 等散布多页；换名即断；新壳只能增 key，且需在基线中登记（本文件即登记处） |
 | R9 | 共享 store 解密态被磁盘密文覆盖 | open（红线） | TerminalPage aboutToAppear 注释：getSharedStore() 已解密，重新 load() 会用 enc:v1 密文覆盖内存明文。任何新消费者必须走 getSharedStore |
-| R10 | Index.ets 1214 行巨石外壳 | open | tab 分发、面板、命令面板、引导全在一个文件；M1 重构为 tty7 Shell 时是最大接触面，需小步拆出、每步可构建 |
+| R10 | Index.ets 1214 行巨石外壳 | open | tab 分发、面板、命令面板、引导全在一个文件；M1 重构为 Shell 时是最大接触面，需小步拆出、每步可构建 |
 | R11 | ConnList.ets 1352 行 | open | 同上，承担 store 初始化责任（setIdentities 调用点），拆动时不能丢初始化时序 |
 | R12 | 渲染热路径在主线程 | open | TM.feed 在 tsfn 回调执行、ForEach span 重绘靠 tick；XComponent 方案迁移前，大流量场景（20000 行洪水）靠窗口快照撑着——M3 性能验收以此为基线 |
 | R13 | display API 在 VM 量出虚假尺寸 | mitigated | measureDims 只信宽度、onAreaChange 700ms 开窗防抖（TerminalPage 实勘注释）；新 Shell 尺寸计算沿用此纪律 |

@@ -1,12 +1,12 @@
 /**
- * tty7-LEG-2 Agent 面板纯逻辑单测(ArkTS/hypium)。
+ * LEG-2 Agent 面板纯逻辑单测(ArkTS/hypium)。
  * 靶: AgentPanelLogic 导出的 engineOfKey/engineLabel/promptGuard/wantPromptValid。
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { engineOfKey, engineLabel, promptGuard, wantPromptValid } from '../../../main/ets/tty7/agent/AgentPanelLogic';
+import { engineOfKey, engineLabel, promptGuard, wantPromptValid } from '../../../main/ets/workbench/agent/AgentPanelLogic';
 
 export default function agentPanelTest() {
-  describe('tty7AgentPanel', () => {
+  describe('AgentPanel', () => {
     it('engine_key_whitelist_and_default', 0, () => {
       expect(engineOfKey('local')).assertEqual('local')
       expect(engineOfKey('acp')).assertEqual('acp')

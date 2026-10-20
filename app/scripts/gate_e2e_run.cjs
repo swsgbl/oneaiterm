@@ -1,8 +1,8 @@
 // gate_e2e_run.cjs -- REAL on-device E2E driver for gate-e2e.cmd (M8-relay10;
-// tty7-LEG-4: legacy channel retired, drives the tty7 workbench).
+// LEG-4: legacy channel retired, drives the workbench).
 // Step 1: force-stop + aa start -> dumpLayout -> dismiss onboarding "skip"
-//         if present -> tty7 workbench elements present (E1: palette glyph or
-//         pane text > 8 nodes -- tty7 minimal shell is intentionally sparse).
+//         if present -> workbench elements present (E1: palette glyph or
+//         pane text > 8 nodes -- minimal shell is intentionally sparse).
 // Step 2 (full mode only): SSH gold path - seed connections.json (postLogin
 //         `echo M8-E2E-GATE-OK`) + palette SSH connect -> marker on the
 //         remote pane via dumpLayout (postLogin wiring in provider).
@@ -62,7 +62,7 @@ let online;
 try { online = sh('echo online'); } catch (e) { online = ''; }
 if (!/online/.test(online)) finish(false, 'device not reachable');
 
-// ---------- Step 1: cold launch + onboarding dismiss + tty7 workbench up ----------
+// ---------- Step 1: cold launch + onboarding dismiss + workbench up ----------
 log('[e2e] 1/3 cold start ' + BUNDLE);
 sh('aa force-stop ' + BUNDLE);
 sleep(2000);
@@ -81,11 +81,11 @@ if (skip) {
 } else {
   log('[e2e] no onboarding overlay (persisted state)');
 }
-// tty7-LEG-4 E1: workbench elements (palette glyph + pane text nodes);
+// LEG-4 E1: workbench elements (palette glyph + pane text nodes);
 // sparse-by-design shell, node-count>50 was the legacy layout's bar.
 const hasPalette = nodes.some(e => e.t === '⌘');
 const paneTexts = nodes.filter(e => e.t !== '' && e.t !== '⌘').length;
-log('[criterion E1] tty7 workbench: palette=' + hasPalette + ' textNodes=' + paneTexts + ' (need palette + >=8)');
+log('[criterion E1] workbench: palette=' + hasPalette + ' textNodes=' + paneTexts + ' (need palette + >=8)');
 if (!hasPalette || paneTexts < 8) {
   log('[e2e] workbench too sparse, first 30 nodes for diagnosis:');
   nodes.slice(0, 30).forEach(e => log('  ' + JSON.stringify(e)));
@@ -97,8 +97,8 @@ if (MODE === 'quick') {
   finish(true);
 }
 
-// ---------- Step 2: SSH gold path (tty7: seed archive + palette connect + marker) ----------
-log('[e2e] 2/3 SSH gold: tty7 palette connect ' + SSH.user + '@' + SSH.host + ':' + SSH.port + ' + postLogin echo ' + MARKER);
+// ---------- Step 2: SSH gold path (workbench: seed archive + palette connect + marker) ----------
+log('[e2e] 2/3 SSH gold: palette connect ' + SSH.user + '@' + SSH.host + ':' + SSH.port + ' + postLogin echo ' + MARKER);
 const payload = JSON.stringify({
   connections: [{
     id: 'm8r10-e2e', name: 'e2e-gold', type: 'ssh',
@@ -109,7 +109,7 @@ const payload = JSON.stringify({
 });
 const pb64 = Buffer.from(payload, 'utf8').toString('base64');
 sh('busybox echo ' + pb64 + ' | busybox base64 -d > /data/local/tmp/e2e-conn.json');
-// tty7-LEG-4: seed connections.json directly (importText channel retired),
+// LEG-4: seed connections.json directly (importText channel retired),
 // then drive palette: ⌘ -> 会话·SSH 连接 (single archive auto-connect).
 sh('mkdir -p /data/app/el2/100/base/' + BUNDLE + '/haps/entry/files');
 sh('cp /data/local/tmp/e2e-conn.json /data/app/el2/100/base/' + BUNDLE + '/haps/entry/files/connections.json');
@@ -140,7 +140,7 @@ sh('uitest uiInput click ' + cx + ' ' + cy);
 log('[e2e] palette SSH connect clicked');
 
 // postLogin echo lands ~10-30s after connect; poll the BRIDGE capture
-// (model-level; tty7-LEG-4: pane render timing is flaky on dump, capture is
+// (model-level; LEG-4: pane render timing is flaky on dump, capture is
 // the authoritative same-session view).
 function bridgeCapture(paneId, lines) {
   try {

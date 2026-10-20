@@ -1,5 +1,5 @@
 /**
- * tty7 单测:AgentEventBus + HmhEventBridge.map(任务 tty7-M5a)。
+ * 单测:AgentEventBus + HmhEventBridge.map(任务 M5a)。
  * 覆盖:
  *   1. emit/subscribe 收到 + seq 单调
  *   2. unsubscribe 后不再收
@@ -9,9 +9,9 @@
  *      approval_required/tool_result/UNAVAILABLE→error/取消→idle)
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { AgentEventBus } from '../../../main/ets/tty7/agent/AgentEventBus';
-import { AgentEvent } from '../../../main/ets/tty7/agent/AgentEvent';
-import { HmhEventBridge } from '../../../main/ets/tty7/agent/HmhEventBridge';
+import { AgentEventBus } from '../../../main/ets/workbench/agent/AgentEventBus';
+import { AgentEvent } from '../../../main/ets/workbench/agent/AgentEvent';
+import { HmhEventBridge } from '../../../main/ets/workbench/agent/HmhEventBridge';
 import {
   AgentEvent as AE, ToolCallView, ApprovalView, AGENT_ENGINE_UNAVAILABLE
 } from '../../../main/ets/agent/AgentProvider';
@@ -25,7 +25,7 @@ function mkDelta(): AgentEvent {
 }
 
 export default function agentEventBusTest() {
-  describe('tty7AgentEventBus', () => {
+  describe('AgentEventBus', () => {
     it('emit_subscribes_and_seq_increases', 0, () => {
       const bus = AgentEventBus.instance()
       const seen: AgentEvent[] = []

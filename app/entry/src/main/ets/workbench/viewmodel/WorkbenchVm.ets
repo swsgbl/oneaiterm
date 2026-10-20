@@ -1,0 +1,850 @@
+/**
+ * 工作台 ViewModel(任务 M1b 建立,M1c 接入 LayoutTree,M2a 多 Tab 独立
+ * 布局树+持久化,M2b 多工作区 + SessionSlot 挂接)。
+ *
+ * 纯状态容器:字段 + 纯方法。红线:除 workbench/store/WorkbenchStore 外不 import 任何 service/PTY/SSH/AI。
+ * 四级模型(M2b 齐):Workspace(workspaces/activeWs)→ Tab(tabs/activeTab)→
+ * Pane(layout/panes/focusedPane)→ Session(TabState.sessions + bind/unbind)。
+ *
+ * tabs 投影约定:@Observed(V1)无 getter 追踪,tabs 不能做成计算属性——改为
+ * 显式同引用投影:tabs 恒等于 workspaces[activeWs].tabs(切工作区时整体替换
+ * this.tabs 引用;写路径不变,syncFromLayout 写 tabs[activeTab] 即经同引用写回
+ * 当前工作区,TabBar 等旧消费方零改动)。工作区 activeTab 记忆在 persist 前回写。
+ *
+ * SessionSlot 挂接:bindSession/unbindSession/sessionOf(当前 tab,pane 必须存在
+ * 于树);closePane 联动清理被删 pane 的 slot;slotsRev 计数器驱动 PaneSurface
+ * 标题行刷新(V1 方法调用不追踪,表达式读 slotsRev 绑定字段建立依赖)。
+ * 持久化:构造恢复(失败→双 pane 基线);sync/会话变更/工作区操作后 saveWorkbench(v2)。
+ */
+import { LayoutTreeModel, SplitDir } from '../layout/LayoutTree';
+import { LayoutOps } from '../layout/LayoutOps';
+import { TabState, SessionSlot } from '../model/TabState';
+import { WorkspaceState } from '../model/WorkspaceState';
+import { restoreWorkbench, saveWorkbench } from '../store/WorkbenchStore';
+import { TermModel } from '../../components/TermModel';
+import { TermHost } from '../term/TermHost';
+import { RemoteTermHost } from '../remote/RemoteTermHost';
+import { TelTermHost } from '../remote/TelTermHost';
+import { TtydSession } from '../term/TtydSession';
+import { getSharedStore } from '../../store/ConnStore';
+import { PaneDropTargets } from '../model/PaneDropTargets';
+import { trimBlankTail } from '../shell/ParityUi';
+
+/** Sidebar 工作区图标 glyph 池(AppIcons 现有 glyph 集内取;本地常量,不 import UI 模块)。 */
+const WS_GLYPHS: string[] = ['◈', '▣', '☸', '⌗', '∿', '▦', '◷'];
+
+/** FR(纯,单测靶):会话槽数组里首个 local 槽的 paneId(无 → '')。
+ *  TermHost 单例 → 恢复活化只取首个 local 槽。 */
+export function firstLocalSlotPaneId(sessions: SessionSlot[]): string {
+  for (const s of sessions) {
+    if (s.kind === 'local') {
+      return s.paneId
+    }
+  }
+  return ''
+}
+
+@Observed
+export class WorkbenchVm {
+  /** 工作区数组(activeWs 为下标;至少 1 个)。 */
+  workspaces: WorkspaceState[] = []
+  activeWs: number = 0
+  /** tab 状态数组(=workspaces[activeWs].tabs 同引用投影;activeTab 为下标)。 */
+  tabs: TabState[] = []
+  activeTab: number = 0
+  /** 布局树(=tabs[activeTab].layout 同步引用;一切布局事实的唯一来源)。 */
+  layout: LayoutTreeModel = new LayoutTreeModel()
+  /** 以下两项由 syncFromLayout 从 layout 同步(派生展示态)。 */
+  panes: string[] = []
+  focusedPane: string = ''
+  /** RightPanel(M1d agent 面板)开关桩。 */
+  rightPanelOpen: boolean = false
+  /** 右面板当前页签(+M7a:'agent'|'sftp'|'git';从 RightPanel
+   *  组件内 @State 提升为 vm 字段——palette 命令可指定落页)。 */
+  rightTab: string = 'agent'
+  /** 命令面板开关(M1d):单源状态,AppShell/StatusBar 共用(避免双源)。 */
+  paletteOpen: boolean = false
+  /** 布局版本号:每次 syncFromLayout +1。PaneGrid 用其奇偶交替 if 分支强制
+   * 重建渲染子树(V1 精准更新不重评组件构造参数,树根/槽宽变化否则全部
+   * 冻结——M1c 验收实证;M3 前置优化:升级 @ObservedV2/@Trace 精细追踪)。 */
+  rev: number = 0
+  /** 会话槽版本号:每次 bind/unbind/联动清理 +1。PaneSurface 标题表达式读
+   * 此绑定字段(V1 方法调用不追踪,借 slotsRev 建立依赖),sessionTitle 纯查询。 */
+  slotsRev: number = 0
+  statusText: string = '就绪'
+  /** 终端会话版本号(M3a):TermHost 绑定/解绑/EOF 死亡时 +1。PaneSurface
+   *  内容区条件渲染表达式读此绑定字段(bound() 静态查询不追踪,借 termTick
+   *  建立依赖,同 slotsRev 模式)。 */
+  termTick: number = 0
+  /** Agent 状态点桩(M1d 接 HMH Provider 真状态)。 */
+  agentOnline: boolean = true
+  /** Agent 活跃版本号(M5b):桥 emit 含 paneId 的事件时经 agentRevTap ++。
+   *  PaneSurface 标题表达式读此绑定字段建立追踪(V1 方法调用不追踪,
+   *  activeOnPane 纯查询,同 slotsRev/termTick 模式)。 */
+  agentRev: number = 0
+  /** 窗口可见版本号(FR):Index.onPageShow ++。PaneSurface 的 web
+   *  分支读它建立追踪——ArkWeb 在隐藏窗口创建的 Web 永不 attach 且无
+   *  重试(冷启 aa start 不抢前台实证),门控到可见后再建。 */
+  shellVisibleTick: number = 0
+  /** 存档恢复成功标记(FR):Index.aboutToAppear 据此分流——恢复档
+   *  走 reviveLocalSession,全新基线走 p1 即用绑定。 */
+  restoredFromArchive: boolean = false
+  private tabSeq: number = 1
+  private paneSeq: number = 0
+  private wsSeq: number = 1
+
+  constructor() {
+    // 恢复存档(v2 直读/v1 降级);失败(无档/损坏/无 context)→ 双 pane 基线:
+    // 单工作区单 tab,single('p1') 再 split 出 p2。
+    let restored = false
+    try {
+      const snap = restoreWorkbench()
+      if (snap !== null) {
+        this.workspaces = snap.workspaces
+        this.activeWs = snap.activeWs
+        // wsSeq/tabSeq 从恢复的 id 重导(防 close 后 new 生成重复 id 撞 ForEach 键)
+        let maxWs = 0
+        let maxTab = 0
+        for (const ws of this.workspaces) {
+          if (ws.wsId.indexOf('w') === 0) {
+            const wn = Number(ws.wsId.substring(1))
+            if (!Number.isNaN(wn) && wn > maxWs) {
+              maxWs = wn
+            }
+          }
+          for (const t of ws.tabs) {
+            if (t.tabId.indexOf('t') === 0) {
+              const num = Number(t.tabId.substring(1))
+              if (!Number.isNaN(num) && num > maxTab) {
+                maxTab = num
+              }
+            }
+          }
+        }
+        this.wsSeq = maxWs
+        this.tabSeq = maxTab
+        const ws = this.workspaces[this.activeWs]
+        this.tabs = ws.tabs
+        this.activeTab = ws.activeTab >= 0 && ws.activeTab < ws.tabs.length ? ws.activeTab : 0
+        ws.activeTab = this.activeTab
+        this.syncFromLayout(this.tabs[this.activeTab].layout)
+        this.restoredFromArchive = true
+        restored = true
+      }
+    } catch (e) {
+      restored = false
+    }
+    if (!restored) {
+      const t = new TabState()
+      t.tabId = 't1'
+      t.title = '终端'
+      t.layout = LayoutOps.split(LayoutOps.single('p1'), 'p1', 'h', 'p2')
+      const ws = new WorkspaceState()
+      ws.wsId = 'w1'
+      ws.name = 'workspace'
+      ws.glyph = WS_GLYPHS[0]
+      ws.tabs = [t]
+      ws.activeTab = 0
+      this.workspaces = [ws]
+      this.activeWs = 0
+      this.tabs = ws.tabs
+      this.activeTab = 0
+      this.syncFromLayout(t.layout)
+    }
+    // M3a:PTY EOF(sh exit)时通知 UI(model 保留供回看,termTick 驱动重评)
+    TermHost.onDead = (): void => {
+      this.termTick += 1
+      this.statusText = '会话已结束'
+    }
+    // M6a:远程 SSH 会话死亡(connect 失败/断线/主动关)——清 slot 防幽灵,
+    // termTick 驱动 PaneSurface 条件重评(statusText 由 refreshStatus 统一组装)
+    RemoteTermHost.onDead = (): void => {
+      const b = RemoteTermHost.bound()
+      const why = this.remoteErrorBrief() // stop() 前取(死后保留诊断)
+      RemoteTermHost.stop()
+      if (b !== '') {
+        this.unbindSession(b)
+      }
+      this.termTick += 1
+      // M6b:失败/断线反馈(带原因前 60 字;无错回退通用文案)
+      this.statusText = why !== '' ? 'ssh 失败:' + why : 'ssh 已断开'
+    }
+    // M6b:连接建立反馈(statusText;'ssh 已连接';onDead 同站点会覆写,
+    // 文案不叠加)。错误原因经 RemoteTermHost.lastError 查询,不在此展开。
+    RemoteTermHost.onOpen = (): void => {
+      this.statusText = 'ssh 已连接'
+    }
+    // +LEG-2: telnet 会话死亡/建立反馈(镜像 ssh 通道;文案 telnet 前缀)
+    TelTermHost.onDead = (): void => {
+      const b = TelTermHost.bound()
+      const why = this.telnetErrorBrief()
+      TelTermHost.stop()
+      if (b !== '') {
+        this.unbindSession(b)
+      }
+      this.termTick += 1
+      this.statusText = why !== '' ? 'telnet 失败:' + why : 'telnet 已断开'
+    }
+    TelTermHost.onOpen = (): void => {
+      this.statusText = 'telnet 已连接 ' + TelTermHost.endpoint()
+    }
+  }
+
+  /** 布局树 → 展示态同步(唯一写入口;写入当前 tab 树 + 整体替换驱动刷新 + 落盘)。 */
+  private syncFromLayout(m: LayoutTreeModel): void {
+    this.rev += 1
+    this.layout = m
+    if (this.activeTab >= 0 && this.activeTab < this.tabs.length) {
+      this.tabs[this.activeTab].layout = m
+    }
+    this.panes = LayoutOps.panes(m)
+    this.focusedPane = m.focusedPaneId
+    this.refreshStatus()
+    this.persist()
+  }
+
+  /** 状态栏文案派生:panes N · focus X · sess M(仅 M>0 时追加)。 */
+  private refreshStatus(): void {
+    const focus = this.focusedPane !== '' ? this.focusedPane : '-'
+    let s = 'panes ' + this.panes.length.toString() + ' · focus ' + focus
+    const n = this.sessionCount()
+    if (n > 0) {
+      s += ' · sess ' + n.toString()
+    }
+    this.statusText = s
+  }
+
+  /** 持久化(无 context 环境静默不落盘;失败静默,绝不外抛)。
+   *  落盘前回写当前工作区的 activeTab 记忆。 */
+  private persist(): void {
+    try {
+      if (this.activeWs >= 0 && this.activeWs < this.workspaces.length) {
+        this.workspaces[this.activeWs].activeTab = this.activeTab
+      }
+      saveWorkbench(this.workspaces, this.activeWs)
+    } catch (e) {
+      // 静默:存档失败不阻塞 UI
+    }
+  }
+
+  // ===================== 工作区(M2b) =====================
+
+  /** 新建工作区:空工作区(单 tab 空模型)入栈并切换(委托命名版,行为不变)。 */
+  newWorkspace(): void {
+    this.newWorkspaceNamed('')
+  }
+
+  /** 新建工作区(命名版,任务 PA:ws.new;name '' → 默认名)。
+   *  返回新 wsId——桥需要 id 回传;原 newWorkspace 逻辑整体搬入。 */
+  newWorkspaceNamed(name: string): string {
+    this.wsSeq += 1
+    const ws = new WorkspaceState()
+    ws.wsId = 'w' + this.wsSeq.toString()
+    ws.name = name !== '' ? name : 'workspace-' + this.wsSeq.toString()
+    ws.glyph = WS_GLYPHS[(this.wsSeq - 1) % WS_GLYPHS.length]
+    this.tabSeq += 1
+    const t = new TabState()
+    t.tabId = 't' + this.tabSeq.toString()
+    t.title = '' + this.tabSeq.toString()
+    ws.tabs = [t]
+    ws.activeTab = 0
+    this.workspaces = this.workspaces.concat([ws])
+    this.activeWs = this.workspaces.length - 1
+    this.tabs = ws.tabs
+    this.activeTab = 0
+    this.syncFromLayout(t.layout)
+    this.statusText = '新工作区 ' + ws.name
+    return ws.wsId
+  }
+
+  /** 切工作区:activeWs=i、tabs 引用整体替换、activeTab 取工作区记忆值、sync + persist。 */
+  switchWorkspace(i: number): void {
+    if (i < 0 || i >= this.workspaces.length || i === this.activeWs) {
+      return
+    }
+    this.activeWs = i
+    const ws = this.workspaces[i]
+    this.tabs = ws.tabs
+    this.activeTab = ws.activeTab >= 0 && ws.activeTab < ws.tabs.length ? ws.activeTab : 0
+    this.syncFromLayout(this.tabs[this.activeTab].layout)
+    this.statusText = '工作区 ' + ws.name
+  }
+
+  /** 关工作区(至少保留 1 个);active 落在被删位时右移收缩,在左侧时左移。 */
+  closeWorkspace(i: number): void {
+    if (i < 0 || i >= this.workspaces.length || this.workspaces.length <= 1) {
+      return
+    }
+    this.workspaces = this.workspaces.slice(0, i).concat(this.workspaces.slice(i + 1))
+    if (this.activeWs >= this.workspaces.length) {
+      this.activeWs = this.workspaces.length - 1
+    } else if (i < this.activeWs) {
+      this.activeWs -= 1
+    }
+    const ws = this.workspaces[this.activeWs]
+    this.tabs = ws.tabs
+    this.activeTab = ws.activeTab >= 0 && ws.activeTab < ws.tabs.length ? ws.activeTab : 0
+    this.syncFromLayout(this.tabs[this.activeTab].layout)
+    this.statusText = '关闭工作区,共 ' + this.workspaces.length.toString() + ' 个'
+    this.reapTermIfGone() // M3a:工作区收缩后绑定 pane 不在当前树 → 回收
+  }
+
+  // ===================== SessionSlot 挂接(M2b) =====================
+
+  /** pane↔会话绑定(当前 tab;pane 必须存在于树;同 paneId 重复绑定=覆盖)。 */
+  bindSession(paneId: string, kind: string, connKey: string, title: string): boolean {
+    if (this.panes.indexOf(paneId) < 0) {
+      return false
+    }
+    const cur = this.curTabOrNull()
+    if (cur === null) {
+      return false
+    }
+    let slot: SessionSlot | null = null
+    for (const s of cur.sessions) {
+      if (s.paneId === paneId) {
+        slot = s
+        break
+      }
+    }
+    if (slot === null) {
+      slot = new SessionSlot()
+      slot.paneId = paneId
+      cur.sessions = cur.sessions.concat([slot])
+    }
+    slot.kind = kind
+    slot.connKey = connKey
+    slot.title = title
+    this.slotsRev += 1
+    this.refreshStatus()
+    this.persist()
+    return true
+  }
+
+  /** 解除绑定(未绑定 no-op)。 */
+  unbindSession(paneId: string): void {
+    const cur = this.curTabOrNull()
+    if (cur === null) {
+      return
+    }
+    let found = false
+    const kept: SessionSlot[] = []
+    for (const s of cur.sessions) {
+      if (s.paneId === paneId) {
+        found = true
+      } else {
+        kept.push(s)
+      }
+    }
+    if (found) {
+      cur.sessions = kept
+      this.slotsRev += 1
+      this.refreshStatus()
+      this.persist()
+    }
+  }
+
+  /** 查询 pane 的会话槽(当前 tab;未绑定 null)。 */
+  sessionOf(paneId: string): SessionSlot | null {
+    const cur = this.curTabOrNull()
+    if (cur === null) {
+      return null
+    }
+    for (const s of cur.sessions) {
+      if (s.paneId === paneId) {
+        return s
+      }
+    }
+    return null
+  }
+
+  /** CLI capture 用:pane 尾部可视行文本拼接(任务 M8a)。
+   *  纯查询:经 TermHost/RemoteTermHost.term().lines 取尾 N 行 textOf;
+   *  宿主未绑/model 为空返回空串(桥侧转 error)。
+   *  RD-2:web 分支(TtydSession live)优先——桥 capture 与用户所见
+   *  同一 ttyd 会话;无 web 会话回落 PTY 路径(A4 降级语义)。 */
+  paneCapture(paneId: string, lines: number): string {
+    if (TtydSession.isLive(paneId)) {
+      const web = TtydSession.capture(paneId, lines)
+      if (web !== '') {
+        return web
+      }
+    }
+    let model: TermModel | null = null
+    if (TermHost.bound() === paneId) {
+      model = TermHost.term()
+    } else if (RemoteTermHost.bound() === paneId) {
+      model = RemoteTermHost.term()
+    }
+    if (model === null) {
+      return ''
+    }
+    const all: string[] = []
+    for (const ln of model.lines) {
+      all.push(model.textOf(ln))
+    }
+    // PB 热修:先剪尾空行(垫底 blank 不算"最近输出";新会话提示符在
+    // 屏顶时尾 N 行全空 → capture 空串 → 桥误报 pane not bound——PBCAP 实勘)
+    const src = trimBlankTail(all)
+    const n = lines > 0 ? Math.min(lines, src.length) : src.length
+    let out = ''
+    for (let i = src.length - n; i < src.length; i++) {
+      if (out.length > 0) {
+        out += '\n'
+      }
+      out += src[i]
+    }
+    return out
+  }
+
+    /** 当前 tab 绑定数(状态栏 sess N 派生源)。 */
+  sessionCount(): number {
+    const cur = this.curTabOrNull()
+    return cur === null ? 0 : cur.sessions.length
+  }
+
+  /** pane 标题(绑定时 slot.title 非空优先,否则 kind;未绑定回 paneId)。
+   *  纯查询:PaneSurface 标题表达式读 vm.slotsRev 建立追踪后调此方法。 */
+  sessionTitle(paneId: string): string {
+    const s = this.sessionOf(paneId)
+    if (s === null) {
+      return paneId
+    }
+    return s.title !== '' ? s.title : s.kind
+  }
+
+  /** 当前 tab(无有效 tab 时 null)。 */
+  private curTabOrNull(): TabState | null {
+    if (this.activeTab >= 0 && this.activeTab < this.tabs.length) {
+      return this.tabs[this.activeTab]
+    }
+    return null
+  }
+
+  /** 联动清理:剔除 sessions 中 paneId 已不在当前树的槽(closePane 后调)。 */
+  private pruneSessions(): void {
+    const cur = this.curTabOrNull()
+    if (cur === null) {
+      return
+    }
+    let changed = false
+    const kept: SessionSlot[] = []
+    for (const s of cur.sessions) {
+      if (this.panes.indexOf(s.paneId) >= 0) {
+        kept.push(s)
+      } else {
+        changed = true
+      }
+    }
+    if (changed) {
+      cur.sessions = kept
+      this.slotsRev += 1
+      this.refreshStatus()
+    }
+  }
+
+  /** SSH 连接选择浮层开关(M6a;>1 条 ssh profile 时 palette 打开)。 */
+  sshPickerOpen: boolean = false
+  /** Telnet 连接选择浮层开关(+LEG-2;>1 条 telnet profile 时 palette 打开)。 */
+  telnetPickerOpen: boolean = false
+
+  // ===================== 远程终端会话(M6a,单会话) =====================
+
+  /** 焦点 pane 挂 SSH 远程会话。返回 true 仅代表已发起(connect 异步补判,
+   *  失败经 RemoteTermHost.onDead 异步清 slot);store 未就绪/无记录 → false。 */
+  bindSshSession(connKey: string): boolean {
+    const paneId = this.focusedPane
+    if (paneId === '') {
+      return false
+    }
+    if (RemoteTermHost.bound() === paneId) {
+      this.focusPane(paneId)
+      return true // 幂等(同 bindLocalSession 语义)
+    }
+    // 单会话互斥:远程已绑他 pane → 先解绑;本地在跑 → 让位(provider 兜底)
+    if (RemoteTermHost.bound() !== '') {
+      this.unbindSession(RemoteTermHost.bound())
+      RemoteTermHost.stop()
+    }
+    if (TermHost.bound() !== '') {
+      this.unbindTerm()
+    }
+    if (!RemoteTermHost.start(connKey, 80, 24)) {
+      return false
+    }
+    RemoteTermHost.bind(paneId)
+    this.bindSession(paneId, 'ssh', connKey, 'ssh ' + this.sshConnName(connKey))
+    this.termTick += 1
+    // M6b:发起反馈('连接中';成败由 onOpen/onDead 异步覆写——成功
+    // 'ssh 已连接',失败带原因前 60 字)。此处覆写 refreshStatus 文案可接受:
+    // 布局/会话计数经后续 sync 重组,连接反馈为瞬时态。
+    this.statusText = 'ssh 连接中…'
+    return true
+  }
+
+  /** 连接名查询(store 内存态;查不到回 connKey)。只读,不 load()。 */
+  private sshConnName(connKey: string): string {
+    const store = getSharedStore()
+    if (store === null) {
+      return connKey
+    }
+    for (const c of store.connections) {
+      if (c.id === connKey) {
+        return c.name !== '' ? c.name : connKey
+      }
+    }
+    return connKey
+  }
+
+  /** 结束远程会话(stop 内部关句柄;slot 清 + termTick)。 */
+  unbindRemote(): void {
+    const wasBound = RemoteTermHost.bound()
+    RemoteTermHost.stop()
+    if (wasBound !== '') {
+      this.unbindSession(wasBound)
+    }
+    this.termTick += 1
+  }
+
+  // ===================== Telnet 会话(+LEG-2,单会话) =====================
+
+  /** 焦点 pane 挂 telnet 会话(镜像 bindSshSession 语义:幂等/互斥/异步补判;
+   *  失败经 TelTermHost.onDead 清 slot)。store 未就绪/无记录 → false。 */
+  bindTelnetSession(connKey: string): boolean {
+    const paneId = this.focusedPane
+    if (paneId === '') {
+      return false
+    }
+    if (TelTermHost.bound() === paneId) {
+      this.focusPane(paneId)
+      return true // 幂等
+    }
+    // 单会话互斥:telnet 已绑他 pane → 先解绑;ssh/local 在跑 → 让位
+    if (TelTermHost.bound() !== '') {
+      this.unbindSession(TelTermHost.bound())
+      TelTermHost.stop()
+    }
+    if (RemoteTermHost.bound() !== '') {
+      this.unbindRemote()
+    }
+    if (TermHost.bound() !== '') {
+      this.unbindTerm()
+    }
+    const store = getSharedStore()
+    if (store === null) {
+      return false
+    }
+    const rec = store.connections.find((c): boolean => c.id === connKey && c.type === 'telnet')
+    if (rec === undefined) {
+      return false
+    }
+    if (!TelTermHost.start(rec.host, rec.port, 80, 24)) {
+      return false
+    }
+    TelTermHost.bind(paneId)
+    this.bindSession(paneId, 'telnet', connKey, 'telnet ' + (rec.name !== '' ? rec.name : rec.host))
+    this.termTick += 1
+    this.statusText = 'telnet 连接中…'
+    return true
+  }
+
+  /** 结束 telnet 会话(镜像 unbindRemote)。 */
+  unbindTelnet(): void {
+    const wasBound = TelTermHost.bound()
+    TelTermHost.stop()
+    if (wasBound !== '') {
+      this.unbindSession(wasBound)
+    }
+    this.termTick += 1
+  }
+
+  /** 最近一次 telnet 错误摘要(前 60 字,无错回 '')。 */
+  telnetErrorBrief(): string {
+    const e = TelTermHost.lastError
+    return e.length > 60 ? e.substring(0, 60) : e
+  }
+
+  /** 最近一次远程错误摘要(M6b:live-ssh 反馈;前 60 字,无错回 '')。
+   *  纯查询 RemoteTermHost.lastError,不重连不碰句柄。 */
+  remoteErrorBrief(): string {
+    const e = RemoteTermHost.lastError
+    return e.length > 60 ? e.substring(0, 60) : e
+  }
+
+  // ===================== 本地终端会话(M3a,单会话) =====================
+
+  /** 焦点 pane 起本地 shell。规则(任务书):已绑定本 pane → 聚焦即可(幂等);
+   *  已绑定他 pane → 先解绑旧 pane 再绑新;PTY 启动失败 → false 不动状态。 */
+  bindLocalSession(): boolean {
+    const paneId = this.focusedPane
+    if (paneId === '') {
+      return false
+    }
+    if (TermHost.bound() === paneId) {
+      this.focusPane(paneId)
+      return true
+    }
+    if (TermHost.bound() !== '') {
+      this.unbindSession(TermHost.bound())
+    }
+    if (!TermHost.start(80, 24)) {
+      return false
+    }
+    TermHost.bind(paneId)
+    this.bindSession(paneId, 'local', '', 'local shell')
+    this.termTick += 1
+    // statusText 由 bindSession→refreshStatus 统一组装(panes · focus · sess N),
+    // 此处不覆写——保留布局与焦点信息(验收判据:状态栏含 sess 1)
+    return true
+  }
+
+  /** 页面可见通知(FR):Index.onPageShow 驱动,shellVisibleTick ++
+   *  触发 PaneSurface web 分支翻转(隐藏窗口期不建 Web,可见后才建)。 */
+  shellVisible(): void {
+    this.shellVisibleTick += 1
+  }
+
+  /** 指定 pane 绑本地会话(FR:bindLocalSession 的显式 pane 变体;
+   *  Index 冷启基线 p1 即用——首启跳过引导即见活终端,原为双水印占位)。 */
+  bindLocalSessionFor(paneId: string): boolean {
+    if (this.panes.indexOf(paneId) < 0) {
+      return false
+    }
+    if (TermHost.bound() === paneId) {
+      return true
+    }
+    if (TermHost.bound() !== '') {
+      this.unbindSession(TermHost.bound())
+    }
+    if (!TermHost.start(80, 24)) {
+      return false
+    }
+    TermHost.bind(paneId)
+    this.bindSession(paneId, 'local', '', 'local shell')
+    this.termTick += 1
+    return true
+  }
+
+  /** 恢复档里的 local 槽复活(FR:TermHost 重启+绑定——原仅标题恢复、
+   *  内容永久占位,「崩溃恢复占位陷阱」;TermHost 单例取首个 local 槽)。 */
+  reviveLocalSession(): void {
+    if (TermHost.bound() !== '') {
+      return
+    }
+    const target = firstLocalSlotPaneId(this.tabs[this.activeTab].sessions)
+    if (target === '' || this.panes.indexOf(target) < 0) {
+      return
+    }
+    if (TermHost.start(80, 24)) {
+      TermHost.bind(target)
+      this.termTick += 1
+    }
+  }
+
+  /** 结束本地会话:PTY 关 + 绑定 pane 的 slot 清 + termTick 驱动水印回归。
+   *  M6a:同时结束远程会话(session.end 语义=全停,双宿主幂等)。
+   *  LEG-2:telnet 宿主同停(三宿主幂等)。 */
+  unbindTerm(): void {
+    const wasBound = TermHost.bound()
+    TermHost.stop()
+    if (wasBound !== '') {
+      this.unbindSession(wasBound) // 内部 refreshStatus:sess 计数归零
+    }
+    this.unbindRemote()
+    this.unbindTelnet()
+  }
+
+  /** 绑定 pane 已不在当前树 → 回收 PTY/远程会话 + 清 slot(布局收缩后统一
+   *  调用;M6a 起双宿主各查各的 bound)。 */
+  private reapTermIfGone(): void {
+    const b = TermHost.bound()
+    if (b !== '' && this.panes.indexOf(b) < 0) {
+      TermHost.stop()
+      this.unbindSession(b)
+      this.termTick += 1
+    }
+    const rb = RemoteTermHost.bound()
+    if (rb !== '' && this.panes.indexOf(rb) < 0) {
+      RemoteTermHost.stop()
+      this.unbindSession(rb)
+      this.termTick += 1
+    }
+  }
+
+  /** tabs 引用回写当前工作区(任务 PA 实勘修复:newTab/closeTab 用
+   *  concat/slice 整体替换 this.tabs 后,workspaces[activeWs].tabs 仍指旧
+   *  数组——违反文件头"同引用投影"约定,ws.tree/persist 读 workspaces 拿
+   *  到陈旧 tabs;一切整体替换处后调此方法恢复不变量)。 */
+  private projectTabsToWs(): void {
+    if (this.activeWs >= 0 && this.activeWs < this.workspaces.length) {
+      this.workspaces[this.activeWs].tabs = this.tabs
+    }
+  }
+
+  /** tab 重命名(任务 PA:tab.rename;越界/空 title 拒,走 persist 链落盘)。 */
+  renameTab(i: number, title: string): boolean {
+    if (i < 0 || i >= this.tabs.length || title === '') {
+      return false
+    }
+    this.tabs[i].title = title
+    this.persist()
+    return true
+  }
+
+  // ===================== 布局(M1c) =====================
+
+  /** 新建 pane 并返回新 pane id(任务 PA:pane.split 桥要新 id)。
+   *  空布局→single(首 pane);否则对焦点叶 split,新 id=p{现存最大序号+1}。 */
+  newPaneId(dir: SplitDir): string {
+    const ids = LayoutOps.panes(this.layout)
+    let max = 0
+    for (const id of ids) {
+      if (id.indexOf('p') === 0) {
+        const num = Number(id.substring(1))
+        if (!Number.isNaN(num) && num > max) {
+          max = num
+        }
+      }
+    }
+    this.paneSeq = max + 1
+    const fresh = 'p' + this.paneSeq.toString()
+    if (ids.length === 0) {
+      this.syncFromLayout(LayoutOps.single(fresh))
+      return fresh
+    }
+    let host = this.layout.focusedPaneId
+    if (host === '') {
+      host = ids[0]
+    }
+    this.syncFromLayout(LayoutOps.split(this.layout, host, dir, fresh))
+    return fresh
+  }
+
+  /** 新建 pane(任务 PA:委托 newPaneId;签名与行为不变)。 */
+  newPane(dir: SplitDir): void {
+    this.newPaneId(dir)
+  }
+
+  /** 关闭 pane(close 内建焦点迁移与父层折叠;联动清理被删 pane 的会话槽)。 */
+  closePane(id: string): void {
+    this.syncFromLayout(LayoutOps.close(this.layout, id))
+    this.pruneSessions()
+    this.reapTermIfGone() // M3a:被删 pane 持有 PTY → 回收
+  }
+
+  /** 焦点叶 zoom 切换(zoom 语义由 PaneGrid 渲染层实现)。 */
+  zoomToggle(): void {
+    if (this.layout.focusedPaneId === '') {
+      return
+    }
+    this.syncFromLayout(LayoutOps.zoom(this.layout, this.layout.focusedPaneId))
+  }
+
+  /** 分隔条拖拽落点(供 PaneGrid 回调;clamp 由 LayoutOps 内建)。 */
+  resizeSplit(splitNodeId: string, ratio: number): void {
+    this.syncFromLayout(LayoutOps.resize(this.layout, splitNodeId, ratio))
+  }
+
+  /** 两 pane 互换位置(任务 M1e;树结构不变只换叶身份)。
+   *  经 syncFromLayout 单源链:rev++ 驱动 PaneGrid rev-parity 分支重建,
+   *  持久化自动带上;focused/zoomedPaneId 保持(LayoutOps.swapPane 语义:
+   *  身份互换焦点跟随身份)。同 id/任一不在树 → LayoutOps 守卫直返拷贝,
+   *  sync 仍走(rev 变但树等价,无害)。 */
+  swapPanes(idA: string, idB: string): void {
+    this.syncFromLayout(LayoutOps.swapPane(this.layout, idA, idB))
+  }
+
+  // ===================== Tab(M2a) =====================
+
+  /** 新建 tab:空模型根叶(切到即见"空白工作区"引导),标题 N,置为 active。 */
+  newTab(): void {
+    this.tabSeq += 1
+    const t = new TabState()
+    t.tabId = 't' + this.tabSeq.toString()
+    t.title = '' + this.tabSeq.toString()
+    this.tabs = this.tabs.concat([t])
+    this.projectTabsToWs()
+    this.activeTab = this.tabs.length - 1
+    this.syncFromLayout(t.layout)
+    this.statusText = '新标签 ' + this.tabSeq.toString()
+  }
+
+  /** 关 tab(至少保留 1 个);active 落在被删位时右移收缩,在左侧时左移。 */
+  closeTab(i: number): void {
+    if (i < 0 || i >= this.tabs.length || this.tabs.length <= 1) {
+      return
+    }
+    this.tabs = this.tabs.slice(0, i).concat(this.tabs.slice(i + 1))
+    this.projectTabsToWs()
+    if (this.activeTab >= this.tabs.length) {
+      this.activeTab = this.tabs.length - 1
+    } else if (i < this.activeTab) {
+      this.activeTab -= 1
+    }
+    this.syncFromLayout(this.tabs[this.activeTab].layout)
+    this.statusText = '关闭标签,共 ' + this.tabs.length.toString() + ' 个'
+    this.reapTermIfGone() // M3a:新 active 树无绑定 pane → 回收 PTY
+  }
+
+  /** 切 tab:布局跟随(整树替换 + sync 派生)。 */
+  setActiveTab(i: number): void {
+    if (i >= 0 && i < this.tabs.length && i !== this.activeTab) {
+      this.activeTab = i
+      this.syncFromLayout(this.tabs[i].layout)
+    }
+  }
+
+  /** 焦点 pane 切换(pane 必须存在;经 LayoutOps.focus 保持单源)。 */
+  focusPane(id: string): void {
+    if (this.panes.indexOf(id) >= 0 && id !== this.focusedPane) {
+      this.syncFromLayout(LayoutOps.focus(this.layout, id))
+    }
+  }
+
+  /** 拖拽落点判定(M1e onDragEnd 兜底通道,纯查询):
+   *  PaneSurface onAreaChange 把各 pane 全窗口矩形注册进 PaneDropTargets,
+   *  这里取落点 (wx,wy) 所在且非拖源自身的 pane id(命中即首个,重叠时
+   *  取面积最小者更准;当前布局无重叠,线性首个够用);无命中回 ''。 */
+  dropTargetAt(winX: number, winY: number, excludePaneId: string): string {
+    const rects = PaneDropTargets.all()
+    let best = ''
+    let bestArea = Number.MAX_VALUE
+    for (const r of rects) {
+      if (r.paneId === excludePaneId) {
+        continue
+      }
+      if (winX >= r.x && winX <= r.x + r.w && winY >= r.y && winY <= r.y + r.h) {
+        const a = r.w * r.h
+        if (best === '' || a < bestArea) {
+          best = r.paneId
+          bestArea = a
+        }
+      }
+    }
+    return best
+  }
+
+  // ===================== 面板/杂项(M1d) =====================
+
+  /** RightPanel 开关(桩)。 */
+  toggleRightPanel(): void {
+    this.rightPanelOpen = !this.rightPanelOpen
+    this.statusText = this.rightPanelOpen ? 'Agent 面板开' : 'Agent 面板关'
+  }
+
+  /** 右面板页签切换(+M7a:RightPanel pill 点击与 palette 命令
+   *  共用;值经 drawerTabOf 白名单归一)。 */
+  setRightTab(tab: string): void {
+    this.rightTab = tab
+  }
+
+  /** 命令面板开关翻转(M1d;syncFromLayout 不动它——非布局派生态)。 */
+  togglePalette(): void {
+    this.paletteOpen = !this.paletteOpen
+  }
+
+  /** 状态栏文案直写(Sidebar 桩动作回写)。 */
+  setStatus(text: string): void {
+    this.statusText = text
+  }
+}

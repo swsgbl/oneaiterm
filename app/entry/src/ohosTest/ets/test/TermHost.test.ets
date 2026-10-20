@@ -1,6 +1,6 @@
 /**
- * tty7 M3a 单测:TermHost 守卫 + TermModel feed 渲染 + WorkbenchVm
- * bindLocalSession 时序(任务 tty7-M3a 交付物 6)。
+ * M3a 单测:TermHost 守卫 + TermModel feed 渲染 + WorkbenchVm
+ * bindLocalSession 时序(任务 M3a 交付物 6)。
  *
  * 环境说明:ohosTest 跑在 KaihongOS 真机,liblocalpty.so 可用,PTY open
  * 真会成功——故 vm 用例按"成功路径 + 幂等 + 回收"设计(任务书预案 B);
@@ -9,12 +9,12 @@
  * 用例间强制 TermHost.stop() 复位单例,消除顺序耦合。
  */
 import { describe, it, expect, beforeAll } from '@ohos/hypium';
-import { TermHost } from '../../../main/ets/tty7/term/TermHost';
+import { TermHost } from '../../../main/ets/workbench/term/TermHost';
 import { TermModel, TermLine, lineToSpans } from '../../../main/ets/components/TermModel';
-import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
+import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
 
 export default function termHostTest() {
-  describe('tty7TermHost', () => {
+  describe('TermHost', () => {
     beforeAll(() => {
       TermHost.stop() // 干净起点
     })

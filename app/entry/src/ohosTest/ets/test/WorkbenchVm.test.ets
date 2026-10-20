@@ -1,5 +1,5 @@
 /**
- * tty7 WorkbenchVm 布局集成单元测试（任务 tty7-M1c，ArkTS/hypium）。
+ * WorkbenchVm 布局集成单元测试（任务 M1c，ArkTS/hypium）。
  *
  * Vm 是 @Observed 状态容器，其布局方法全部是 LayoutOps 纯变换的薄封装，
  * 可在无 UI 环境直接实例化验证（沿用 LayoutTree.test 的真实 import 范式）。
@@ -13,9 +13,9 @@
  *   6. resizeSplit：clamp 0.1~0.9 + 派生态同步
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { WorkbenchVm, firstLocalSlotPaneId } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
-import { PaneLeaf, SplitNode } from '../../../main/ets/tty7/layout/LayoutTree';
-import { SessionSlot } from '../../../main/ets/tty7/model/TabState';
+import { WorkbenchVm, firstLocalSlotPaneId } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
+import { PaneLeaf, SplitNode } from '../../../main/ets/workbench/layout/LayoutTree';
+import { SessionSlot } from '../../../main/ets/workbench/model/TabState';
 
 /** 构造 2x2：p1|p2 两列，各列上下再分。 */
 function vm2x2(): WorkbenchVm {
@@ -28,7 +28,7 @@ function vm2x2(): WorkbenchVm {
 }
 
 export default function workbenchVmTest() {
-  describe('tty7WorkbenchVm', () => {
+  describe('workbenchVm', () => {
     // ===== 1. 初始基线 =====
     it('initial_baseline_two_panes', 0, () => {
       const vm = new WorkbenchVm()
@@ -120,7 +120,7 @@ export default function workbenchVmTest() {
       expect(vm.panes.join(',')).assertEqual('p1,p2')
     })
 
-    // ===== 7. tty7-FR: firstLocalSlotPaneId(恢复复活取槽纯函数) =====
+    // ===== 7. FR: firstLocalSlotPaneId(恢复复活取槽纯函数) =====
     it('firstlocalslot_empty_when_no_sessions', 0, () => {
       expect(firstLocalSlotPaneId([])).assertEqual('')
     })

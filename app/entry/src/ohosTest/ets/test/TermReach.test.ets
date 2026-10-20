@@ -1,5 +1,5 @@
 /**
- * tty7-RD-1 单测:TermReach 纯逻辑——缓存/退避/异常不抛(任务书交付物:
+ * RD-1 单测:TermReach 纯逻辑——缓存/退避/异常不抛(任务书交付物:
  * 网络调用注入 mock,真网络永不触达)。
  *
  * 覆盖:
@@ -19,10 +19,10 @@ import { describe, it, expect } from '@ohos/hypium';
 import {
   TermReachState, backoffAfter, BACKOFF_MS, injectFetcher, resetFetcher,
   reachState, probeTtyd
-} from '../../../main/ets/tty7/term/TermReach';
+} from '../../../main/ets/workbench/term/TermReach';
 
 export default function termReachTest() {
-  describe('tty7TermReach', () => {
+  describe('TermReach', () => {
     // ===== 1. 退避表语义 =====
     it('backoff_table_1s_5s_30s_cap', 0, () => {
       expect(backoffAfter(0)).assertEqual(0)

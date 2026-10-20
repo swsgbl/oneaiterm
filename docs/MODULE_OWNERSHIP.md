@@ -1,6 +1,6 @@
-# MODULE_OWNERSHIP — 模块归属 / 职责 / 不可回退清单（tty7-M0）
+# MODULE_OWNERSHIP — 模块归属 / 职责 / 不可回退清单（M0）
 
-> 「不可回退」= tty7 集成施工中不得删除、不得语义变更、不得绕过的行为。改动必须走等价迁移（如 PolicyEngine 头注「存量 AgentKernel.riskOf 等价迁移」范式）。
+> 「不可回退」= 集成施工中不得删除、不得语义变更、不得绕过的行为。改动必须走等价迁移（如 PolicyEngine 头注「存量 AgentKernel.riskOf 等价迁移」范式）。
 
 ## 1. 终端域
 
@@ -15,7 +15,7 @@
 
 | 模块 | 职责 | 不可回退 |
 |---|---|---|
-| `service/SessionService.ets` (416 行) | SSH 单会话生命周期、事件分发、backspaceKey、stats、screenText、attachLocalPty、feedExternal | 全静态单会话假设被 tty7 多会话打破是**已知计划内重构**，但 screenText/hasSession/feedExternal 契约必须保留（agent 工具依赖）；首连 tsfn 单例分发范式（头部注释） |
+| `service/SessionService.ets` (416 行) | SSH 单会话生命周期、事件分发、backspaceKey、stats、screenText、attachLocalPty、feedExternal | 全静态单会话假设被 多会话打破是**已知计划内重构**，但 screenText/hasSession/feedExternal 契约必须保留（agent 工具依赖）；首连 tsfn 单例分发范式（头部注释） |
 | `thirdparty/libssh-x86_64-har` | libssh NAPI + ArkTS 包装 | sessionOpenWithPassword/Key/writeStdin/sftpOpen 签名（libssh.ets:81-135）；HAR 预编译 arm64/x86_64 双架构 |
 | `service/TelnetService.ets` | telnet/raw TCP | feedExternal 注入路径 |
 | `service/ZmodemService.ets` (736 行) | rz/sz 双向、ZRQINIT/ZRINIT 嗅探、rawfile 目标目录 | 嗅探在 data 事件内的位置（SessionService.onEvent 'data' 分支） |

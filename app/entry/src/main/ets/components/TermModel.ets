@@ -112,7 +112,7 @@ export class TermModel {
   private save: SaveState | null = null;
   private carry: string = ''; // incomplete escape tail across chunks
   private gen: number = 1;
-  /** tty7-M4b: alternate screen active (DECSET 1049/1047/47) - input layer
+  /** M4b: alternate screen active (DECSET 1049/1047/47) - input layer
    *  passthrough hint, no separate screen buffer (log model keeps lines). */
   altScreen: boolean = false;
 

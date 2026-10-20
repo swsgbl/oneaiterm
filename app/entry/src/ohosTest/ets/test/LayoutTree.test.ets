@@ -1,5 +1,5 @@
 /**
- * tty7 LayoutTree/LayoutOps 单元测试（任务 tty7-M1a，ArkTS/hypium）。
+ * LayoutTree/LayoutOps 单元测试（任务 M1a，ArkTS/hypium）。
  *
  * 与既有套件的“纯函数复制”范式不同：LayoutTree 是本任务新增的零依赖纯数据模块，
  * 因此直接相对路径 import 真实实现（测真实 API 而非复制品）。
@@ -15,8 +15,8 @@
  *   8. 不可变风格：所有 op 不改入参
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { LayoutOps } from '../../../main/ets/tty7/layout/LayoutOps';
-import { LayoutTreeModel, PaneLeaf, SplitNode } from '../../../main/ets/tty7/layout/LayoutTree';
+import { LayoutOps } from '../../../main/ets/workbench/layout/LayoutOps';
+import { LayoutTreeModel, PaneLeaf, SplitNode } from '../../../main/ets/workbench/layout/LayoutTree';
 
 /** 构造 2x2：A|B 两列，各列上下再分（A→C 上/下、B→D 上/下）。panes 先序 = A,C,B,D。 */
 function build2x2(): LayoutTreeModel {
@@ -28,7 +28,7 @@ function build2x2(): LayoutTreeModel {
 }
 
 export default function layoutTreeTest() {
-  describe('tty7LayoutTree', () => {
+  describe('LayoutTree', () => {
     // ===== 1. 构造与 panes 先序 =====
     it('single_split_nested_2x2_panes_preorder', 0, () => {
       const m0 = LayoutOps.single('A')
@@ -230,7 +230,7 @@ export default function layoutTreeTest() {
       expect(m2.focusedPaneId).assertEqual('A')
       expect(m2.zoomedPaneId).assertEqual('')
     })
-    // ===== 9. swapPane（tty7-M1e 拖拽重排核心）=====
+    // ===== 9. swapPane（M1e 拖拽重排核心）=====
     it('swap_diagonal_leaves_preorder_and_shape', 0, () => {
       const m2 = build2x2() // 先序 A,C,B,D
       const m = LayoutOps.swapPane(m2, 'A', 'D')

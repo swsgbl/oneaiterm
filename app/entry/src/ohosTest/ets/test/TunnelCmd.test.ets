@@ -1,12 +1,12 @@
 /**
- * tty7-LEG-3b 隧道命令纯函数单测(ArkTS/hypium)。
+ * LEG-3b 隧道命令纯函数单测(ArkTS/hypium)。
  * 靶: parseTunnelSpec(规格解析与校验)。
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { parseTunnelSpec } from '../../../main/ets/tty7/shell/PaletteCommands';
+import { parseTunnelSpec } from '../../../main/ets/workbench/shell/PaletteCommands';
 
 export default function tunnelCmdTest() {
-  describe('tty7TunnelCmd', () => {
+  describe('TunnelCmd', () => {
     it('parse_valid_spec', 0, () => {
       const s = parseTunnelSpec('9432:127.0.0.1:3306')
       expect(s !== null).assertTrue()

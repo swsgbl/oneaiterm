@@ -1,5 +1,5 @@
 /**
- * tty7 M6a 远程工作区单元测试(ArkTS/hypium,无网环境)。
+ * M6a 远程工作区单元测试(ArkTS/hypium,无网环境)。
  *
  * 覆盖(对应 M6a 交付物 5;无档环境走降级断言,ConnStore 真档只读原则):
  *   T1 provider.open 无 connKey 记录 → null + error 事件(store 未就绪分支:
@@ -9,12 +9,12 @@
  *   T4 bindSession 元数据链:kind/connKey/title 写入 + unbind 清理
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
-import { SshWorkspaceProvider } from '../../../main/ets/tty7/remote/RemoteWorkspaceProvider';
-import { RemoteTermHost } from '../../../main/ets/tty7/remote/RemoteTermHost';
+import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
+import { SshWorkspaceProvider } from '../../../main/ets/workbench/remote/RemoteWorkspaceProvider';
+import { RemoteTermHost } from '../../../main/ets/workbench/remote/RemoteTermHost';
 
 export default function remoteWorkspaceTest() {
-  describe('tty7RemoteWorkspace', () => {
+  describe('RemoteWorkspace', () => {
     // ===== T1 provider open:store 未就绪 → null + error 事件 =====
     it('provider_open_no_store_returns_null_with_error_event', 0, () => {
       // 单测环境无 ConnList 注册(它是唯一 setSharedStore 调用方),

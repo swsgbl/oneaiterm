@@ -1,5 +1,5 @@
 /**
- * tty7 M7a GitService/RemoteCommandRunner 单元测试(ArkTS/hypium,无网环境)。
+ * M7a GitService/RemoteCommandRunner 单元测试(ArkTS/hypium,无网环境)。
  *
  * 覆盖(对应 M7a 交付物 5;全纯函数,无 SSH 会话依赖):
  *   T1 porcelainLine:'XY path' 全形态('M '/' M'/'??'/'A '/' D'/'MM')
@@ -18,11 +18,11 @@
  */
 import { describe, it, expect } from '@ohos/hypium';
 import { GitBranchInfo, GitFileEntry, GitCommit, GitService,
-  porcelainLine, branchLine, logLine, quoteCwd } from '../../../main/ets/tty7/git/GitService';
-import { RunnerBuffer, RemoteCommandRunner } from '../../../main/ets/tty7/git/RemoteCommandRunner';
+  porcelainLine, branchLine, logLine, quoteCwd } from '../../../main/ets/workbench/git/GitService';
+import { RunnerBuffer, RemoteCommandRunner } from '../../../main/ets/workbench/git/RemoteCommandRunner';
 
 export default function gitServiceTest() {
-  describe('tty7GitService', () => {
+  describe('GitService', () => {
     // ===== T1 porcelainLine:全形态 =====
     it('porcelainline_all_xy_forms', 0, () => {
       // 'M ' staged 修改

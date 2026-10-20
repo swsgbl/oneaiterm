@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * oneaiterm-cli(任务 tty7-M8a 首发六命令;M8b 加 agents/events/wait/git
- * + 桥侧 \r 转义约定):驱动 app 内 tty7 CommandBridge 的 VM 侧 node 工具。
+ * oneaiterm-cli(任务 M8a 首发六命令;M8b 加 agents/events/wait/git
+ * + 桥侧 \r 转义约定):驱动 app 内 CommandBridge 的 VM 侧 node 工具。
  * 协议:TCP 127.0.0.1:18971,首行 token('dev-local',TODO-M9),之后每行
  * 一个 JSON 请求 {id,cmd,args},响应 {id,ok,data|error}(按 id 匹配;wait/git
  * 响应异步到——M8b 起同连接并发,等 id 即可)。

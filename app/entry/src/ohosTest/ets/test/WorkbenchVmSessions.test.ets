@@ -1,5 +1,5 @@
 /**
- * tty7 WorkbenchVm 会话挂接 + 多工作区单元测试(任务 tty7-M2b,ArkTS/hypium)。
+ * WorkbenchVm 会话挂接 + 多工作区单元测试(任务 M2b,ArkTS/hypium)。
  *
  * 单测环境无 ability context:AppStorage 无 'ut.filesDir',WorkbenchVm 构造走
  * 恢复失败降级分支(单工作区单 tab 双 pane 基线),persist() 静默不落盘
@@ -15,12 +15,12 @@
  *   7. slotsRev 递增(绑定/解绑各 +1)
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
-import { serializeWorkspaces, deserializeWorkspaces } from '../../../main/ets/tty7/store/WorkbenchStore';
-import { WorkspaceState } from '../../../main/ets/tty7/model/WorkspaceState';
+import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
+import { serializeWorkspaces, deserializeWorkspaces } from '../../../main/ets/workbench/store/WorkbenchStore';
+import { WorkspaceState } from '../../../main/ets/workbench/model/WorkspaceState';
 
 export default function workbenchVmSessionsTest() {
-  describe('tty7WorkbenchVmSessions', () => {
+  describe('workbenchVmSessions', () => {
     // ===== 1. bind/unbind/sessionOf 基本链 + 覆盖 =====
     it('bind_unbind_sessionof_chain_with_override', 0, () => {
       const vm = new WorkbenchVm() // p1|h|p2,焦点 p1
@@ -115,8 +115,8 @@ export default function workbenchVmSessionsTest() {
     it('archive_v1_downgrades_to_single_workspace', 0, () => {
       // 2 tab 的 v1 档(M2a 真实形态):降级后应包成 1 工作区 2 tab
       // (片段需包成 {...} 对象再入数组——裸 "key":value 拼接是非法 JSON)
-      const t1 = '{"tabId":"t1","title":"tty7","layout":{"root":{"t":"s","id":"sp1","dir":"h","ratio":0.5,"ch":[{"t":"l","id":"p1"},{"t":"l","id":"p2"}]},"focused":"p1","zoomed":""},"sessions":[]}'
-      const t2 = '{"tabId":"t2","title":"tty7-2","layout":{"root":{"t":"l","id":"p1"},"focused":"p1","zoomed":""},"sessions":[]}'
+      const t1 = '{"tabId":"t1","title":"终端","layout":{"root":{"t":"s","id":"sp1","dir":"h","ratio":0.5,"ch":[{"t":"l","id":"p1"},{"t":"l","id":"p2"}]},"focused":"p1","zoomed":""},"sessions":[]}'
+      const t2 = '{"tabId":"t2","title":"2","layout":{"root":{"t":"l","id":"p1"},"focused":"p1","zoomed":""},"sessions":[]}'
       const v1 = '{"v":1,"active":1,"tabs":[' + t1 + ',' + t2 + ']}'
       const back = deserializeWorkspaces(v1)
       expect(back !== null).assertTrue()
@@ -126,7 +126,7 @@ export default function workbenchVmSessionsTest() {
       expect(wss[0].tabs.length).assertEqual(2)
       expect(wss[0].tabs[0].tabId).assertEqual('t1')
       expect(wss[0].tabs[1].tabId).assertEqual('t2')
-      expect(wss[0].tabs[1].title).assertEqual('tty7-2')
+      expect(wss[0].tabs[1].title).assertEqual('2')
     })
 
     // ===== 7. slotsRev 递增 =====

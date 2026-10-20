@@ -1,5 +1,5 @@
 /**
- * tty7 WorkbenchStore 存档层单元测试(任务 tty7-M2a 建立,M2b 适配 v2 多工作区格式)。
+ * WorkbenchStore 存档层单元测试(任务 M2a 建立,M2b 适配 v2 多工作区格式)。
  *
  * 纯序列化/反序列化用例直接验证 serializeWorkspaces/deserializeWorkspaces;Vm 用例不落盘
  * ——单测环境无 ability context,AppStorage 无 'ut.filesDir',WorkbenchVm 构造
@@ -14,11 +14,11 @@
  *   6. Vm 层:setActiveTab 派生态跟随(statusText 'panes N' 与该 tab 树一致)
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { serializeWorkspaces, deserializeWorkspaces } from '../../../main/ets/tty7/store/WorkbenchStore';
-import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
-import { TabState } from '../../../main/ets/tty7/model/TabState';
-import { WorkspaceState } from '../../../main/ets/tty7/model/WorkspaceState';
-import { PaneLeaf, SplitNode } from '../../../main/ets/tty7/layout/LayoutTree';
+import { serializeWorkspaces, deserializeWorkspaces } from '../../../main/ets/workbench/store/WorkbenchStore';
+import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
+import { TabState } from '../../../main/ets/workbench/model/TabState';
+import { WorkspaceState } from '../../../main/ets/workbench/model/WorkspaceState';
+import { PaneLeaf, SplitNode } from '../../../main/ets/workbench/layout/LayoutTree';
 
 /** 构造 2x2 树:p1|p2 两列,各列上下再分(p3 挂 p1 下,p4 挂 p2 下)。 */
 function tab2x2(): TabState {
@@ -59,7 +59,7 @@ function wsOf(wsId: string, tabs: TabState[]): WorkspaceState {
 }
 
 export default function workbenchStoreTest() {
-  describe('tty7WorkbenchStore', () => {
+  describe('workbenchStore', () => {
     // ===== 1. 往返一致 =====
     it('roundtrip_two_workspaces_2x2_and_single', 0, () => {
       const json = serializeWorkspaces([wsOf('w1', [tab2x2()]), wsOf('w2', [tabSingle()])], 1)

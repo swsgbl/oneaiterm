@@ -183,13 +183,13 @@ export class TunnelService {
     hilog.info(DOMAIN, TAG, 'drop key=%{public}d active=%{public}d', key, TunnelService.conns.size);
   }
 
-  /** +tty7-LEG-3b: 运行态查询(监听 socket 在=活跃;API14 语义:stop 后
+  /** +LEG-3b: 运行态查询(监听 socket 在=活跃;API14 语义:stop 后
    *  端口仍被占但 conns 已清——active 只反映本类生命周期视角)。 */
   public static active(): boolean {
     return TunnelService.server !== null
   }
 
-  /** +tty7-LEG-3b: 累计转发连接数(footer 同源计数)。 */
+  /** +LEG-3b: 累计转发连接数(footer 同源计数)。 */
   public static totalForwarded(): number {
     return TunnelService.totalConns
   }

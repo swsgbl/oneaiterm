@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # vm-build-entry.sh -- build the MAIN entry module (product=store, target=
-# default) on the KaihongOS VM, for tty7-M2a device acceptance.
+# default) on the KaihongOS VM, for M2a device acceptance.
 # Derived from pack_hap.sh with ONLY the product axis sed'd (default->store);
 # the target stays @default (unlike vm-build-test.sh which also swaps target).
 # Output: /data/local/home/tmp/app/out_entry-signed.hap (script signs itself).

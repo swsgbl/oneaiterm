@@ -17,12 +17,12 @@ import {
   indexArg,
   renameOk,
   statusSnapshot
-} from '../../../main/ets/tty7/bridge/CommandBridge';
-import { gitAuditRecord } from '../../../main/ets/tty7/git/GitService';
-import { AgentEvent, AgentEventType } from '../../../main/ets/tty7/agent/AgentEvent';
-import { LayoutOps } from '../../../main/ets/tty7/layout/LayoutOps';
-import { SessionSlot } from '../../../main/ets/tty7/model/TabState';
-import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
+} from '../../../main/ets/workbench/bridge/CommandBridge';
+import { gitAuditRecord } from '../../../main/ets/workbench/git/GitService';
+import { AgentEvent, AgentEventType } from '../../../main/ets/workbench/agent/AgentEvent';
+import { LayoutOps } from '../../../main/ets/workbench/layout/LayoutOps';
+import { SessionSlot } from '../../../main/ets/workbench/model/TabState';
+import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
 
 export default function commandBridgeTest() {
   describe('CommandBridge', () => {
@@ -181,7 +181,7 @@ export default function commandBridgeTest() {
       const bad2 = gitAuditRecord('unstage', '/w', 'a', false, '')
       expect(bad2.resultDigest).assertEqual('failed')
     })
-    // ---- tty7-PA:treeToJson(2x2 树递归 JSON 形状 + slot 元数据)----
+    // ---- PA:treeToJson(2x2 树递归 JSON 形状 + slot 元数据)----
     it('treeToJsonRecursive', 0, () => {
       let m = LayoutOps.single('p1')
       m = LayoutOps.split(m, 'p1', 'h', 'p2')
@@ -213,7 +213,7 @@ export default function commandBridgeTest() {
       expect(right['paneId']).assertEqual('p2')
       expect(right['slotKind']).assertEqual('')
     })
-    // ---- tty7-PA:keysToBytes(命名键全表 + C-x 和弦 + 未知拒)----
+    // ---- PA:keysToBytes(命名键全表 + C-x 和弦 + 未知拒)----
     it('keysToBytesTable', 0, () => {
       expect(keysToBytes('enter')).assertEqual('\r')
       expect(keysToBytes('escape')).assertEqual('\x1b')
@@ -242,7 +242,7 @@ export default function commandBridgeTest() {
       expect(keysToBytes('C-1')).assertEqual('')
       expect(keysToBytes('')).assertEqual('')
     })
-    // ---- tty7-PA:tab.rename 参数校验(空 title 拒 + index 解析)----
+    // ---- PA:tab.rename 参数校验(空 title 拒 + index 解析)----
     it('renameIndexGuards', 0, () => {
       expect(renameOk('')).assertFalse()
       expect(renameOk('work')).assertTrue()
@@ -252,7 +252,7 @@ export default function commandBridgeTest() {
       expect(indexArg(-1, 0, 0)).assertEqual(-1)
       expect(indexArg(0, 0, 1)).assertEqual(0)
     })
-    // ---- tty7-PA:pane.split dir 白名单(缺省 h,白名单外拒)----
+    // ---- PA:pane.split dir 白名单(缺省 h,白名单外拒)----
     it('splitDirWhitelist', 0, () => {
       expect(splitDirOf('')).assertEqual('h')
       expect(splitDirOf('h')).assertEqual('h')
@@ -261,7 +261,7 @@ export default function commandBridgeTest() {
       expect(splitDirOf('H')).assertEqual('')
       expect(splitDirOf('hv')).assertEqual('')
     })
-    // ---- tty7-PA:status 快照降级(vm 未设)----
+    // ---- PA:status 快照降级(vm 未设)----
     it('statusDegradesWithoutVm', 0, () => {
       const s = statusSnapshot()
       expect(s['bridge']).assertEqual(0)
@@ -271,7 +271,7 @@ export default function commandBridgeTest() {
       expect(r.ok).assertFalse()
       expect(r.error).assertEqual('vm-not-set')
     })
-    // ---- tty7-PA:newWorkspaceNamed + 投影不变量 + renameTab(真档链)----
+    // ---- PA:newWorkspaceNamed + 投影不变量 + renameTab(真档链)----
     it('wsNewNamedAndProjection', 0, () => {
       const vm = new WorkbenchVm()
       const id = vm.newWorkspaceNamed('pa-x')

@@ -14,17 +14,17 @@ interface RawSession {
 
 export class TelnetService {
   private static cur: RawSession | null = null;
-  // +tty7-LEG-2: tty7 旁路订阅口(null = 旧界面路径,SessionService.feedExternal 原样;
-  // 非空 = tty7 TelTermHost 消费,feedExternal 跳过——两界面互斥,不会双流)
+  // +LEG-2: 旁路订阅口(null = 旧界面路径,SessionService.feedExternal 原样;
+  // 非空 = TelTermHost 消费,feedExternal 跳过——两界面互斥,不会双流)
   private static dataTap: ((text: string) => void) | null = null;
   private static eventTap: ((ev: string, data: string) => void) | null = null;
 
-  /** 数据旁路订阅(+tty7-LEG-2;null 摘除恢复旧界面直通路径)。 */
+  /** 数据旁路订阅(+LEG-2;null 摘除恢复旧界面直通路径)。 */
   static onData(fn: ((text: string) => void) | null): void {
     TelnetService.dataTap = fn;
   }
 
-  /** 事件旁路订阅('open'|'closed'|'error';+tty7-LEG-2;null 摘除)。 */
+  /** 事件旁路订阅('open'|'closed'|'error';+LEG-2;null 摘除)。 */
   static onEvent(fn: ((ev: string, data: string) => void) | null): void {
     TelnetService.eventTap = fn;
   }
@@ -64,7 +64,7 @@ export class TelnetService {
     TelnetService.deliver('[已连接 ' + host + ':' + port.toString() + ']\r\n')
   }
 
-  /** 数据投递:优先 tty7 旁路;无旁路走旧界面 SessionService 直通(零改动)。 */
+  /** 数据投递:优先 旁路;无旁路走旧界面 SessionService 直通(零改动)。 */
   private static deliver(text: string): void {
     const tap = TelnetService.dataTap
     if (tap !== null) {
@@ -78,7 +78,7 @@ export class TelnetService {
     SessionService.feedExternal(text)
   }
 
-  /** 事件投递(旁路;无旁路时旧界面靠文本标记,事件口仅 tty7 消费)。 */
+  /** 事件投递(旁路;无旁路时旧界面靠文本标记,事件口仅 消费)。 */
   private static deliverEvent(ev: string, data: string): void {
     const tap = TelnetService.eventTap
     if (tap !== null) {

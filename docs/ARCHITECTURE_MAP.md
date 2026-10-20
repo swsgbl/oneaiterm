@@ -1,4 +1,4 @@
-# ARCHITECTURE_MAP — oneAIterm 模块地图（tty7-M0 基线，以当前 checkout 为准）
+# ARCHITECTURE_MAP — oneAIterm 模块地图（M0 基线，以当前 checkout 为准）
 
 > 佐证格式：`file:line`。所有路径相对 `app/entry/src/main/`（除标注 thirdparty/scripts/ohosTest）。
 

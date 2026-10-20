@@ -1,5 +1,5 @@
 /**
- * tty7-PB parity 棒 B 纯函数单测(ArkTS/hypium)。
+ * PB parity 棒 B 纯函数单测(ArkTS/hypium)。
  *
  * 覆盖(任务书 ≥4):
  *   1. isPromptBack:尾行 trim 后缀 $/#/> 判定(含空数组/空白守卫)
@@ -13,11 +13,11 @@ import { describe, it, expect } from '@ohos/hypium';
 import {
   isPromptBack, recentMatches, DoneProbeState, probeSubmit, probeTick,
   buildFinishedAttention, RECENT_MAX, trimBlankTail
-} from '../../../main/ets/tty7/shell/ParityUi';
-import { AgentEventBus } from '../../../main/ets/tty7/agent/AgentEventBus';
+} from '../../../main/ets/workbench/shell/ParityUi';
+import { AgentEventBus } from '../../../main/ets/workbench/agent/AgentEventBus';
 
 export default function parityUiTest() {
-  describe('tty7ParityUi', () => {
+  describe('ParityUi', () => {
     // ===== 1. isPromptBack 提示符回归判定 =====
     it('prompt_back_detects_suffix_dollar_hash_gt', 0, () => {
       expect(isPromptBack(['out line', 'hongfu@vm:~$'])).assertTrue()

@@ -1,13 +1,13 @@
 /**
- * tty7-LEG-1 连接档案管理表单校验单测(ArkTS/hypium)。
+ * LEG-1 连接档案管理表单校验单测(ArkTS/hypium)。
  * 靶: ConnManagePanel 导出的纯函数 connFormValid/defaultPortFor。
  */
 import { describe, it, expect } from '@ohos/hypium';
 import { ConnRec } from '../../../main/ets/store/ConnStore';
-import { connFormValid, defaultPortFor, favoriteFirst } from '../../../main/ets/tty7/shell/ConnManagePanel';
+import { connFormValid, defaultPortFor, favoriteFirst } from '../../../main/ets/workbench/shell/ConnManagePanel';
 
 export default function connManageTest() {
-  describe('tty7ConnManage', () => {
+  describe('ConnManage', () => {
     it('form_valid_happy_path', 0, () => {
       expect(connFormValid('dev', 'ssh', '10.0.2.2', 2222)).assertEqual('')
       expect(connFormValid(' 交换机 ', 'telnet', '192.168.1.1', 23)).assertEqual('')

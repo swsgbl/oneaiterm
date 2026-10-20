@@ -1,5 +1,5 @@
 /**
- * tty7 M6b RightPanel 抽屉化单元测试(ArkTS/hypium,无网环境)。
+ * M6b RightPanel 抽屉化单元测试(ArkTS/hypium,无网环境)。
  *
  * 覆盖(对应 M6b 交付物 4;tab 切换逻辑在组件,事件列表保留由组件 @State +
  * if/else 分支结构保证,此处测纯函数值域 + 连接守卫):
@@ -10,11 +10,11 @@
  *      RightPanel SFTP 页连接态条件项,无会话环境即此态)
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { DrawerEntry, drawerTabOf, joinDir, parentDir, sortEntries } from '../../../main/ets/tty7/shell/SftpDrawerLogic';
-import { SshWorkspaceProvider } from '../../../main/ets/tty7/remote/RemoteWorkspaceProvider';
+import { DrawerEntry, drawerTabOf, joinDir, parentDir, sortEntries } from '../../../main/ets/workbench/shell/SftpDrawerLogic';
+import { SshWorkspaceProvider } from '../../../main/ets/workbench/remote/RemoteWorkspaceProvider';
 
 export default function sftpDrawerTest() {
-  describe('tty7SftpDrawer', () => {
+  describe('SftpDrawer', () => {
     // ===== T1 drawerTabOf:白名单归一 =====
     it('drawertab_of_normalizes_to_whitelist', 0, () => {
       expect(drawerTabOf('agent')).assertEqual('agent')

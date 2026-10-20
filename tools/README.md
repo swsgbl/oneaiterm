@@ -1,6 +1,6 @@
 # oneaiterm-cli(工具集)
 
-VM/宿主侧 node 工具,驱动 app 内 tty7 CommandBridge(TCP JSON-RPC,
+VM/宿主侧 node 工具,驱动 app 内 CommandBridge(TCP JSON-RPC,
 仅 listen `127.0.0.1:18971`)。协议:首行 token,之后每行一个 JSON
 请求 `{id,cmd,args}`,响应 `{id,ok,data|error}` 单行 JSON(按 id 匹配;
 `wait`/`git` 响应异步到,同连接并发安全)。
@@ -11,7 +11,7 @@ VM/宿主侧 node 工具,驱动 app 内 tty7 CommandBridge(TCP JSON-RPC,
 node --jitless oneaiterm-cli.js <cmd> [args...] --token <cli_token 值>
 ```
 
-## token 获取(任务 tty7-M9:真 token,替换 dev 常量)
+## token 获取(任务 M9:真 token,替换 dev 常量)
 
 app 冷启自动生成并持久化 `filesDir/cli_token`(双 UUID 拼接 64 hex =
 32 字节熵;文件读写失败降级本次进程内存 token)。两种取法:
@@ -30,7 +30,7 @@ app 冷启自动生成并持久化 `filesDir/cli_token`(双 UUID 拼接 64 hex =
 
 握手失败立即断连(`bridge auth rejected`);token 值绝不进 hilog。
 
-## 命令全集(M8a 六 + M8b 四 + tty7-PA 管理动词九 + send --keys)
+## 命令全集(M8a 六 + M8b 四 + PA 管理动词九 + send --keys)
 
 | 命令 | 参数 | 说明 |
 |---|---|---|
@@ -70,7 +70,7 @@ node --jitless oneaiterm-cli.js wait --paneId p1 --match CLI-OK --timeout 8000
 node --jitless oneaiterm-cli.js agents
 node --jitless oneaiterm-cli.js events --n 50
 
-# tty7-PA 管理链:工作区/tab/pane 增删改 + 树 + 键名发送
+# PA 管理链:工作区/tab/pane 增删改 + 树 + 键名发送
 node --jitless oneaiterm-cli.js ws.new --name scratch
 node --jitless oneaiterm-cli.js tab.new
 node --jitless oneaiterm-cli.js pane.split --dir v

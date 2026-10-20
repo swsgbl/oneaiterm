@@ -1,5 +1,5 @@
 /**
- * tty7 M7b Git 写操作单元测试(ArkTS/hypium,无网环境)。
+ * M7b Git 写操作单元测试(ArkTS/hypium,无网环境)。
  *
  * 覆盖(对应 M7b 交付物 4;全纯函数,无 SSH 会话依赖):
  *   T1 quoteMsg:合法(中英文/空格/括号)→ 单引号包裹;非法字符集
@@ -12,10 +12,10 @@
  *   T4 pushDryText:空输出 → 一致文案;To 行剔除;更新行保留;>300 截断
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { quoteMsg, quotePath, cmdFor, isStaged, isUntracked, pushDryText } from '../../../main/ets/tty7/git/GitService';
+import { quoteMsg, quotePath, cmdFor, isStaged, isUntracked, pushDryText } from '../../../main/ets/workbench/git/GitService';
 
 export default function gitWriteTest() {
-  describe('tty7GitWrite', () => {
+  describe('GitWrite', () => {
     // ===== T1 quoteMsg:合法/非法/边界 =====
     it('quotemsg_valid_invalid_and_length', 0, () => {
       // 合法:中英文/空格/括号/冒号 → 单引号包裹
