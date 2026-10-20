@@ -64,6 +64,7 @@ echo [4/6] REPACK ok
 
 rem ---- stage 5: INSTALL ----
 echo [5/6] INSTALL sign + bm install on device
+"%HDC%" %T% file send "%SCR%\vm-sign-install.sh" /data/local/tmp/vm-sign-install.sh >nul 2>&1
 "%HDC%" %T% file send "%EV%\vm-repacked.hap" /data/local/tmp/m7r1-unsigned.hap >nul 2>&1
 "%HDC%" %T% shell "sh /data/local/tmp/vm-sign-install.sh" >"%EV%\stage5-install.log" 2>&1
 findstr /C:"successfully" "%EV%\stage5-install.log" >nul || goto :fail_install

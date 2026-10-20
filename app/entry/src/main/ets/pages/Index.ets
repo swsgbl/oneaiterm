@@ -45,6 +45,14 @@ struct Index {
     } catch (e) {
       this.guideShow = true // 拿不到路径宁可弹(有跳过钮)
     }
+    // tty7-FR(冷启即用+恢复复活,UI 层接线):存档恢复 → local 槽复活;
+    // 全新基线 → p1 直接绑本地会话。放 aboutToAppear(vm 构造保持纯净,
+    // 单测环境不启 PTY);PTY 无窗口依赖,web 挂载由可见性门控兜。
+    if (this.tty7Vm.restoredFromArchive) {
+      this.tty7Vm.reviveLocalSession()
+    } else {
+      this.tty7Vm.bindLocalSessionFor('p1')
+    }
     // M8-relay14 dev channel: --ps agentPrompt/--ps agentEngine(tty7 直驱:
     // 开右栏+落 Agent 页;文本经 AppStorage 信号,RightPanel 挂载后消费)
     if (WantParams.getAgentPrompt() !== '') {
@@ -60,6 +68,12 @@ struct Index {
     if (WantParams.getTermCmd() !== '') {
       AppStorage.setOrCreate('ut.term.cmd', WantParams.getTermCmd())
     }
+  }
+
+  // tty7-FR: 页面可见(冷启后台启动的窗口上前时也触发)——驱动 PaneSurface
+  // 的 web 可见性门控(ArkWeb 隐藏窗口创建的 Web 永不 attach 且无重试)
+  onPageShow(): void {
+    this.tty7Vm.shellVisible()
   }
 
   // relay4 C1: 引导完成/跳过 → 写标记文件,永不再弹

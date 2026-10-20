@@ -236,13 +236,33 @@ export struct PaneSurface {
           .layoutWeight(1)
           .width('100%')
           .justifyContent(FlexAlign.Center)
-        } else if (this.ttydOk) {
+        } else if (this.ttydOk === true && this.vm.shellVisibleTick > 0) {
           // tty7-RD-2: web 分支接完成通知(桥注入/用户提交 → ✓ 双落点,同 TermPaneView)
+          // tty7-FR: 门控 vm.shellVisibleTick(if 表达式读它建立追踪)——
+          // 窗口可见后才建 Web:ArkWeb 在隐藏窗口创建的 Web 永不 attach
+          // 且无重试(冷启后台启动即死 pane;tick 0→1 翻转本分支时才创建)
           TermWebView({
             paneId: this.paneId,
             onUnreachable: (): void => { this.onTtydUnreachable() },
             onDone: (): void => { this.onCmdDone(this.paneId) }
           })
+        } else if (this.ttydOk === true) {
+          // tty7-FR: 探测 ok 但窗口未上前——等待可见(shellVisibleTick 变化
+          // 驱动翻转到 web 分支;冷启 aa start 不抢前台的窗口属此态)
+          Column() {
+            Text(this.paneId)
+              .fontSize(20)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.th().inkSubtle)
+              .opacity(0.55)
+            Text('等待窗口就绪…')
+              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontColor(this.th().inkSubtle)
+              .opacity(0.7)
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
         } else {
           TermPaneView({
             paneId: this.paneId,

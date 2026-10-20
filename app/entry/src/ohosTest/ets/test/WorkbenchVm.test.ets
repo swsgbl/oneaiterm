@@ -13,8 +13,9 @@
  *   6. resizeSplit：clamp 0.1~0.9 + 派生态同步
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { WorkbenchVm } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
+import { WorkbenchVm, firstLocalSlotPaneId } from '../../../main/ets/tty7/viewmodel/WorkbenchVm';
 import { PaneLeaf, SplitNode } from '../../../main/ets/tty7/layout/LayoutTree';
+import { SessionSlot } from '../../../main/ets/tty7/model/TabState';
 
 /** 构造 2x2：p1|p2 两列，各列上下再分。 */
 function vm2x2(): WorkbenchVm {
@@ -117,6 +118,32 @@ export default function workbenchVmTest() {
       vm.resizeSplit(spId, 0.4)
       expect((vm.layout.root as SplitNode).ratio).assertEqual(0.4)
       expect(vm.panes.join(',')).assertEqual('p1,p2')
+    })
+
+    // ===== 7. tty7-FR: firstLocalSlotPaneId(恢复复活取槽纯函数) =====
+    it('firstlocalslot_empty_when_no_sessions', 0, () => {
+      expect(firstLocalSlotPaneId([])).assertEqual('')
+    })
+
+    it('firstlocalslot_picks_first_local_skipping_remote', 0, () => {
+      const remote = new SessionSlot()
+      remote.paneId = 'p1'
+      remote.kind = 'ssh'
+      const local2 = new SessionSlot()
+      local2.paneId = 'p3'
+      local2.kind = 'local'
+      const local3 = new SessionSlot()
+      local3.paneId = 'p4'
+      local3.kind = 'local'
+      expect(firstLocalSlotPaneId([remote, local2, local3])).assertEqual('p3')
+    })
+
+    it('fr_baseline_ctor_stays_pure_no_pty', 0, () => {
+      // 构造纯净性:基线构造不启 PTY(会话绑定在 Index UI 层,单测环境不触发)
+      const vm = new WorkbenchVm()
+      expect(vm.restoredFromArchive).assertFalse()
+      expect(vm.shellVisibleTick).assertEqual(0)
+      expect(vm.sessionOf('p1')).assertNull()
     })
   })
 }

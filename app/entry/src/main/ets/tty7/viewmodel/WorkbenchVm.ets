@@ -33,6 +33,17 @@ import { trimBlankTail } from '../shell/ParityUi';
 /** Sidebar 工作区图标 glyph 池(AppIcons 现有 glyph 集内取;本地常量,不 import UI 模块)。 */
 const WS_GLYPHS: string[] = ['◈', '▣', '☸', '⌗', '∿', '▦', '◷'];
 
+/** tty7-FR(纯,单测靶):会话槽数组里首个 local 槽的 paneId(无 → '')。
+ *  TermHost 单例 → 恢复活化只取首个 local 槽。 */
+export function firstLocalSlotPaneId(sessions: SessionSlot[]): string {
+  for (const s of sessions) {
+    if (s.kind === 'local') {
+      return s.paneId
+    }
+  }
+  return ''
+}
+
 @Observed
 export class WorkbenchVm {
   /** 工作区数组(activeWs 为下标;至少 1 个)。 */
@@ -71,6 +82,13 @@ export class WorkbenchVm {
    *  PaneSurface 标题表达式读此绑定字段建立追踪(V1 方法调用不追踪,
    *  activeOnPane 纯查询,同 slotsRev/termTick 模式)。 */
   agentRev: number = 0
+  /** 窗口可见版本号(tty7-FR):Index.onPageShow ++。PaneSurface 的 web
+   *  分支读它建立追踪——ArkWeb 在隐藏窗口创建的 Web 永不 attach 且无
+   *  重试(冷启 aa start 不抢前台实证),门控到可见后再建。 */
+  shellVisibleTick: number = 0
+  /** 存档恢复成功标记(tty7-FR):Index.aboutToAppear 据此分流——恢复档
+   *  走 reviveLocalSession,全新基线走 p1 即用绑定。 */
+  restoredFromArchive: boolean = false
   private tabSeq: number = 1
   private paneSeq: number = 0
   private wsSeq: number = 1
@@ -110,6 +128,7 @@ export class WorkbenchVm {
         this.activeTab = ws.activeTab >= 0 && ws.activeTab < ws.tabs.length ? ws.activeTab : 0
         ws.activeTab = this.activeTab
         this.syncFromLayout(this.tabs[this.activeTab].layout)
+        this.restoredFromArchive = true
         restored = true
       }
     } catch (e) {
@@ -577,6 +596,49 @@ export class WorkbenchVm {
     // statusText 由 bindSession→refreshStatus 统一组装(panes · focus · sess N),
     // 此处不覆写——保留布局与焦点信息(验收判据:状态栏含 sess 1)
     return true
+  }
+
+  /** 页面可见通知(tty7-FR):Index.onPageShow 驱动,shellVisibleTick ++
+   *  触发 PaneSurface web 分支翻转(隐藏窗口期不建 Web,可见后才建)。 */
+  shellVisible(): void {
+    this.shellVisibleTick += 1
+  }
+
+  /** 指定 pane 绑本地会话(tty7-FR:bindLocalSession 的显式 pane 变体;
+   *  Index 冷启基线 p1 即用——首启跳过引导即见活终端,原为双水印占位)。 */
+  bindLocalSessionFor(paneId: string): boolean {
+    if (this.panes.indexOf(paneId) < 0) {
+      return false
+    }
+    if (TermHost.bound() === paneId) {
+      return true
+    }
+    if (TermHost.bound() !== '') {
+      this.unbindSession(TermHost.bound())
+    }
+    if (!TermHost.start(80, 24)) {
+      return false
+    }
+    TermHost.bind(paneId)
+    this.bindSession(paneId, 'local', '', 'local shell')
+    this.termTick += 1
+    return true
+  }
+
+  /** 恢复档里的 local 槽复活(tty7-FR:TermHost 重启+绑定——原仅标题恢复、
+   *  内容永久占位,「崩溃恢复占位陷阱」;TermHost 单例取首个 local 槽)。 */
+  reviveLocalSession(): void {
+    if (TermHost.bound() !== '') {
+      return
+    }
+    const target = firstLocalSlotPaneId(this.tabs[this.activeTab].sessions)
+    if (target === '' || this.panes.indexOf(target) < 0) {
+      return
+    }
+    if (TermHost.start(80, 24)) {
+      TermHost.bind(target)
+      this.termTick += 1
+    }
   }
 
   /** 结束本地会话:PTY 关 + 绑定 pane 的 slot 清 + termTick 驱动水印回归。

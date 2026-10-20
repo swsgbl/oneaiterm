@@ -64,8 +64,9 @@
 | 输入热修 | `dcc9731` | 终端输入链五坑修复(双 \r/IME 让路/提交后焦点/显示残留/pane id 唯一化) |
 | RD(重设计) | `dd1c28d`..`dda0ac9` | **ADR-0002 系统终端栈**:Web 组件加载系统 ttyd(xterm.js,渲染/输入/PTY/环境全归系统)——PoC go 门(五项)→运行时探测分流(RD-1)→CLI 桥同会话注入(RD-2)→**RD-2b 终修(dda0ac9):term 层接管 send/探针/活性(triggerDataEvent,pageEnd 直装+重试梯),弃用 ws wrap 与 one-shot refresh;VM 实证 B1/B3 双过** |
 | LEG(退役) | `02a1fb0`..`faa5dfe` | **旧界面退役四棒**:连接档案管理(RightPanel 第4页签+Dialog 表单)→Telnet+AI 三引擎 pill→收藏置顶+隧道 palette 命令+Zmodem 差异注记→**Index 壳化 108 行+删旧四文件 3362 行+E2E 门禁迁 tty7** |
+| FR(冷启健壮) | 本轮 | **冷启即用+可见性门控+崩溃复活**:全新基线 p1 直接绑本地会话(首启跳过引导即见活终端,原双水印占位);ArkWeb 隐藏窗口创建的 Web 永不 attach 且无重试→PaneSurface web 分支门控 vm.shellVisibleTick(Index.onPageShow 驱动);存档 local 槽复活 TermHost(原仅标题恢复=「崩溃恢复占位陷阱」);firstLocalSlotPaneId 纯函数+3 单测。VM 实证:V1a 冷启即用 F1-F4 全过(date 干净进 capture),V1b kill-9 复活 R1-R3 全过(REVIVED×2) |
 
-> 终态(2026-10-15,`dda0ac9`):tty7 工作台是唯一界面;RD-2 会话边界 known issue 闭环;全量 Release Gate
+> 终态(2026-10-20):tty7 工作台是唯一界面;RD-2 闭环+FR 冷启健壮;全量 Release Gate
 > 9/9 ALL PASSED(typecheck/unit 295/integration/E2E 金链/security/
 > license/SBOM/双 product build/package)——发布就绪。
 
