@@ -17,16 +17,28 @@ export struct WebPaneLayer {
   aboutToAppear(): void {
     WebPaneRects.onRevTap = (): void => {
       this.rev += 1
-      // R4b:键盘焦点请求消费(ArkUI 键盘事件走焦点树,Web 组件需显式
-      // 拿组件级焦点——解耦后点击穿透只给页面内部焦点,组件焦点要补)
+      // R4d:键盘焦点请求消费(ArkUI 键盘走焦点树;requestFocus 匹配的
+      // 是 .key() 标识——R4c 误用 .id() 静默失败,本修为 .key())。
+      // 双保险:pendingFocus 请求 + 唯一可见 pane 自动请求。
       const pf = WebPaneRects.consumePendingFocus()
       if (pf !== '' && this.vm.focusedPane === pf) {
-        try {
-          this.getUIContext().getFocusController().requestFocus('webpane-' + pf)
-        } catch (e) {
-          // 焦点请求失败不阻塞(下次 arm/焦点变化再试)
+        this.reqFocus(pf)
+      }
+      const snap = WebPaneRects.snapshot()
+      if (pf === '') {
+        const visible = snap.filter((r: WebPaneRect): boolean => r.show)
+        if (visible.length === 1) {
+          this.reqFocus(visible[0].paneId)
         }
       }
+    }
+  }
+
+  private reqFocus(paneId: string): void {
+    try {
+      this.getUIContext().getFocusController().requestFocus('webpane-' + paneId)
+    } catch (e) {
+      // 失败不阻塞(下次 arm/焦点变化再试)
     }
   }
 
@@ -55,6 +67,7 @@ export struct WebPaneLayer {
           })
             .id('webpane-' + r.paneId)
             .focusable(true)
+            .defaultFocus(r.paneId === this.vm.focusedPane && r.show)
             .position({ x: r.x, y: r.y })
             .width(r.w)
             .height(r.h)

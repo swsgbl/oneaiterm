@@ -23,6 +23,7 @@ import { unifiedDataChannel } from '@kit.ArkData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PaneDropTargets, PaneRectEntry, PaneDragState } from '../model/PaneDropTargets';
 import { WebPaneRects } from '../model/WebPaneRects';
+import { TtydSession } from '../term/TtydSession';
 import { tr } from '../../common/AppI18n';
 import { fsc } from '../../common/UiFont';
 
@@ -34,6 +35,48 @@ const M1E_DOMAIN: number = 0x0301
  *  编辑框会插字);自定义类型无默认消费方,onDrop 事件可达根容器。
  *  paneId 经 UnifiedRecord(type, value) 泛型构造承载(value:string)。 */
 const DRAG_TYPE: string = 'wb.pane-drag'
+
+/** R4e:键码 → 发送序列(单测靶)。字母 a-z=2017-2042 直转(小写;
+ *  Shift/大小写由 IME 时代路径不可用,保持小写足够覆盖命令面);
+ *  Enter=2054→\r;方向/退格/Tab→ANSI。IME 无关(KeyEvent 直达)。 */
+export function keyToSeq(code: number): string {
+  if (code >= 2017 && code <= 2042) {
+    return String.fromCharCode(97 + code - 2017)
+  }
+  if (code === 2054) {
+    return '\r'
+  }
+  return ansiOfKeyCode(code)
+}
+
+/** R4e:特殊键 → ANSI 序列(方向/退格/Tab/Home/End;单测靶)。 */
+export function ansiOfKeyCode(code: number): string {
+  if (code === 2034) {
+    return '\x1b[D'
+  }
+  if (code === 2035) {
+    return '\x1b[C'
+  }
+  if (code === 2036) {
+    return '\x1b[A'
+  }
+  if (code === 2037) {
+    return '\x1b[B'
+  }
+  if (code === 2038) {
+    return '\x7f'
+  }
+  if (code === 2049) {
+    return '\t'
+  }
+  if (code === 2078) {
+    return '\x1b[H'
+  }
+  if (code === 2079) {
+    return '\x1b[F'
+  }
+  return ''
+}
 
 @Component
 export struct PaneSurface {
@@ -53,6 +96,7 @@ export struct PaneSurface {
   @State ttydOk: boolean | null = null
   /** GUI-R4: 根矩形缓存(分支 onAppear 无 Area 上下文,用缓存发布)。 */
   private rectCache: number[] = [0, 0, 0, 0]
+  /** R4e 键盘转发:透明 TextInput 控制器 + 影子缓冲(差分出键)。 */
   /** GUI-i18n: 占位/提示文案反应式语言。 */
   @StorageProp('ut.locale') locale: string = 'zh-CN'
   /** RD-1: 退避重探链句柄(-1 未挂;pane 销毁清)。 */
@@ -279,14 +323,41 @@ export struct PaneSurface {
           // 占位 + 矩形上报」(WebPaneRects),真身在 AppShell 常驻
           // WebPaneLayer。布局树 rev 重建/分屏/换页只改矩形,web 实例
           // 与会话内容永不重载(用户实锤「新建分屏刷掉第一屏」根治)。
-          // 占位 hitTest None:点击直达下层 web;xterm 自获焦点。
-          Column()
-            .layoutWeight(1)
-            .width('100%')
-            .backgroundColor(Color.Transparent)
-            .hitTestBehavior(HitTestMode.None)
-            .onAppear(() => {
-              this.publishFromCache(true)
+          // R4e 键盘确定性通路:全幅透明 TextInput 持焦点并把按键转发到
+          // 同一 shell(视觉零存在)。**全部走 onKeyEvent 直转**(字母
+          // 键码→字符,2054→\r,功能键→ANSI)——不依赖 IME 文本插入
+          // (实勘:IME 连接断后 onChange 永不触发,但 KeyEvent 始终
+          // 到达节点,昨夜 AceFocus 日志实锤);返回 true 消费防双发。
+          Stack() {
+            TextInput({
+              placeholder: '',
+            })
+              .fontSize(fsc(this.fontScale, 13))
+              .fontColor(Color.Transparent)
+              .caretColor(Color.Transparent)
+              .placeholderColor(Color.Transparent)
+              .backgroundColor(Color.Transparent)
+              .borderRadius(0)
+              .padding(0)
+              .width('100%')
+              .height('100%')
+              .defaultFocus(this.vm.focusedPane === this.paneId)
+              .onKeyEvent((e: KeyEvent) => {
+                if (e.type === KeyType.Down) {
+                  const seq = keyToSeq(e.keyCode)
+                  if (seq !== '') {
+                    TtydSession.sendText(this.paneId, seq)
+                    return true
+                  }
+                }
+                return false
+              })
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .backgroundColor(Color.Transparent)
+          .onAppear(() => {
+            this.publishFromCache(true)
             })
         } else if (this.ttydOk === true) {
           // FR: 探测 ok 但窗口未上前——等待可见(shellVisibleTick 变化
