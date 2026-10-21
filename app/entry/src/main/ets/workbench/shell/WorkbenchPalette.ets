@@ -14,13 +14,16 @@ import { paletteCmds, PaletteCmd } from './PaletteCommands';
 import { InputHistory } from '../term/InputHistory';
 import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
+import { TtydSession } from '../term/TtydSession';
 import { recentMatches } from './ParityUi';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { tr } from '../../common/AppI18n';
+import { fsc } from '../../common/UiFont';
 
 @Component
 export struct WorkbenchPalette {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
   @StorageProp('ut.locale') locale: string = 'zh-CN'
@@ -54,9 +57,12 @@ export struct WorkbenchPalette {
   }
 
   /** PB:焦点 pane 宿主写口(bound 的 TermHost/RemoteTermHost;
-   *  未绑会话 null——条目置灰不可点)。 */
+   *  未绑会话 null——条目置灰不可点)。GUI-R3:web 会话经 TtydSession 注入。 */
   private focusTermWrite(): ((t: string) => void) | null {
     const f = this.vm.focusedPane
+    if (f !== '' && TtydSession.isLive(f)) {
+      return (t: string): void => { TtydSession.sendText(f, t) }
+    }
     if (f !== '' && RemoteTermHost.bound() === f) {
       return (t: string): void => { RemoteTermHost.write(t) }
     }
@@ -85,7 +91,7 @@ export struct WorkbenchPalette {
       // 居中面板(Stack 默认 Center)
       Column({ space: DesignTokens.SPACE_XS }) {
         TextInput({ placeholder: tr(this.locale, 'palette.placeholder') })
-          .fontSize(DesignTokens.FONT_BODY)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
           .fontColor(this.th().ink)
           .placeholderColor(this.th().inkSubtle)
           .caretColor(this.th().brand)
@@ -105,7 +111,7 @@ export struct WorkbenchPalette {
             // (write(text+'\r'),非 palette 命令语义);未绑会话置灰不可点。
             ForEach(this.visibleRecent(), (r: string, i: number) => {
               Text(r)
-                .fontSize(DesignTokens.FONT_BODY)
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
                 .fontColor(this.focusTermWrite() !== null ? this.th().inkSubtle : this.th().iconMuted)
                 .width('100%')
                 .height(34)
@@ -126,7 +132,7 @@ export struct WorkbenchPalette {
             }, (r: string, i: number) => 'rec#' + i.toString())
             ForEach(this.visibleCmds(), (c: PaletteCmd) => {
               Text(tr(this.locale, c.label))
-                .fontSize(DesignTokens.FONT_BODY)
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
                 .fontColor(this.th().ink)
                 .width('100%')
                 .height(44)

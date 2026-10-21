@@ -25,6 +25,7 @@ import { TtydSession } from './TtydSession';
 import { DoneProbeState, probeSubmit, probeTick, PROBE_TICK_MS } from '../shell/ParityUi';
 import { InputHistory } from './InputHistory';
 import { tr } from '../../common/AppI18n';
+import { fsc } from '../../common/UiFont';
 
 const RDPOC_TAG: string = 'RDPOC'
 const RDPOC_DOMAIN: number = 0xFF00
@@ -136,6 +137,7 @@ const ARM_RETRY_MS: number = 600
 
 @Component
 export struct TermWebView {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   paneId: string = ''
   /** ArkWeb 控制器(PoC 仅持有;不做 loadUrl/refresh 驱动)。 */
   controller: webview.WebviewController = new webview.WebviewController()
@@ -334,13 +336,13 @@ export struct TermWebView {
       if (this.pageState === 'error') {
         Column({ space: 6 }) {
           Text(tr(this.locale, 'term.unreach'))
-            .fontSize(14)
+            .fontSize(fsc(this.fontScale, 14))
             .fontColor('#f85149')
           Text(TTYD_URL)
-            .fontSize(11)
+            .fontSize(fsc(this.fontScale, 11))
             .fontColor('#7d8590')
           Text(this.pageErr.length > 0 ? this.pageErr : tr(this.locale, 'term.check'))
-            .fontSize(11)
+            .fontSize(fsc(this.fontScale, 11))
             .fontColor('#7d8590')
             .maxLines(2)
         }

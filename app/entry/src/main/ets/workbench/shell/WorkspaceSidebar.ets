@@ -15,9 +15,11 @@ import { AppIcons } from '../../common/AppIcons';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { tr } from '../../common/AppI18n';
+import { fsc } from '../../common/UiFont';
 
 @Component
 export struct WorkspaceSidebar {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @StorageLink('ut.theme') themeName: string = 'dark'
   @StorageProp('ut.locale') locale: string = 'zh-CN'
@@ -43,13 +45,19 @@ export struct WorkspaceSidebar {
 
   @Builder
   TipBubble() {
+    // GUI-R3: 气泡底色由 builder 自绘(popupColor 对 custom builder 在深色
+    // 主题不生效——系统白底+浅字=用户实见「白气泡看不到字」;自带 surfaceRaised
+    // 底+hairline 边,两主题均正常)
     Column() {
       Text(this.tipText)
-        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
         .fontColor(this.th().ink)
         .maxLines(2)
     }
     .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+    .backgroundColor(this.th().surfaceRaised)
+    .borderRadius(DesignTokens.RADIUS_MD)
+    .border({ width: 1, color: this.th().hairline })
   }
 
   /** bindPopup options 工厂(ArkTS 无对象字面量类型推断,显式组装)。 */
@@ -59,8 +67,8 @@ export struct WorkspaceSidebar {
         this.TipBubble()
       },
       placement: Placement.Right,
-      popupColor: this.th().panel,
-      enableArrow: true,
+      popupColor: Color.Transparent,
+      enableArrow: false,
       autoCancel: false
     }
     return o
@@ -70,7 +78,7 @@ export struct WorkspaceSidebar {
     Column() {
       // 展开/收起切换钮(顶部箭头:收起»/展开«)
       Text(this.vm.sidebarExpanded ? '«' : '»')
-        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
         .fontWeight(FontWeight.Bold)
         .fontColor(this.hoverId === 'sbtoggle' ? this.th().brand : this.th().iconMuted)
         .width(this.vm.sidebarExpanded ? '100%' : 32)
@@ -94,7 +102,7 @@ export struct WorkspaceSidebar {
       ForEach(this.vm.workspaces, (ws: WorkspaceState, idx: number) => {
         Row({ space: 8 }) {
           Text(ws.glyph)
-            .fontSize(DesignTokens.FONT_HEADING)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
             .fontWeight(FontWeight.Bold)
             .fontColor(this.vm.activeWs === idx || this.hoverId === 'ws' + idx.toString()
               ? this.th().brand : this.th().inkSubtle)
@@ -103,7 +111,7 @@ export struct WorkspaceSidebar {
             .textAlign(TextAlign.Center)
           if (this.vm.sidebarExpanded) {
             Text(ws.name)
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.vm.activeWs === idx ? this.th().ink : this.th().inkSubtle)
               .maxLines(1)
               .layoutWeight(1)
@@ -127,14 +135,14 @@ export struct WorkspaceSidebar {
       // + 新建工作区
       Row({ space: 8 }) {
         Text(AppIcons.OP_ADD)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontWeight(FontWeight.Bold)
           .fontColor(this.hoverId === 'wsnew' ? this.th().brand : this.th().iconMuted)
           .width(32)
           .textAlign(TextAlign.Center)
         if (this.vm.sidebarExpanded) {
           Text(tr(this.locale, 'sb.newWorkspace'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .maxLines(1)
             .layoutWeight(1)
@@ -156,14 +164,14 @@ export struct WorkspaceSidebar {
       // 连接(真实接线 → RightPanel conn 页)
       Row({ space: 8 }) {
         Text(AppIcons.PANEL_CONNECTIONS)
-          .fontSize(DesignTokens.FONT_HEADING)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
           .fontWeight(FontWeight.Bold)
           .fontColor(this.hoverId === 'conn' ? this.th().brand : this.th().iconStrong)
           .width(32)
           .textAlign(TextAlign.Center)
         if (this.vm.sidebarExpanded) {
           Text(tr(this.locale, 'sb.connections'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().ink)
             .maxLines(1)
             .layoutWeight(1)
@@ -185,14 +193,14 @@ export struct WorkspaceSidebar {
       // Git(真实接线 → RightPanel git 页)
       Row({ space: 8 }) {
         Text(AppIcons.PANEL_TUNNEL)
-          .fontSize(DesignTokens.FONT_HEADING)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
           .fontWeight(FontWeight.Bold)
           .fontColor(this.hoverId === 'git' ? this.th().brand : this.th().iconStrong)
           .width(32)
           .textAlign(TextAlign.Center)
         if (this.vm.sidebarExpanded) {
           Text(tr(this.locale, 'sb.git'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().ink)
             .maxLines(1)
             .layoutWeight(1)
@@ -215,7 +223,7 @@ export struct WorkspaceSidebar {
       Row({ space: 8 }) {
         Stack({ alignContent: Alignment.TopEnd }) {
           Text(AppIcons.CMD_AI)
-            .fontSize(DesignTokens.FONT_HEADING)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
             .fontWeight(FontWeight.Bold)
             .fontColor(this.hoverId === 'agent' ? this.th().brand : this.th().iconStrong)
             .width(32)
@@ -234,7 +242,7 @@ export struct WorkspaceSidebar {
 
         if (this.vm.sidebarExpanded) {
           Text(tr(this.locale, 'sb.agent'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().ink)
             .maxLines(1)
             .layoutWeight(1)
@@ -257,13 +265,13 @@ export struct WorkspaceSidebar {
       // 设置(GUI-R2:侧栏 ⚙ → 设置面板,主题/语言/桥状态/版本)
       Row({ space: 8 }) {
         Text('⚙')
-          .fontSize(DesignTokens.FONT_HEADING)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
           .fontColor(this.hoverId === 'settings' ? this.th().brand : this.th().iconStrong)
           .width(32)
           .textAlign(TextAlign.Center)
         if (this.vm.sidebarExpanded) {
           Text(tr(this.locale, 'sb.settings'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().ink)
             .maxLines(1)
             .layoutWeight(1)
@@ -285,13 +293,13 @@ export struct WorkspaceSidebar {
       // 底部主题切换点(暗/浅互切,沿用 AppStorage 'ut.theme' 通道)
       Row({ space: 8 }) {
         Text('●')
-          .fontSize(DesignTokens.FONT_HEADING)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
           .fontColor(this.themeName === 'dark' ? this.th().brand : this.th().inkSubtle)
           .width(32)
           .textAlign(TextAlign.Center)
         if (this.vm.sidebarExpanded) {
           Text(tr(this.locale, 'sb.theme'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .maxLines(1)
             .layoutWeight(1)

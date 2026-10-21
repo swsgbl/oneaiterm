@@ -7,9 +7,11 @@
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
+import { fsc } from '../../common/UiFont';
 
 @Component
 export struct ToastHost {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
 
@@ -22,7 +24,7 @@ export struct ToastHost {
       Column({ space: DesignTokens.SPACE_XS }) {
         ForEach(this.vm.toastMsgs, (msg: string, i: number) => {
           Text(msg)
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().ink)
             .padding({ left: 14, right: 14, top: 6, bottom: 6 })
             .borderRadius(DesignTokens.RADIUS_XL)

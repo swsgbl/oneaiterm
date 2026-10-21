@@ -23,6 +23,7 @@ import { unifiedDataChannel } from '@kit.ArkData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PaneDropTargets, PaneRectEntry, PaneDragState } from '../model/PaneDropTargets';
 import { tr } from '../../common/AppI18n';
+import { fsc } from '../../common/UiFont';
 
 const M1E_TAG: string = 'wb.M1e'
 const M1E_DOMAIN: number = 0x0301
@@ -35,6 +36,7 @@ const DRAG_TYPE: string = 'wb.pane-drag'
 
 @Component
 export struct PaneSurface {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
   paneId: string = ''
@@ -124,13 +126,13 @@ export struct PaneSurface {
         // bridge.activeOnPane 纯查询(run 未 final 时 '✦' 前缀;同 slotsRev 模式)
         Text((this.vm.agentRev >= 0 && HmhEventBridge.activeOnPane(this.paneId) ? '✦ ' : '') +
           (this.vm.slotsRev >= 0 ? this.vm.sessionTitle(this.paneId) : this.paneId))
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontWeight(FontWeight.Bold)
           .maxLines(1)
           .layoutWeight(1)
           .fontColor(this.vm.focusedPane === this.paneId ? this.th().brand : this.th().inkSubtle)
         Text('◎')
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().iconMuted)
           .width(16)
           .height(16)
@@ -142,7 +144,7 @@ export struct PaneSurface {
             this.onZoom()
           })
         Text(AppIcons.OP_DELETE)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.hoverClose ? this.th().danger : this.th().inkSubtle)
           .width(16)
           .height(16)
@@ -219,20 +221,21 @@ export struct PaneSurface {
           onDone: (): void => { this.onCmdDone(this.paneId) },
           wantFocus: this.vm.focusedPane === this.paneId
         })
-      } else if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
-        // RD-1: 运行时探测分流(替代 PoC 期 RD_POC 编译常量):
-        //  ttydOk=null 探测中(paneId 水印占位);true 渲染 TermWebView
-        //  (Web+ttyd);false 降级旧自绘 TermPaneView(onDone/wantFocus 接线
-        //  保留)。TermHost 会话生命周期不动(PTY 并行,RD-2 重映射)。
+      } else if (this.vm.slotsRev >= 0 && this.vm.sessionKindOf(this.paneId) === 'local') {
+        // GUI-R3 多本地:本地分支改按会话槽判定——web 架构下每个 pane 的
+        // ttyd 即独立 shell,不再被 TermHost 单例锁死(「开新终端杀旧终端」
+        // 修复);降级分支(ttyd 不可达)保留单例并给出占位提示(web 为主)。
+        // RD-1: 运行时探测分流:ttydOk=null 探测中;true→TermWebView
+        // (可见性门控);false→降级 TermPaneView。
         if (this.ttydOk === null) {
           Column() {
             Text(this.paneId)
-              .fontSize(20)
+              .fontSize(fsc(this.fontScale, 20))
               .fontWeight(FontWeight.Bold)
               .fontColor(this.th().inkSubtle)
               .opacity(0.55)
             Text(tr(this.locale, 'pane.probing'))
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().inkSubtle)
               .opacity(0.7)
           }
@@ -255,12 +258,12 @@ export struct PaneSurface {
           // 驱动翻转到 web 分支;冷启 aa start 不抢前台的窗口属此态)
           Column() {
             Text(this.paneId)
-              .fontSize(20)
+              .fontSize(fsc(this.fontScale, 20))
               .fontWeight(FontWeight.Bold)
               .fontColor(this.th().inkSubtle)
               .opacity(0.55)
             Text(tr(this.locale, 'pane.waitwin'))
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().inkSubtle)
               .opacity(0.7)
           }
@@ -268,27 +271,46 @@ export struct PaneSurface {
           .width('100%')
           .justifyContent(FlexAlign.Center)
         } else {
-          TermPaneView({
-            paneId: this.paneId,
-            onDone: (): void => { this.onCmdDone(this.paneId) },
-            wantFocus: this.vm.focusedPane === this.paneId
-          })
+          // 降级路径(ttyd 不可达):TermPaneView 依赖 TermHost 单例——
+          // 归属本 pane 才渲染;被其它 pane 占用时占位提示(web 为主)
+          if (this.vm.termTick >= 0 && TermHost.bound() === this.paneId && TermHost.term() !== null) {
+            TermPaneView({
+              paneId: this.paneId,
+              onDone: (): void => { this.onCmdDone(this.paneId) },
+              wantFocus: this.vm.focusedPane === this.paneId
+            })
+          } else {
+            Column() {
+              Text(this.paneId)
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
+                .fontWeight(FontWeight.Bold)
+                .fontColor(this.th().inkSubtle)
+                .opacity(0.55)
+              Text(tr(this.locale, 'pane.degradedbusy'))
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
+                .fontColor(this.th().inkSubtle)
+                .opacity(0.7)
+            }
+            .layoutWeight(1)
+            .width('100%')
+            .justifyContent(FlexAlign.Center)
+          }
         }
       } else {
         // GUI 丝滑棒:未绑会话 pane 的引导空态(原裸 paneId 水印)——
         // 快速动作直达:新建本地 / SSH 连接 / 命令面板
         Column({ space: DesignTokens.SPACE_SM }) {
           Text(this.paneId)
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().iconMuted)
             .opacity(0.7)
           Text(tr(this.locale, 'pane.empty.hint'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .opacity(0.8)
           Row({ space: DesignTokens.SPACE_SM }) {
             Text(tr(this.locale, 'pane.empty.local'))
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontWeight(FontWeight.Medium)
               .fontColor(this.th().surface)
               .height(30)
@@ -298,7 +320,7 @@ export struct PaneSurface {
               .textAlign(TextAlign.Center)
               .onClick(() => this.vm.bindLocalSessionFor(this.paneId))
             Text(tr(this.locale, 'pane.empty.ssh'))
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().ink)
               .height(30)
               .padding({ left: 14, right: 14 })
@@ -308,7 +330,7 @@ export struct PaneSurface {
               .textAlign(TextAlign.Center)
               .onClick(() => this.vm.openRightTab('conn'))
             Text('⌘ ' + tr(this.locale, 'pane.empty.palette'))
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().inkSubtle)
               .height(30)
               .padding({ left: 14, right: 14 })

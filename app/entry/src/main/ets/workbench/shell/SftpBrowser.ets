@@ -17,6 +17,7 @@ import { SessionService } from '../../service/SessionService';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { DrawerEntry, joinDir, parentDir, sortEntries } from './SftpDrawerLogic';
+import { fsc } from '../../common/UiFont';
 
 /** sftpList JSON 响应结构(与 pages/SftpPanel 同形;只取展示字段)。 */
 interface DrawerListResp {
@@ -26,6 +27,7 @@ interface DrawerListResp {
 
 @Component
 export struct SftpBrowser {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @Prop themeName: string = 'dark'
   @State cwd: string = '.'
   @State entries: DrawerEntry[] = []
@@ -98,13 +100,13 @@ export struct SftpBrowser {
       // ===== 路径行:cwd + '..' 返回 =====
       Row({ space: DesignTokens.SPACE_XS }) {
         Text(this.cwd)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().ink)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
         Text('..')
-          .fontSize(DesignTokens.FONT_LABEL)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
           .fontColor(this.th().brand)
           .padding({ left: 8, right: 8, top: 3, bottom: 3 })
           .borderRadius(DesignTokens.RADIUS_SM)
@@ -118,13 +120,13 @@ export struct SftpBrowser {
       if (this.errText !== '') {
         Row({ space: DesignTokens.SPACE_SM }) {
           Text(this.errText)
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().danger)
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
           Text('重试')
-            .fontSize(DesignTokens.FONT_LABEL)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
             .fontColor(this.th().brand)
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
             .borderRadius(DesignTokens.RADIUS_SM)
@@ -135,7 +137,7 @@ export struct SftpBrowser {
         .alignItems(VerticalAlign.Center)
       } else if (this.listing) {
         Text('加载中…')
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().inkSubtle)
       }
 
@@ -144,17 +146,17 @@ export struct SftpBrowser {
         Column() {
           if (!this.listing && this.errText === '' && this.entries.length === 0) {
             Text('空目录')
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().inkSubtle)
               .padding({ top: DesignTokens.SPACE_SM })
           }
           ForEach(this.entries, (e: DrawerEntry) => {
             Row({ space: DesignTokens.SPACE_XS }) {
               Text(e.isDir ? '▸' : '·')
-                .fontSize(DesignTokens.FONT_BODY)
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
                 .fontColor(e.isDir ? this.th().brand : this.th().inkSubtle)
               Text(e.name)
-                .fontSize(DesignTokens.FONT_BODY)
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
                 .fontColor(e.isDir ? this.th().ink : this.th().inkSubtle)
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })

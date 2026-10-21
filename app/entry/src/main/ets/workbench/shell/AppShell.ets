@@ -21,9 +21,11 @@ import { CommandBridge } from '../bridge/CommandBridge';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
+import { fsc } from '../../common/UiFont';
 
 @Component
 export struct AppShell {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @StorageLink('ut.theme') themeName: string = 'dark'
   onClose: () => void = () => {
@@ -59,7 +61,7 @@ export struct AppShell {
         // 顶行:返回钮 + TabBar(28px 合一高度,返回钮嵌在 tab 行左端)
         Row() {
           Text('«')
-            .fontSize(DesignTokens.FONT_HEADING)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
             .fontWeight(FontWeight.Bold)
             .fontColor(this.th().brand)
             .width(26)
@@ -72,7 +74,7 @@ export struct AppShell {
           TabBar({ vm: this.vm, themeName: this.themeName })
           // ⌘ 命令面板钮(M1d):开/关 paletteOpen(vm 单源)
           Text('⌘')
-            .fontSize(DesignTokens.FONT_HEADING)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
             .fontColor(this.th().iconMuted)
             .width(24)
             .height(22)

@@ -9,9 +9,11 @@ import { AppIcons } from '../../common/AppIcons';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { tr } from '../../common/AppI18n';
+import { fsc } from '../../common/UiFont';
 
 @Component
 export struct TabBar {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
   @State hoverClose: number = -1
@@ -54,14 +56,14 @@ export struct TabBar {
         ForEach(this.vm.tabs, (t: TabState, idx: number) => {
           Row({ space: 4 }) {
             Text(t.title)
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .constraintSize({ maxWidth: 120 })
               .fontColor(this.vm.activeTab === idx ? this.th().surface : this.th().inkSubtle)
             // × 关闭钮(至少 1 个 tab 时才可关)
             Text(this.vm.tabs.length > 1 ? AppIcons.OP_DELETE : ' ')
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.hoverClose === idx ? this.th().danger
                 : (this.vm.activeTab === idx ? this.th().surface : this.th().inkSubtle))
               .width(16)
@@ -84,7 +86,7 @@ export struct TabBar {
         }, (t: TabState, idx: number) => t.title + '#' + idx.toString())
         // + 新建钮
         Text(AppIcons.OP_ADD)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontWeight(FontWeight.Bold)
           .fontColor(this.th().iconMuted)
           .width(22)

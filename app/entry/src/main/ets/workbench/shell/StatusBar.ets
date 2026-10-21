@@ -6,9 +6,11 @@
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
+import { fsc } from '../../common/UiFont';
 
 @Component
 export struct StatusBar {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
 
@@ -20,7 +22,7 @@ export struct StatusBar {
     Row({ space: DesignTokens.SPACE_MD }) {
       // ⌘ 命令面板钮(M1d):与 AppShell 顶行 ⌘ 同源(vm.paletteOpen)
       Text('⌘')
-        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
         .fontColor(this.th().iconMuted)
         .width(18)
         .height(16)
@@ -29,17 +31,17 @@ export struct StatusBar {
         .accessibilityText('命令面板')
         .onClick(() => this.vm.togglePalette())
       Text(this.vm.statusText)
-        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
         .fontColor(this.th().inkSubtle)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .constraintSize({ maxWidth: '60%' })
       Blank()
       Text('panes ' + this.vm.panes.length.toString())
-        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
         .fontColor(this.th().inkSubtle)
       Text('focus ' + (this.vm.focusedPane !== '' ? this.vm.focusedPane : '-'))
-        .fontSize(DesignTokens.FONT_CAPTION)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
         .fontColor(this.vm.focusedPane !== '' ? this.th().ink : this.th().inkSubtle)
     }
     .width('100%')

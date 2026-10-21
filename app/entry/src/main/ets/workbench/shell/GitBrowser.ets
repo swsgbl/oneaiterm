@@ -18,9 +18,11 @@ import { DesignTokens } from '../../common/DesignTokens';
 import { GitBranchInfo, GitFileEntry, GitCommit, GitService,
   isStaged, isUntracked, quoteMsg } from '../git/GitService'; // +M7b: XY 分类/消息转义纯函数
 import { RemoteCommandRunner } from '../git/RemoteCommandRunner';
+import { fsc } from '../../common/UiFont';
 
 @Component
 export struct GitBrowser {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @Prop themeName: string = 'dark'
   @State branch: string = ''
   @State ahead: number = 0
@@ -261,14 +263,14 @@ export struct GitBrowser {
       // ===== 顶行:branch + ahead/behind + 刷新钮 =====
       Row({ space: DesignTokens.SPACE_XS }) {
         Text(this.branchText())
-          .fontSize(DesignTokens.FONT_BODY)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
           .fontWeight(FontWeight.Medium)
           .fontColor(this.th().ink)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
         Text(this.loading ? '…' : '↻')
-          .fontSize(DesignTokens.FONT_BODY)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
           .fontColor(this.th().brand)
           .width(24)
           .height(24)
@@ -285,13 +287,13 @@ export struct GitBrowser {
       if (this.errText !== '') {
         Row({ space: DesignTokens.SPACE_SM }) {
           Text(this.errText)
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().danger)
             .maxLines(2)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
           Text('重试')
-            .fontSize(DesignTokens.FONT_LABEL)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
             .fontColor(this.th().brand)
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
             .borderRadius(DesignTokens.RADIUS_SM)
@@ -305,7 +307,7 @@ export struct GitBrowser {
       // ===== 操作反馈行(M7b:stage/commit/pushDry 结果;'' 不显示) =====
       if (this.actionMsg !== '') {
         Text(this.actionMsg)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.actionOk ? this.th().success : this.th().danger)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -315,7 +317,7 @@ export struct GitBrowser {
       // ===== push 预演结果行(M7b:'推送预演' 钮产出;只读展示) =====
       if (this.pushText !== '') {
         Text(this.pushText)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().inkSubtle)
           .maxLines(4)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -328,14 +330,14 @@ export struct GitBrowser {
         Column() {
           if (this.errText === '' && this.files.length === 0 && !this.loading) {
             Text('无变更文件')
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().inkSubtle)
               .padding({ top: DesignTokens.SPACE_XS })
           }
           ForEach(this.files, (f: GitFileEntry) => {
             Row({ space: DesignTokens.SPACE_XS }) {
               Text(this.xyLabel(f.xy))
-                .fontSize(DesignTokens.FONT_LABEL)
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
                 .fontColor(this.xyColor(f.xy))
                 .width(18)
                 .textAlign(TextAlign.Center)
@@ -343,7 +345,7 @@ export struct GitBrowser {
                 .borderRadius(DesignTokens.RADIUS_SM)
                 .border({ width: 1, color: this.xyColor(f.xy) })
               Text(f.path)
-                .fontSize(DesignTokens.FONT_BODY)
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
                 .fontColor(this.th().ink)
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -352,7 +354,7 @@ export struct GitBrowser {
               // '-取消';首列空或'??'=未暂存/untracked '+暂存');写态中禁用
               if (!this.writing) {
                 Text(isStaged(f.xy) ? '-取消' : '+暂存')
-                  .fontSize(DesignTokens.FONT_LABEL)
+                  .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
                   .fontColor(isStaged(f.xy) ? this.th().warn : this.th().success)
                   .padding({ left: 6, right: 6, top: 2, bottom: 2 })
                   .borderRadius(DesignTokens.RADIUS_SM)
@@ -367,22 +369,22 @@ export struct GitBrowser {
           // ===== 最近提交列表(hash 前 7 + subject + date) =====
           if (this.commits.length > 0) {
             Text('最近提交')
-              .fontSize(DesignTokens.FONT_LABEL)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
               .fontColor(this.th().inkSubtle)
               .padding({ top: DesignTokens.SPACE_SM, bottom: DesignTokens.SPACE_XS })
             ForEach(this.commits, (c: GitCommit) => {
               Row({ space: DesignTokens.SPACE_XS }) {
                 Text(c.hash.length >= 7 ? c.hash.substring(0, 7) : c.hash)
-                  .fontSize(DesignTokens.FONT_CAPTION)
+                  .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
                   .fontColor(this.th().brand)
                 Text(c.subject)
-                  .fontSize(DesignTokens.FONT_CAPTION)
+                  .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
                   .fontColor(this.th().ink)
                   .maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                   .layoutWeight(1)
                 Text(c.date)
-                  .fontSize(DesignTokens.FONT_CAPTION)
+                  .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
                   .fontColor(this.th().inkSubtle)
               }
               .width('100%')
@@ -402,7 +404,7 @@ export struct GitBrowser {
       // ===== M7b 底部提交行:推送预演钮 + 消息输入 + 提交钮 =====
       Row({ space: DesignTokens.SPACE_XS }) {
         Text(this.writing ? '…' : '推送预演')
-          .fontSize(DesignTokens.FONT_LABEL)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
           .fontColor(this.writing ? this.th().inkSubtle : this.th().brand)
           .padding({ left: 6, right: 6, top: 5, bottom: 5 })
           .borderRadius(DesignTokens.RADIUS_SM)
@@ -410,7 +412,7 @@ export struct GitBrowser {
           .onClick(() => this.doPushDry())
         TextInput({ placeholder: '提交消息…', text: this.msgInput })
           .id('GitMsg') // M7b: palette 焦点信号 requestFocus 靶
-          .fontSize(DesignTokens.FONT_BODY)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
           .fontColor(this.th().ink)
           .placeholderColor(this.th().inkSubtle)
           .backgroundColor(this.th().inputBg)
@@ -424,7 +426,7 @@ export struct GitBrowser {
           .onSubmit(() => this.doCommit())
         if (this.hasStaged() && !this.writing && !this.loading) {
           Text('提交')
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().surface)
             .padding({ left: 10, right: 10, top: 6, bottom: 6 })
             .borderRadius(DesignTokens.RADIUS_MD)
@@ -432,7 +434,7 @@ export struct GitBrowser {
             .onClick(() => this.doCommit())
         } else {
           Text('提交')
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().inkSubtle)
             .padding({ left: 10, right: 10, top: 6, bottom: 6 })
             .borderRadius(DesignTokens.RADIUS_MD)

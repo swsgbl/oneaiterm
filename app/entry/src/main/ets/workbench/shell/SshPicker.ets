@@ -12,6 +12,7 @@ import { getSharedStore } from '../../store/ConnStore';
 import { ensureSharedStore } from '../remote/ConnStoreBootstrap';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
+import { fsc } from '../../common/UiFont';
 
 /** 列表行展示模型(只保留展示字段)。 */
 class SshRow {
@@ -21,6 +22,7 @@ class SshRow {
 
 @Component
 export struct SshPicker {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
   onClose: () => void = () => {
@@ -61,7 +63,7 @@ export struct SshPicker {
       // 居中面板
       Column({ space: DesignTokens.SPACE_XS }) {
         Text('选择 SSH 连接')
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().inkSubtle)
           .width('100%')
 
@@ -69,7 +71,7 @@ export struct SshPicker {
           Column({ space: DesignTokens.SPACE_XS }) {
             ForEach(this.rows(), (r: SshRow) => {
               Text(r.label)
-                .fontSize(DesignTokens.FONT_BODY)
+                .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
                 .fontColor(this.th().ink)
                 .width('100%')
                 .height(44)

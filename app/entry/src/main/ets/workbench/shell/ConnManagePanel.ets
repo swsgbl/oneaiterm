@@ -15,6 +15,7 @@ import { ensureSharedStore } from '../remote/ConnStoreBootstrap';
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
+import { fsc } from '../../common/UiFont';
 
 /**
  * 表单校验(纯;单测靶):返回 '' = 合法,否则错误文案(UI 直接展示)。
@@ -75,6 +76,7 @@ export class ConnFormValues {
 
 @CustomDialog
 struct ConnFormDialog {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   controller?: CustomDialogController
   @StorageProp('ut.locale') locale: string = 'zh-CN'
   @State vName: string = ''
@@ -126,11 +128,11 @@ struct ConnFormDialog {
   build() {
     Column({ space: DesignTokens.SPACE_SM }) {
       Text(tr(this.locale, this.title))
-        .fontSize(DesignTokens.FONT_HEADING)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
         .fontColor(this.th().ink)
         .padding({ top: DesignTokens.SPACE_MD, bottom: DesignTokens.SPACE_SM })
       Text(tr(this.locale, 'conn.save'))
-        .fontSize(DesignTokens.FONT_LABEL)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
         .fontColor(this.th().surface)
         .padding({ left: 16, right: 16, top: 6, bottom: 6 })
         .borderRadius(DesignTokens.RADIUS_MD)
@@ -139,13 +141,13 @@ struct ConnFormDialog {
       Scroll() {
         Column() {
           Text(tr(this.locale, 'conn.f.name'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .width('100%')
             .textAlign(TextAlign.Start)
             .padding({ top: DesignTokens.SPACE_SM, bottom: 2 })
           TextInput({ text: this.vName, placeholder: tr(this.locale, 'conn.ph.name') })
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().ink)
             .backgroundColor(this.th().panel)
             .width('100%')
@@ -155,14 +157,14 @@ struct ConnFormDialog {
               this.vName = x
             })
           Text(tr(this.locale, 'conn.f.type'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .width('100%')
             .textAlign(TextAlign.Start)
             .padding({ top: DesignTokens.SPACE_SM, bottom: 2 })
           Row({ space: DesignTokens.SPACE_SM }) {
             Text('SSH')
-              .fontSize(DesignTokens.FONT_LABEL)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
               .fontColor(this.vType === 'ssh' ? this.th().surface : this.th().inkSubtle)
               .padding({ left: 14, right: 14, top: 5, bottom: 5 })
               .borderRadius(DesignTokens.RADIUS_MD)
@@ -172,7 +174,7 @@ struct ConnFormDialog {
                 this.vPort = defaultPortFor('ssh').toString()
               })
             Text('Telnet')
-              .fontSize(DesignTokens.FONT_LABEL)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
               .fontColor(this.vType === 'telnet' ? this.th().surface : this.th().inkSubtle)
               .padding({ left: 14, right: 14, top: 5, bottom: 5 })
               .borderRadius(DesignTokens.RADIUS_MD)
@@ -185,13 +187,13 @@ struct ConnFormDialog {
           .alignItems(VerticalAlign.Center)
           .width('100%')
           Text(tr(this.locale, 'conn.f.host'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .width('100%')
             .textAlign(TextAlign.Start)
             .padding({ top: DesignTokens.SPACE_SM, bottom: 2 })
           TextInput({ text: this.vHost, placeholder: tr(this.locale, 'conn.ph.host') })
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().ink)
             .backgroundColor(this.th().panel)
             .width('100%')
@@ -199,13 +201,13 @@ struct ConnFormDialog {
               this.vHost = x
             })
           Text(tr(this.locale, 'conn.f.port'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .width('100%')
             .textAlign(TextAlign.Start)
             .padding({ top: DesignTokens.SPACE_SM, bottom: 2 })
           TextInput({ text: this.vPort, placeholder: '22' })
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().ink)
             .backgroundColor(this.th().panel)
             .width('100%')
@@ -214,13 +216,13 @@ struct ConnFormDialog {
               this.vPort = x
             })
           Text(tr(this.locale, 'conn.f.user'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .width('100%')
             .textAlign(TextAlign.Start)
             .padding({ top: DesignTokens.SPACE_SM, bottom: 2 })
           TextInput({ text: this.vUser, placeholder: 'root' })
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().ink)
             .backgroundColor(this.th().panel)
             .width('100%')
@@ -228,13 +230,13 @@ struct ConnFormDialog {
               this.vUser = x
             })
           Text(tr(this.locale, 'conn.f.pass'))
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
             .width('100%')
             .textAlign(TextAlign.Start)
             .padding({ top: DesignTokens.SPACE_SM, bottom: 2 })
           TextInput({ text: this.vPass, placeholder: '' })
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().ink)
             .backgroundColor(this.th().panel)
             .width('100%')
@@ -244,12 +246,12 @@ struct ConnFormDialog {
             })
           if (this.formErr !== '') {
             Text(this.formErr)
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor('#e5534b')
               .padding({ top: 4 })
           }
           Text(tr(this.locale, 'conn.cancel'))
-            .fontSize(DesignTokens.FONT_LABEL)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
             .fontColor(this.th().inkSubtle)
             .padding({ left: 14, right: 14, top: 5, bottom: 5 })
             .borderRadius(DesignTokens.RADIUS_MD)
@@ -273,6 +275,7 @@ struct ConnFormDialog {
 
 @Component
 export struct ConnManagePanel {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
   @StorageProp('ut.locale') locale: string = 'zh-CN'
@@ -428,11 +431,11 @@ export struct ConnManagePanel {
     Row({ space: DesignTokens.SPACE_SM }) {
       Column({ space: 2 }) {
         Text(rec.name !== '' ? rec.name : rec.id)
-          .fontSize(DesignTokens.FONT_BODY)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
           .fontColor(this.th().ink)
           .maxLines(1)
         Text(rec.type + ' · ' + rec.user + '@' + rec.host + ':' + rec.port.toString())
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().inkSubtle)
           .maxLines(1)
       }
@@ -440,25 +443,25 @@ export struct ConnManagePanel {
       .alignItems(HorizontalAlign.Start)
       // LEG-3a: 收藏星标(置顶排序;★实/☆虚)
       Text(rec.favorite ? '★' : '☆')
-        .fontSize(DesignTokens.FONT_BODY)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
         .fontColor(rec.favorite ? '#e3b341' : this.th().inkSubtle)
         .onClick(() => this.toggleFav(rec))
       Text(tr(this.locale, 'conn.row.connect'))
-        .fontSize(DesignTokens.FONT_LABEL)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
         .fontColor(this.th().surface)
         .padding({ left: 10, right: 10, top: 3, bottom: 3 })
         .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th().brand) // ssh/telnet 均可连(LEG-2)
         .onClick(() => this.connect(rec))
       Text(tr(this.locale, 'conn.row.edit'))
-        .fontSize(DesignTokens.FONT_LABEL)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
         .fontColor(this.th().inkSubtle)
         .padding({ left: 8, right: 8, top: 3, bottom: 3 })
         .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th().hover)
         .onClick(() => this.startEdit(rec))
       Text(tr(this.locale, 'conn.row.del'))
-        .fontSize(DesignTokens.FONT_LABEL)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
         .fontColor(this.th().inkSubtle)
         .padding({ left: 8, right: 8, top: 3, bottom: 3 })
         .borderRadius(DesignTokens.RADIUS_MD)
@@ -475,7 +478,7 @@ export struct ConnManagePanel {
     Column({ space: DesignTokens.SPACE_SM }) {
       if (this.hint !== '') {
         Text(this.hint)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().inkSubtle)
           .padding({ left: DesignTokens.SPACE_MD, right: DesignTokens.SPACE_MD, top: DesignTokens.SPACE_XS })
           .onClick(() => {
@@ -486,7 +489,7 @@ export struct ConnManagePanel {
         Column() {
           if (this.conns.length === 0) {
             Text(tr(this.locale, 'conn.empty'))
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().inkSubtle)
               .padding(DesignTokens.SPACE_MD)
           }
@@ -494,18 +497,18 @@ export struct ConnManagePanel {
             if (this.deleting === rec.id) {
               Column({ space: DesignTokens.SPACE_XS }) {
                 Text(tr(this.locale, 'conn.del.confirm') + (rec.name !== '' ? rec.name : rec.id) + tr(this.locale, 'conn.del.confirm2'))
-                  .fontSize(DesignTokens.FONT_BODY)
+                  .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
                   .fontColor(this.th().ink)
                 Row({ space: DesignTokens.SPACE_MD }) {
                   Text(tr(this.locale, 'conn.del.ok'))
-                    .fontSize(DesignTokens.FONT_LABEL)
+                    .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
                     .fontColor('#e5534b')
                     .padding({ left: 10, right: 10, top: 3, bottom: 3 })
                     .borderRadius(DesignTokens.RADIUS_MD)
                     .backgroundColor(this.th().hover)
                     .onClick(() => this.doDelete())
                   Text(tr(this.locale, 'conn.cancel'))
-                    .fontSize(DesignTokens.FONT_LABEL)
+                    .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
                     .fontColor(this.th().inkSubtle)
                     .padding({ left: 10, right: 10, top: 3, bottom: 3 })
                     .borderRadius(DesignTokens.RADIUS_MD)
@@ -522,7 +525,7 @@ export struct ConnManagePanel {
             }
           }, (rec: ConnRec) => rec.id + ':' + (rec.favorite ? '1' : '0')) // 收藏态入键:favorite 翻转驱动行重建(V1 键不变不刷新)
           Text(tr(this.locale, 'conn.new'))
-            .fontSize(DesignTokens.FONT_LABEL)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
             .fontColor(this.th().surface)
             .padding({ left: 14, right: 14, top: 5, bottom: 5 })
             .borderRadius(DesignTokens.RADIUS_MD)

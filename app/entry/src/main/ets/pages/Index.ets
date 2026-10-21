@@ -20,6 +20,9 @@ import { AppShell } from '../workbench/shell/AppShell';
 import { WorkbenchVm } from '../workbench/viewmodel/WorkbenchVm';
 import { GuideOverlay } from '../components/GuideOverlay';
 import { applyLocale, bindPersistLocale } from '../common/AppI18n';
+import { applyFontScale, bindFontPersist } from '../common/UiFont';
+import { UpdateChecker, UpdateResult, isNewer } from '../service/UpdateChecker';
+import { t, curLocale } from '../common/AppI18n';
 
 @Entry
 @Component
@@ -55,6 +58,32 @@ struct Index {
       })
     } catch (e) {
       applyLocale('')
+    }
+    // GUI-R3: 界面字号档回放(filesDir/uifont.txt;无档=1.0)+持久化钩子
+    try {
+      const fctx = getContext(this) as common.UIAbilityContext
+      const fp = fctx.filesDir + '/uifont.txt'
+      let savedScale = 1.0
+      try {
+        savedScale = Number(fs.readTextSync(fp).trim())
+        if (Number.isNaN(savedScale)) {
+          savedScale = 1.0
+        }
+      } catch (e2) {
+        savedScale = 1.0
+      }
+      applyFontScale(savedScale)
+      bindFontPersist((s: number): void => {
+        try {
+          const f = fs.openSync(fp, fs.OpenMode.WRITE_ONLY | fs.OpenMode.CREATE)
+          fs.writeSync(f.fd, s.toString())
+          fs.closeSync(f)
+        } catch (e3) {
+          hilog.warn(0x0110, 'oat.index', 'uifont persist fail')
+        }
+      })
+    } catch (e) {
+      applyFontScale(1.0)
     }
     try {
       const ctx = getContext(this) as common.UIAbilityContext
@@ -93,6 +122,26 @@ struct Index {
     // --ps termCmd: 信号写入(工作台侧消费端留后续;legacy 直开终端已退役)
     if (WantParams.getTermCmd() !== '') {
       AppStorage.setOrCreate('ut.term.cmd', WantParams.getTermCmd())
+    }
+    // GUI-R3: 启动自动检查更新(update_auto.txt='1' 时;仅新版本 toast)
+    try {
+      const uctx = getContext(this) as common.UIAbilityContext
+      let auto = false
+      try {
+        auto = fs.readTextSync(uctx.filesDir + '/update_auto.txt').trim() === '1'
+      } catch (e4) {
+        auto = false
+      }
+      if (auto) {
+        UpdateChecker.check(curLocale()).then((r: UpdateResult): void => {
+          if (r.ok && isNewer('2.1.0', r.latest)) {
+            this.workbenchVm.toast(t('upd.found') + ' v' + r.latest)
+          }
+        }).catch((): void => {
+        })
+      }
+    } catch (e) {
+      // 自动检查失败静默
     }
   }
 

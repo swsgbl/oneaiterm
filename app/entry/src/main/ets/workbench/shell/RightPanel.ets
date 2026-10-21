@@ -39,6 +39,7 @@ import { SftpBrowser } from './SftpBrowser';
 import { GitBrowser } from './GitBrowser'; // +M7a: Git 只读页
 import { ConnManagePanel } from './ConnManagePanel'; // +LEG-1: 连接档案管理
 import { engineLabel, engineOfKey, promptGuard } from '../agent/AgentPanelLogic'; // +LEG-2: 三引擎 pill/守卫
+import { fsc } from '../../common/UiFont';
 
 /** delta 单条正文显示上限(溢出省略)。 */
 const TEXT_CAP: number = 200;
@@ -47,6 +48,7 @@ const PANEL_MAX: number = 200;
 
 @Component
 export struct RightPanel {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
   @StorageProp('ut.locale') locale: string = 'zh-CN'
@@ -238,7 +240,7 @@ export struct RightPanel {
         Circle({ width: 5, height: 5 })
           .fill(ev.state === 'error' ? this.th().danger : this.th().success)
         Text(ev.text !== '' ? ev.text : ev.state)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().inkSubtle)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -248,7 +250,7 @@ export struct RightPanel {
       .padding({ top: 2, bottom: 2 })
     } else if (ev.type === 'delta') {
       Text(this.capText(ev.text))
-        .fontSize(DesignTokens.FONT_BODY)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
         .fontColor(ev.kind === 'reasoning' ? this.th().inkSubtle : this.th().ink)
         .fontStyle(ev.kind === 'reasoning' ? FontStyle.Italic : FontStyle.Normal)
         .maxLines(6)
@@ -258,14 +260,14 @@ export struct RightPanel {
     } else if (ev.type === 'tool_call') {
       Row({ space: DesignTokens.SPACE_XS }) {
         Text('🔧 ' + (ev.toolName !== '' ? ev.toolName : 'tool'))
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.riskColor(ev))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
         if (ev.riskLevel !== '') {
           Text('· ' + ev.riskLevel)
-            .fontSize(DesignTokens.FONT_LABEL)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
             .fontColor(this.riskColor(ev))
         }
       }
@@ -274,10 +276,10 @@ export struct RightPanel {
     } else if (ev.type === 'tool_result') {
       Row({ space: DesignTokens.SPACE_XS }) {
         Text(ev.ok ? '✓ ' : '✗ ')
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(ev.ok ? this.th().success : this.th().danger)
         Text(this.capText(ev.text !== '' ? ev.text : (ev.toolName !== '' ? ev.toolName : '')))
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().inkSubtle)
           .maxLines(4)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -290,21 +292,21 @@ export struct RightPanel {
       // approval_result 同 toolId 回流后置灰(决策不重发);未收口前可点。
       Column({ space: DesignTokens.SPACE_XS }) {
         Text('需要审批: ' + (ev.toolName !== '' ? ev.toolName : '') + '·' + this.capText(ev.argsDigest))
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.approvalSettledFor(ev) ? this.th().inkSubtle : this.th().ink)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Row({ space: DesignTokens.SPACE_SM }) {
           if (ev.riskLevel !== '') {
             Text('· ' + ev.riskLevel)
-              .fontSize(DesignTokens.FONT_LABEL)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
               .fontColor(this.toneColor(approvalToneOf(ev.riskLevel)))
               .layoutWeight(1)
           } else {
             Blank().layoutWeight(1)
           }
           Text(tr(this.locale, 'ev.allow'))
-            .fontSize(DesignTokens.FONT_LABEL)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
             .fontColor(this.approvalSettledFor(ev) ? this.th().inkSubtle : this.th().success)
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
             .borderRadius(DesignTokens.RADIUS_SM)
@@ -318,7 +320,7 @@ export struct RightPanel {
               }
             })
           Text(tr(this.locale, 'ev.deny'))
-            .fontSize(DesignTokens.FONT_LABEL)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
             .fontColor(this.approvalSettledFor(ev) ? this.th().inkSubtle : this.th().danger)
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
             .borderRadius(DesignTokens.RADIUS_SM)
@@ -346,11 +348,11 @@ export struct RightPanel {
     } else if (ev.type === 'final') {
       Row({ space: DesignTokens.SPACE_XS }) {
         Text(ev.ok ? '✓ 完成' : '✗ 失败')
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontWeight(FontWeight.Medium)
           .fontColor(ev.ok ? this.th().success : this.th().danger)
         Text(this.capText(ev.text))
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().inkSubtle)
           .maxLines(4)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -361,7 +363,7 @@ export struct RightPanel {
     } else if (ev.type === 'run_started') {
       Row({ space: DesignTokens.SPACE_XS }) {
         Text('▶ 任务 ' + ev.runId)
-          .fontSize(DesignTokens.FONT_CAPTION)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
           .fontColor(this.th().brand)
       }
       .width('100%')
@@ -369,7 +371,7 @@ export struct RightPanel {
     } else if (ev.type === 'session_checkpoint') {
       // M5b 桩:'↻ 会话恢复 sessionId 前缀'(HMH resume 机制接入留 M8 CLI 棒)
       Text(checkpointLabel(ev.text === '' ? 'resumed' : ev.text))
-        .fontSize(DesignTokens.FONT_LABEL)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
         .fontColor(this.th().inkSubtle)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -378,7 +380,7 @@ export struct RightPanel {
     } else {
       // attention:轻提示行
       Text('· ' + this.capText(ev.text))
-        .fontSize(DesignTokens.FONT_LABEL)
+        .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
         .fontColor(this.th().inkSubtle)
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -392,7 +394,7 @@ export struct RightPanel {
       // ===== 标题行:Agent + 真实状态点(bus 最近 state 派生) =====
       Row({ space: DesignTokens.SPACE_SM }) {
         Text(this.stateLabel())
-          .fontSize(DesignTokens.FONT_HEADING)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
           .fontWeight(FontWeight.Bold)
           .fontColor(this.th().ink)
           .maxLines(1)
@@ -414,28 +416,28 @@ export struct RightPanel {
       // ===== M6b 页签行:Agent | SFTP pill(active=brand 底/surface 字) =====
       Row({ space: DesignTokens.SPACE_XS }) {
         Text('Agent')
-          .fontSize(DesignTokens.FONT_LABEL)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
           .fontColor(this.vm.rightTab === 'agent' ? this.th().surface : this.th().inkSubtle)
           .padding({ left: 10, right: 10, top: 3, bottom: 3 })
           .borderRadius(DesignTokens.RADIUS_MD)
           .backgroundColor(this.vm.rightTab === 'agent' ? this.th().brand : Color.Transparent)
           .onClick(() => this.switchTab('agent'))
         Text('SFTP')
-          .fontSize(DesignTokens.FONT_LABEL)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
           .fontColor(this.vm.rightTab === 'sftp' ? this.th().surface : this.th().inkSubtle)
           .padding({ left: 10, right: 10, top: 3, bottom: 3 })
           .borderRadius(DesignTokens.RADIUS_MD)
           .backgroundColor(this.vm.rightTab === 'sftp' ? this.th().brand : Color.Transparent)
           .onClick(() => this.switchTab('sftp'))
         Text('Git') // +M7a: Git 只读页
-          .fontSize(DesignTokens.FONT_LABEL)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
           .fontColor(this.vm.rightTab === 'git' ? this.th().surface : this.th().inkSubtle)
           .padding({ left: 10, right: 10, top: 3, bottom: 3 })
           .borderRadius(DesignTokens.RADIUS_MD)
           .backgroundColor(this.vm.rightTab === 'git' ? this.th().brand : Color.Transparent)
           .onClick(() => this.switchTab('git'))
         Text(tr(this.locale, 'sb.connections')) // +LEG-1: 连接档案管理页签
-          .fontSize(DesignTokens.FONT_LABEL)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_LABEL))
           .fontColor(this.vm.rightTab === 'conn' ? this.th().surface : this.th().inkSubtle)
           .padding({ left: 10, right: 10, top: 3, bottom: 3 })
           .borderRadius(DesignTokens.RADIUS_MD)
@@ -455,7 +457,7 @@ export struct RightPanel {
         Column() {
           if (this.events.length === 0) {
             Text(tr(this.locale, 'panel.empty.events'))
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().inkSubtle)
               .padding(DesignTokens.SPACE_MD)
           }
@@ -478,7 +480,7 @@ export struct RightPanel {
         Row({ space: DesignTokens.SPACE_XS }) {
           ForEach(['hmh', 'local', 'acp'], (k: string) => {
             Text(engineLabel(k))
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.engine === k ? this.th().surface : this.th().inkSubtle)
               .padding({ left: 8, right: 8, top: 2, bottom: 2 })
               .borderRadius(DesignTokens.RADIUS_LG)
@@ -495,7 +497,7 @@ export struct RightPanel {
 
         Row({ space: DesignTokens.SPACE_SM }) {
           TextInput({ placeholder: '问 AI…', text: this.input })
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().ink)
             .placeholderColor(this.th().inkSubtle)
             .backgroundColor(this.th().inputBg)
@@ -508,7 +510,7 @@ export struct RightPanel {
             })
             .onSubmit(() => this.send())
           Text('发送')
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().surface)
             .padding({ left: 10, right: 10, top: 7, bottom: 7 })
             .borderRadius(DesignTokens.RADIUS_MD)
@@ -531,10 +533,10 @@ export struct RightPanel {
         } else {
           Column({ space: DesignTokens.SPACE_XS }) {
             Text('SSH 会话未连接')
-              .fontSize(DesignTokens.FONT_BODY)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
               .fontColor(this.th().inkSubtle)
             Text('先在 palette 建立 SSH 会话')
-              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
               .fontColor(this.th().inkSubtle)
           }
           .width('100%')
@@ -554,10 +556,10 @@ export struct RightPanel {
         // ===== SFTP 页·未连接态 =====
         Column({ space: DesignTokens.SPACE_XS }) {
           Text('SSH 会话未连接')
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th().inkSubtle)
           Text('先在 palette 建立 SSH 会话')
-            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
             .fontColor(this.th().inkSubtle)
         }
         .width('100%')

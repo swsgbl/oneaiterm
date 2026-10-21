@@ -15,6 +15,8 @@ import backspaceKeyTest from './BackspaceKey.test.ets'; // +M1a: layoutTreeTest 
 import layoutTreeTest from './LayoutTree.test.ets';
 import workbenchVmTest from './WorkbenchVm.test.ets'; // +M1c: Vm 布局集成
 import appI18nTest from './AppI18n.test.ets'; // +GUI-i18n: 国际化纯函数
+import uiFontTest from './UiFont.test.ets'; // +GUI-R3: 界面字号纯函数
+import updateCheckerTest from './UpdateChecker.test.ets'; // +GUI-R3: 更新检查纯函数
 import paletteCommandsTest from './PaletteCommands.test.ets'; // +M1d: 命令面板注册表
 import workbenchStoreTest from './WorkbenchStore.test.ets'; // +M2a: 存档序列化/恢复 + 多 Tab 布局独立
 import workbenchVmSessionsTest from './WorkbenchVmSessions.test.ets'; // +M2b: 会话挂接 + 多工作区 + 存档 v2
@@ -50,6 +52,8 @@ export default function testsuite() {
   layoutTreeTest();
   workbenchVmTest(); // +M1c
   appI18nTest(); // +GUI-i18n
+  uiFontTest(); // +GUI-R3
+  updateCheckerTest(); // +GUI-R3
   paletteCommandsTest(); // +M1d
   workbenchStoreTest(); // +M2a
   workbenchVmSessionsTest(); // +M2b

@@ -8,12 +8,14 @@ import { AppTheme, themeByName } from '../common/AppTheme';
 import { DesignTokens } from '../common/DesignTokens';
 import { AppIcons } from '../common/AppIcons';
 import { tr } from '../common/AppI18n';
+import { fsc } from '../common/UiFont';
 
 const STEP_KEYS: string[] = ['0', '1', '2', '3', '4']
 const STEP_ICONS: string[] = [AppIcons.CMD_AI, AppIcons.OP_ADD, AppIcons.CMD_SETTINGS, AppIcons.CMD_SETTINGS, AppIcons.CMD_AI]
 
 @Component
 export struct GuideOverlay {
+  @StorageProp('ut.fontScale') fontScale: number = 1
   onFinish: () => void = () => {}
   @State step: number = 0
   @State th: AppTheme = themeByName('dark')
@@ -52,7 +54,7 @@ export struct GuideOverlay {
         .margin({ bottom: 16 })
 
         Text(STEP_ICONS[this.step])
-          .fontSize(36)
+          .fontSize(fsc(this.fontScale, 36))
           .fontWeight(FontWeight.Bold)
           .fontColor(this.th.iconStrong)
           .width(72)
@@ -64,13 +66,13 @@ export struct GuideOverlay {
           .margin({ bottom: 14 })
 
         Text(tr(this.locale, 'guide.t' + STEP_KEYS[this.step]))
-          .fontSize(DesignTokens.FONT_DISPLAY)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_DISPLAY))
           .fontWeight(FontWeight.Bold)
           .fontColor(this.th.ink)
           .margin({ bottom: 10 })
 
         Text(tr(this.locale, 'guide.d' + STEP_KEYS[this.step]))
-          .fontSize(DesignTokens.FONT_BODY)
+          .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
           .fontColor(this.th.inkSubtle)
           .textAlign(TextAlign.Center)
           .lineHeight(20)
@@ -80,7 +82,7 @@ export struct GuideOverlay {
           // 上一步(首步隐藏占位)
           if (this.step > 0) {
             Text(tr(this.locale, 'guide.prev'))
-              .fontSize(DesignTokens.FONT_BODY)
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
               .fontColor(this.th.inkSubtle)
               .height(36)
               .padding({ left: 16, right: 16 })
@@ -91,7 +93,7 @@ export struct GuideOverlay {
               .onClick(() => this.prev())
           }
           Text(tr(this.locale, 'guide.skip'))
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontColor(this.th.inkSubtle)
             .height(36)
             .padding({ left: 16, right: 16 })
@@ -101,7 +103,7 @@ export struct GuideOverlay {
             .textAlign(TextAlign.Center)
             .onClick(() => this.onFinish())
           Text(this.step === 4 ? tr(this.locale, 'guide.finish') : tr(this.locale, 'guide.next'))
-            .fontSize(DesignTokens.FONT_BODY)
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
             .fontWeight(FontWeight.Medium)
             .fontColor(this.th.surface)
             .height(36)

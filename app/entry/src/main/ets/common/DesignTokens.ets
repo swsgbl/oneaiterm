@@ -1,11 +1,12 @@
 // DesignTokens — 字体/间距/圆角/阴影/动画 令牌体系
-// 5 级字体令牌
+// 5 级字体令牌(R3: 基准整体上调——用户反馈界面字体偏小;
+// 再经 UiFont.fsc 叠加设置内「界面字号」缩放 0.9~1.3)
 export class DesignTokens {
-  static readonly FONT_DISPLAY: number = 18
-  static readonly FONT_HEADING: number = 15
-  static readonly FONT_BODY: number = 12
-  static readonly FONT_CAPTION: number = 10
-  static readonly FONT_LABEL: number = 9
+  static readonly FONT_DISPLAY: number = 20
+  static readonly FONT_HEADING: number = 16
+  static readonly FONT_BODY: number = 13
+  static readonly FONT_CAPTION: number = 11
+  static readonly FONT_LABEL: number = 10
 
   // 5 级间距令牌
   static readonly SPACE_XS: number = 4

@@ -26,6 +26,7 @@ import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { TelTermHost } from '../remote/TelTermHost';
 import { TtydSession } from '../term/TtydSession';
+import { reachState } from '../term/TermReach';
 import { getSharedStore } from '../../store/ConnStore';
 import { PaneDropTargets } from '../model/PaneDropTargets';
 import { trimBlankTail } from '../shell/ParityUi';
@@ -586,27 +587,8 @@ export class WorkbenchVm {
   /** 焦点 pane 起本地 shell。规则(任务书):已绑定本 pane → 聚焦即可(幂等);
    *  已绑定他 pane → 先解绑旧 pane 再绑新;PTY 启动失败 → false 不动状态。 */
   bindLocalSession(): boolean {
-    const paneId = this.focusedPane
-    if (paneId === '') {
-      return false
-    }
-    if (TermHost.bound() === paneId) {
-      this.focusPane(paneId)
-      return true
-    }
-    if (TermHost.bound() !== '') {
-      this.unbindSession(TermHost.bound())
-    }
-    if (!TermHost.start(80, 24)) {
-      return false
-    }
-    TermHost.bind(paneId)
-    this.bindSession(paneId, 'local', '', 'local shell')
-    this.termTick += 1
-    this.toast(i18nT('toast.localbound'))
-    // statusText 由 bindSession→refreshStatus 统一组装(panes · focus · sess N),
-    // 此处不覆写——保留布局与焦点信息(验收判据:状态栏含 sess 1)
-    return true
+    // GUI-R3 多本地:委托显式 pane 变体(槽位制;web 架构不抢占)
+    return this.bindLocalSessionFor(this.focusedPane)
   }
 
   /** 页面可见通知(FR):Index.onPageShow 驱动,shellVisibleTick ++
@@ -634,13 +616,38 @@ export class WorkbenchVm {
     }
   }
 
-  /** 指定 pane 绑本地会话(FR:bindLocalSession 的显式 pane 变体;
-   *  Index 冷启基线 p1 即用——首启跳过引导即见活终端,原为双水印占位)。 */
+  /** pane 会话种类查询(slotsRev 追踪下的纯查询;''=无会话)。 */
+  sessionKindOf(paneId: string): string {
+    const s = this.sessionOf(paneId)
+    return s === null ? '' : s.kind
+  }
+
+  /** web 架构判定(ttyd 可达缓存或本 pane 已 armed → 每 pane 独立 shell)。 */
+  private localViaWeb(paneId: string): boolean {
+    if (TtydSession.isLive(paneId)) {
+      return true
+    }
+    return reachState.ok === true
+  }
+
+  /** 指定 pane 绑本地会话(FR:Index 冷启基线 p1 即用)。
+   *  GUI-R3 多本地:web 架构(ttyd 可达)下只做槽位登记——每 pane 的 ttyd
+   *  即独立 shell,不再抢占 TermHost(「开新终端杀旧终端」修复);
+   *  降级路径(ttyd 不可达)保留 TermHost 单例抢占旧语义。 */
   bindLocalSessionFor(paneId: string): boolean {
     if (this.panes.indexOf(paneId) < 0) {
       return false
     }
-    if (TermHost.bound() === paneId) {
+    const slot = this.sessionOf(paneId)
+    if (slot !== null && slot.kind === 'local') {
+      this.focusPane(paneId)
+      return true
+    }
+    if (this.localViaWeb(paneId)) {
+      this.bindSession(paneId, 'local', '', 'local shell')
+      this.termTick += 1
+      this.focusPane(paneId)
+      this.toast(i18nT('toast.localbound'))
       return true
     }
     if (TermHost.bound() !== '') {
@@ -652,17 +659,24 @@ export class WorkbenchVm {
     TermHost.bind(paneId)
     this.bindSession(paneId, 'local', '', 'local shell')
     this.termTick += 1
+    this.toast(i18nT('toast.localbound'))
     return true
   }
 
-  /** 恢复档里的 local 槽复活(FR:TermHost 重启+绑定——原仅标题恢复、
-   *  内容永久占位,「崩溃恢复占位陷阱」;TermHost 单例取首个 local 槽)。 */
+  /** 恢复档里的 local 槽复活(FR)。
+   *  GUI-R3:web 架构下槽位随档恢复即自洽(每 pane web 挂载即活 shell,
+   *  无需复活);仅降级路径需要 TermHost 重启绑定(单例取首个)。 */
   reviveLocalSession(): void {
     if (TermHost.bound() !== '') {
       return
     }
     const target = firstLocalSlotPaneId(this.tabs[this.activeTab].sessions)
     if (target === '' || this.panes.indexOf(target) < 0) {
+      return
+    }
+    if (this.localViaWeb(target)) {
+      // web 架构:可见性门控下 pane 自行 arm,仅驱动一次重评
+      this.termTick += 1
       return
     }
     if (TermHost.start(80, 24)) {

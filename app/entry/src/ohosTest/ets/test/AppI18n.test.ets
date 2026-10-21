@@ -72,11 +72,14 @@ export default function appI18nTest() {
     })
 
     it('ux_polish_keys_translatable', 0, () => {
-      // GUI 丝滑棒:空态/toast/确认/字号命令键
+      // GUI 丝滑棒:空态/toast/确认/字号命令键 + GUI-R3(字号档/AI 配置/降级占位)
       const keys: string[] = ['pane.empty.hint', 'pane.empty.local', 'pane.empty.ssh', 'pane.empty.palette',
         'toast.ended', 'toast.localbound', 'toast.sshok', 'toast.font', 'toast.fontreset',
         'confirm.close.title', 'confirm.close.msg', 'confirm.close.tabMsg', 'confirm.close.cancel', 'confirm.close.ok',
-        'cmd.view.fontup', 'cmd.view.fontdown', 'cmd.view.fontreset']
+        'cmd.view.fontup', 'cmd.view.fontdown', 'cmd.view.fontreset',
+        'set.fontsize', 'set.font.small', 'set.font.normal', 'set.font.large', 'set.font.xl',
+        'ai.title', 'ai.provider', 'ai.openai', 'ai.baseUrl', 'ai.apiKey', 'ai.model',
+        'ai.save', 'ai.saved', 'ai.savefail', 'ai.hint', 'pane.degradedbusy']
       for (const k of keys) {
         expect(tr('zh-CN', k) !== k).assertTrue()
         expect(tr('en-US', k) !== k).assertTrue()
