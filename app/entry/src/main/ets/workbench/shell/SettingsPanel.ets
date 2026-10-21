@@ -11,12 +11,26 @@ import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { tr, setLocale } from '../../common/AppI18n';
+import { bundleManager } from '@kit.AbilityKit';
 
 @Component
 export struct SettingsPanel {
   @ObjectLink vm: WorkbenchVm
   @StorageLink('ut.theme') themeName: string = 'dark'
   @StorageProp('ut.locale') locale: string = 'zh-CN'
+  @State verName: string = '2.1.0'
+
+  aboutToAppear(): void {
+    // 版本号读运行时 bundle 信息(app.json5 单源;读不到回退缺省)
+    try {
+      const info = bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT)
+      if (info.versionName !== undefined && info.versionName !== '') {
+        this.verName = info.versionName
+      }
+    } catch (e) {
+      // 保持缺省
+    }
+  }
 
   private th(): AppTheme {
     return themeByName(this.themeName)
@@ -127,7 +141,7 @@ export struct SettingsPanel {
           Text(tr(this.locale, 'set.version'))
             .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().inkSubtle)
-          Text('1.1.0')
+          Text(this.verName)
             .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().iconMuted)
             .margin({ left: 8 })

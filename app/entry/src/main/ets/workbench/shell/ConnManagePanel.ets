@@ -10,6 +10,7 @@
  * 本棒只存不连(LEG-2 接 Telnet 通路,按钮置灰带提示)。
  */
 import { ConnRec, getSharedStore } from '../../store/ConnStore';
+import { tr } from '../../common/AppI18n';
 import { ensureSharedStore } from '../remote/ConnStoreBootstrap';
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { AppTheme, themeByName } from '../../common/AppTheme';
@@ -75,6 +76,7 @@ export class ConnFormValues {
 @CustomDialog
 struct ConnFormDialog {
   controller?: CustomDialogController
+  @StorageProp('ut.locale') locale: string = 'zh-CN'
   @State vName: string = ''
   @State vType: string = 'ssh'
   @State vHost: string = ''
@@ -123,11 +125,11 @@ struct ConnFormDialog {
 
   build() {
     Column({ space: DesignTokens.SPACE_SM }) {
-      Text(this.title)
+      Text(tr(this.locale, this.title))
         .fontSize(DesignTokens.FONT_HEADING)
         .fontColor(this.th().ink)
         .padding({ top: DesignTokens.SPACE_MD, bottom: DesignTokens.SPACE_SM })
-      Text('保存')
+      Text(tr(this.locale, 'conn.save'))
         .fontSize(DesignTokens.FONT_LABEL)
         .fontColor(this.th().surface)
         .padding({ left: 16, right: 16, top: 6, bottom: 6 })
@@ -136,13 +138,13 @@ struct ConnFormDialog {
         .onClick(() => this.submit())
       Scroll() {
         Column() {
-          Text('名称')
+          Text(tr(this.locale, 'conn.f.name'))
             .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .width('100%')
             .textAlign(TextAlign.Start)
             .padding({ top: DesignTokens.SPACE_SM, bottom: 2 })
-          TextInput({ text: this.vName, placeholder: '如 我的服务器' })
+          TextInput({ text: this.vName, placeholder: tr(this.locale, 'conn.ph.name') })
             .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().ink)
             .backgroundColor(this.th().panel)
@@ -152,7 +154,7 @@ struct ConnFormDialog {
             .onChange((x: string) => {
               this.vName = x
             })
-          Text('类型')
+          Text(tr(this.locale, 'conn.f.type'))
             .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .width('100%')
@@ -182,13 +184,13 @@ struct ConnFormDialog {
           }
           .alignItems(VerticalAlign.Center)
           .width('100%')
-          Text('主机')
+          Text(tr(this.locale, 'conn.f.host'))
             .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .width('100%')
             .textAlign(TextAlign.Start)
             .padding({ top: DesignTokens.SPACE_SM, bottom: 2 })
-          TextInput({ text: this.vHost, placeholder: 'host 或 IP' })
+          TextInput({ text: this.vHost, placeholder: tr(this.locale, 'conn.ph.host') })
             .fontSize(DesignTokens.FONT_BODY)
             .fontColor(this.th().ink)
             .backgroundColor(this.th().panel)
@@ -196,7 +198,7 @@ struct ConnFormDialog {
             .onChange((x: string) => {
               this.vHost = x
             })
-          Text('端口')
+          Text(tr(this.locale, 'conn.f.port'))
             .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .width('100%')
@@ -211,7 +213,7 @@ struct ConnFormDialog {
             .onChange((x: string) => {
               this.vPort = x
             })
-          Text('用户名')
+          Text(tr(this.locale, 'conn.f.user'))
             .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .width('100%')
@@ -225,7 +227,7 @@ struct ConnFormDialog {
             .onChange((x: string) => {
               this.vUser = x
             })
-          Text('密码(留空=不修改)')
+          Text(tr(this.locale, 'conn.f.pass'))
             .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
             .width('100%')
@@ -246,7 +248,7 @@ struct ConnFormDialog {
               .fontColor('#e5534b')
               .padding({ top: 4 })
           }
-          Text('取消')
+          Text(tr(this.locale, 'conn.cancel'))
             .fontSize(DesignTokens.FONT_LABEL)
             .fontColor(this.th().inkSubtle)
             .padding({ left: 14, right: 14, top: 5, bottom: 5 })
@@ -273,6 +275,7 @@ struct ConnFormDialog {
 export struct ConnManagePanel {
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
+  @StorageProp('ut.locale') locale: string = 'zh-CN'
   /** 列表快照(aboutToAppear/保存后刷新)。 */
   @State conns: ConnRec[] = []
   /** 删除确认态:待删档案 id;'' = 无。 */
@@ -280,7 +283,7 @@ export struct ConnManagePanel {
   @State hint: string = ''
   private dialogController: CustomDialogController = new CustomDialogController({
     builder: ConnFormDialog({
-      title: '新建连接',
+      title: 'conn.dlg.new',
       init: new ConnFormValues(),
       onSave: (v: ConnFormValues): string => this.saveFromForm(v)
     }),
@@ -372,7 +375,7 @@ export struct ConnManagePanel {
   }
 
   private startNew(): void {
-    this.openForm('新建连接', new ConnFormValues())
+    this.openForm('conn.dlg.new', new ConnFormValues())
   }
 
   private startEdit(rec: ConnRec): void {
@@ -383,7 +386,7 @@ export struct ConnManagePanel {
     v.host = rec.host
     v.port = rec.port
     v.user = rec.user
-    this.openForm('编辑连接', v)
+    this.openForm('conn.dlg.edit', v)
   }
 
   private doDelete(): void {
@@ -440,21 +443,21 @@ export struct ConnManagePanel {
         .fontSize(DesignTokens.FONT_BODY)
         .fontColor(rec.favorite ? '#e3b341' : this.th().inkSubtle)
         .onClick(() => this.toggleFav(rec))
-      Text('连')
+      Text(tr(this.locale, 'conn.row.connect'))
         .fontSize(DesignTokens.FONT_LABEL)
         .fontColor(this.th().surface)
         .padding({ left: 10, right: 10, top: 3, bottom: 3 })
         .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th().brand) // ssh/telnet 均可连(LEG-2)
         .onClick(() => this.connect(rec))
-      Text('编')
+      Text(tr(this.locale, 'conn.row.edit'))
         .fontSize(DesignTokens.FONT_LABEL)
         .fontColor(this.th().inkSubtle)
         .padding({ left: 8, right: 8, top: 3, bottom: 3 })
         .borderRadius(DesignTokens.RADIUS_MD)
         .backgroundColor(this.th().hover)
         .onClick(() => this.startEdit(rec))
-      Text('删')
+      Text(tr(this.locale, 'conn.row.del'))
         .fontSize(DesignTokens.FONT_LABEL)
         .fontColor(this.th().inkSubtle)
         .padding({ left: 8, right: 8, top: 3, bottom: 3 })
@@ -482,7 +485,7 @@ export struct ConnManagePanel {
       Scroll() {
         Column() {
           if (this.conns.length === 0) {
-            Text('暂无连接档案;点「新建」添加(旧界面导入的档案自动出现)')
+            Text(tr(this.locale, 'conn.empty'))
               .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().inkSubtle)
               .padding(DesignTokens.SPACE_MD)
@@ -490,18 +493,18 @@ export struct ConnManagePanel {
           ForEach(this.conns, (rec: ConnRec) => {
             if (this.deleting === rec.id) {
               Column({ space: DesignTokens.SPACE_XS }) {
-                Text('确认删除「' + (rec.name !== '' ? rec.name : rec.id) + '」?')
+                Text(tr(this.locale, 'conn.del.confirm') + (rec.name !== '' ? rec.name : rec.id) + tr(this.locale, 'conn.del.confirm2'))
                   .fontSize(DesignTokens.FONT_BODY)
                   .fontColor(this.th().ink)
                 Row({ space: DesignTokens.SPACE_MD }) {
-                  Text('确认删除')
+                  Text(tr(this.locale, 'conn.del.ok'))
                     .fontSize(DesignTokens.FONT_LABEL)
                     .fontColor('#e5534b')
                     .padding({ left: 10, right: 10, top: 3, bottom: 3 })
                     .borderRadius(DesignTokens.RADIUS_MD)
                     .backgroundColor(this.th().hover)
                     .onClick(() => this.doDelete())
-                  Text('取消')
+                  Text(tr(this.locale, 'conn.cancel'))
                     .fontSize(DesignTokens.FONT_LABEL)
                     .fontColor(this.th().inkSubtle)
                     .padding({ left: 10, right: 10, top: 3, bottom: 3 })
@@ -518,7 +521,7 @@ export struct ConnManagePanel {
               this.recRow(rec)
             }
           }, (rec: ConnRec) => rec.id + ':' + (rec.favorite ? '1' : '0')) // 收藏态入键:favorite 翻转驱动行重建(V1 键不变不刷新)
-          Text('＋ 新建')
+          Text(tr(this.locale, 'conn.new'))
             .fontSize(DesignTokens.FONT_LABEL)
             .fontColor(this.th().surface)
             .padding({ left: 14, right: 14, top: 5, bottom: 5 })

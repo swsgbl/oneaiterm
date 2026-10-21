@@ -33,6 +33,7 @@ import { AgentEventBus } from '../agent/AgentEventBus';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { approvalToneOf, approvalSettled, checkpointLabel } from '../agent/ApprovalCardLogic';
 import { drawerTabOf } from './SftpDrawerLogic';
+import { tr } from '../../common/AppI18n';
 import { SshWorkspaceProvider } from '../remote/RemoteWorkspaceProvider';
 import { SftpBrowser } from './SftpBrowser';
 import { GitBrowser } from './GitBrowser'; // +M7a: Git 只读页
@@ -48,6 +49,7 @@ const PANEL_MAX: number = 200;
 export struct RightPanel {
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
+  @StorageProp('ut.locale') locale: string = 'zh-CN'
   @State events: AgentEvent[] = []
   @State input: string = ''
   /** +LEG-2: 引擎选择('hmh'|'local'|'acp';默认 hmh;pill 行单选)。 */
@@ -301,7 +303,7 @@ export struct RightPanel {
           } else {
             Blank().layoutWeight(1)
           }
-          Text('允许')
+          Text(tr(this.locale, 'ev.allow'))
             .fontSize(DesignTokens.FONT_LABEL)
             .fontColor(this.approvalSettledFor(ev) ? this.th().inkSubtle : this.th().success)
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
@@ -315,7 +317,7 @@ export struct RightPanel {
                 this.decideApproval(ev, 'approved')
               }
             })
-          Text('拒绝')
+          Text(tr(this.locale, 'ev.deny'))
             .fontSize(DesignTokens.FONT_LABEL)
             .fontColor(this.approvalSettledFor(ev) ? this.th().inkSubtle : this.th().danger)
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
@@ -432,7 +434,7 @@ export struct RightPanel {
           .borderRadius(DesignTokens.RADIUS_MD)
           .backgroundColor(this.vm.rightTab === 'git' ? this.th().brand : Color.Transparent)
           .onClick(() => this.switchTab('git'))
-        Text('连接') // +LEG-1: 连接档案管理页签
+        Text(tr(this.locale, 'sb.connections')) // +LEG-1: 连接档案管理页签
           .fontSize(DesignTokens.FONT_LABEL)
           .fontColor(this.vm.rightTab === 'conn' ? this.th().surface : this.th().inkSubtle)
           .padding({ left: 10, right: 10, top: 3, bottom: 3 })
@@ -452,7 +454,7 @@ export struct RightPanel {
         Scroll(this.scroller) {
         Column() {
           if (this.events.length === 0) {
-            Text('暂无事件;输入任务后此处实时显示 Agent 事件流')
+            Text(tr(this.locale, 'panel.empty.events'))
               .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().inkSubtle)
               .padding(DesignTokens.SPACE_MD)
