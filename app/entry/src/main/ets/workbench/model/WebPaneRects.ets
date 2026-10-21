@@ -83,10 +83,26 @@ export class WebPaneRects {
     }
   }
 
+  /** 键盘焦点请求(R4b:ArkUI 键盘事件走焦点树——解耦后 Web 组件需显式
+   *  拿组件级焦点,否则打字进不了终端;请求经 rev 链路由层消费)。 */
+  private static pendingFocus: string = ''
+
+  static requestFocus(paneId: string): void {
+    WebPaneRects.pendingFocus = paneId
+    WebPaneRects.bump()
+  }
+
+  static consumePendingFocus(): string {
+    const v = WebPaneRects.pendingFocus
+    WebPaneRects.pendingFocus = ''
+    return v
+  }
+
   /** 单测复位。 */
   static reset(): void {
     WebPaneRects.panes = new Map()
     WebPaneRects.unreachHandlers = new Map()
     WebPaneRects.onRevTap = null
+    WebPaneRects.pendingFocus = ''
   }
 }

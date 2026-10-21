@@ -26,6 +26,7 @@ import { DoneProbeState, probeSubmit, probeTick, PROBE_TICK_MS } from '../shell/
 import { InputHistory } from './InputHistory';
 import { tr } from '../../common/AppI18n';
 import { fsc } from '../../common/UiFont';
+import { WebPaneRects } from '../model/WebPaneRects';
 
 const RDPOC_TAG: string = 'RDPOC'
 const RDPOC_DOMAIN: number = 0xFF00
@@ -121,6 +122,13 @@ function syncTermHookJs(): string {
     '  }catch(e2){}',
     '  return true;',
     '});}catch(e){}',
+    // R4b 诊断(隐私安全):首次任意 keydown 推一次性 [KB-REACH] 标记
+    // 进镜像——只报"键盘到达过页面"这一事实,不记键值不记内容;判别
+    // ArkWeb 组件焦点是否通(不通时键盘根本到不了页面)。
+    'try{var __kbOnce=function(ev){try{if(window.__oatrdProxy){' +
+    'window.__oatrdProxy.push("[KB-REACH]\\r\\n");}' +
+    'document.removeEventListener("keydown",__kbOnce,true);}catch(e){}};' +
+    'document.addEventListener("keydown",__kbOnce,true);}catch(e){}',
     'if(window.__oatrdProxy){window.__oatrdProxy.hello();}',
     'return "armed";',
     '})()'
@@ -189,6 +197,14 @@ export struct TermWebView {
       hello(): void {
         TtydSession.markLive(pane, true)
         hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'rd2 armed pane=%{public}s', pane)
+        // R4b:armed 即请求键盘焦点(ArkUI 键盘事件走焦点树——解耦后
+        // Web 组件需显式拿组件级焦点) + 页面 textarea 聚焦兜底
+        WebPaneRects.requestFocus(pane)
+        try {
+          self.controller.runJavaScript('try{window.term&&window.term.focus&&window.term.focus()}catch(e){}')
+        } catch (e) {
+          // 页面未就绪由重试梯兜
+        }
       }
 
       bye(): void {
