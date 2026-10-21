@@ -224,6 +224,7 @@ export struct PaneSurface {
           this.vm.swapPanes(srcId, tgt)
         }
       })
+      .onClick(() => this.vm.focusPane(this.paneId)) // GUI-R4:焦点动作迁标题行(根容器不消费点击)
 
       // 内容区(M3a):绑定本 pane 的本地终端优先;否则 paneId 大字水印。
       // V1 规则:if 表达式直接读 vm 绑定字段 termTick 建立追踪(TermHost.bound()
@@ -395,18 +396,15 @@ export struct PaneSurface {
     .width('100%')
     .height('100%')
     // GUI-R4:web 分支激活时透明——真身在 AppShell 底层 WebPaneLayer,
-    // 本容器仅画边框/标题(内容区占位 hitTest None 点击直达 web)
+    // 本容器仅画边框/标题。**根容器不绑任何点击/触摸处理器**:命中测试
+    // 经未消费节点直达下层 web(绑定 onClick 会消费命中→web 失焦→终端
+    // 打不了字,R4 解耦回归,用户实锤「输入不了字」)。焦点动作在标题行。
     .backgroundColor(this.webActive() ? Color.Transparent : this.th().panel)
     .borderRadius(DesignTokens.RADIUS_MD)
     .border({
       width: this.dragOver ? 2 : (this.vm.focusedPane === this.paneId ? 2 : 1),
       color: this.dragOver ? this.th().danger :
         (this.vm.focusedPane === this.paneId ? this.th().brand : this.th().hairline)
-    })
-    .onClick(() => {
-      if (!this.webActive()) {
-        this.vm.focusPane(this.paneId)
-      }
     })
     // M1e drop 目标:onDragEnter/Leave 高亮(danger 2px 边框近似"可放");
     // onDrop 读拖源 paneId 换位。不设 allowDrop = 默认接受全部数据类型
