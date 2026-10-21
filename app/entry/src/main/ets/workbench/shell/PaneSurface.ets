@@ -22,6 +22,7 @@ import { buildFinishedAttention } from './ParityUi';
 import { unifiedDataChannel } from '@kit.ArkData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PaneDropTargets, PaneRectEntry, PaneDragState } from '../model/PaneDropTargets';
+import { tr } from '../../common/AppI18n';
 
 const M1E_TAG: string = 'wb.M1e'
 const M1E_DOMAIN: number = 0x0301
@@ -47,6 +48,8 @@ export struct PaneSurface {
   private dragPaneId: string = ''
   /** RD-1: 本 pane ttyd 可达三态(null=探测中;true=web;false=旧自绘)。 */
   @State ttydOk: boolean | null = null
+  /** GUI-i18n: 占位/提示文案反应式语言。 */
+  @StorageProp('ut.locale') locale: string = 'zh-CN'
   /** RD-1: 退避重探链句柄(-1 未挂;pane 销毁清)。 */
   private reachTimer: number = -1
 
@@ -228,7 +231,7 @@ export struct PaneSurface {
               .fontWeight(FontWeight.Bold)
               .fontColor(this.th().inkSubtle)
               .opacity(0.55)
-            Text('ttyd 探测中…')
+            Text(tr(this.locale, 'pane.probing'))
               .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().inkSubtle)
               .opacity(0.7)
@@ -255,7 +258,7 @@ export struct PaneSurface {
               .fontWeight(FontWeight.Bold)
               .fontColor(this.th().inkSubtle)
               .opacity(0.55)
-            Text('等待窗口就绪…')
+            Text(tr(this.locale, 'pane.waitwin'))
               .fontSize(DesignTokens.FONT_CAPTION)
               .fontColor(this.th().inkSubtle)
               .opacity(0.7)
@@ -338,7 +341,7 @@ export struct PaneSurface {
    *  b. RightPanel 开着时 emit attention 事件到 AgentEventBus
    *     (type 'attention' kind 'finished' paneId——Agent 面板可见)。 */
   private onCmdDone(paneId: string): void {
-    this.vm.setStatus('✓ 命令完成 · ' + paneId)
+    this.vm.setStatus(tr(this.locale, 'status.done') + paneId)
     if (this.vm.rightPanelOpen) {
       AgentEventBus.instance().emit(buildFinishedAttention(paneId))
     }

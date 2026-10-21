@@ -19,6 +19,7 @@ import { WantParams } from '../common/WantParams';
 import { AppShell } from '../workbench/shell/AppShell';
 import { WorkbenchVm } from '../workbench/viewmodel/WorkbenchVm';
 import { GuideOverlay } from '../components/GuideOverlay';
+import { applyLocale, bindPersistLocale } from '../common/AppI18n';
 
 @Entry
 @Component
@@ -26,10 +27,35 @@ struct Index {
   // +M1b: 外壳 ViewModel(生命周期与 Index 同;@State 驱动 @ObjectLink)
   @State workbenchVm: WorkbenchVm = new WorkbenchVm()
   @State themeName: string = 'dark'
-  // relay4 C1: 首启引导浮层(filesDir/guide_done 存在则不再弹)
-  @State guideShow: boolean = false
+  // relay4 C1: 首启引导浮层(filesDir/guide_done 存在则不再弹);
+  // GUI 棒:StorageLink 接 palette「帮助 · 使用指引」重开信号
+  @StorageLink('ut.guide.show') guideShow: boolean = false
 
   aboutToAppear(): void {
+    // GUI-i18n 棒:语言初始化——filesDir/locale.txt(用户选择)回放;
+    // 无档=缺省 zh-CN;持久化钩子注入(此后 setLocale 落盘)
+    try {
+      const ictx = getContext(this) as common.UIAbilityContext
+      const lp = ictx.filesDir + '/locale.txt'
+      let saved = ''
+      try {
+        saved = fs.readTextSync(lp).trim()
+      } catch (e2) {
+        saved = ''
+      }
+      applyLocale(saved)
+      bindPersistLocale((l: string): void => {
+        try {
+          const f = fs.openSync(lp, fs.OpenMode.WRITE_ONLY | fs.OpenMode.CREATE)
+          fs.writeSync(f.fd, l)
+          fs.closeSync(f)
+        } catch (e3) {
+          hilog.warn(0x0110, 'oat.index', 'locale persist fail')
+        }
+      })
+    } catch (e) {
+      applyLocale('')
+    }
     try {
       const ctx = getContext(this) as common.UIAbilityContext
       const marker = ctx.filesDir + '/guide_done'

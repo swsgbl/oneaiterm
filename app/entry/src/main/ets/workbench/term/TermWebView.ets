@@ -24,6 +24,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TtydSession } from './TtydSession';
 import { DoneProbeState, probeSubmit, probeTick, PROBE_TICK_MS } from '../shell/ParityUi';
 import { InputHistory } from './InputHistory';
+import { tr } from '../../common/AppI18n';
 
 const RDPOC_TAG: string = 'RDPOC'
 const RDPOC_DOMAIN: number = 0xFF00
@@ -124,6 +125,8 @@ export struct TermWebView {
   /** RD-1: 主文档加载失败回调(PaneSurface 注入:invalidate 缓存+降级)。 */
   onUnreachable: () => void = () => {
   }
+  /** GUI-i18n: 兜底提示文案反应式语言。 */
+  @StorageProp('ut.locale') locale: string = 'zh-CN'
   /** RD-2: 命令完成通知(PB 双落点;PaneSurface onCmdDone 注入)。 */
   onDone: () => void = () => {
   }
@@ -300,13 +303,13 @@ export struct TermWebView {
       // 加载失败兜底提示(不遮挡正常渲染;loaded 后不显示)
       if (this.pageState === 'error') {
         Column({ space: 6 }) {
-          Text('ttyd 不可达')
+          Text(tr(this.locale, 'term.unreach'))
             .fontSize(14)
             .fontColor('#f85149')
           Text(TTYD_URL)
             .fontSize(11)
             .fontColor('#7d8590')
-          Text(this.pageErr.length > 0 ? this.pageErr : '检查 ttyd 服务(27681 端口)')
+          Text(this.pageErr.length > 0 ? this.pageErr : tr(this.locale, 'term.check'))
             .fontSize(11)
             .fontColor('#7d8590')
             .maxLines(2)

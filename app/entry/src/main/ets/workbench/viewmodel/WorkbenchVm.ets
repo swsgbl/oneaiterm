@@ -29,6 +29,7 @@ import { TtydSession } from '../term/TtydSession';
 import { getSharedStore } from '../../store/ConnStore';
 import { PaneDropTargets } from '../model/PaneDropTargets';
 import { trimBlankTail } from '../shell/ParityUi';
+import { t as i18nT } from '../../common/AppI18n';
 
 /** Sidebar 工作区图标 glyph 池(AppIcons 现有 glyph 集内取;本地常量,不 import UI 模块)。 */
 const WS_GLYPHS: string[] = ['◈', '▣', '☸', '⌗', '∿', '▦', '◷'];
@@ -71,7 +72,7 @@ export class WorkbenchVm {
   /** 会话槽版本号:每次 bind/unbind/联动清理 +1。PaneSurface 标题表达式读
    * 此绑定字段(V1 方法调用不追踪,借 slotsRev 建立依赖),sessionTitle 纯查询。 */
   slotsRev: number = 0
-  statusText: string = '就绪'
+  statusText: string = i18nT('status.ready')
   /** 终端会话版本号(M3a):TermHost 绑定/解绑/EOF 死亡时 +1。PaneSurface
    *  内容区条件渲染表达式读此绑定字段(bound() 静态查询不追踪,借 termTick
    *  建立依赖,同 slotsRev 模式)。 */
@@ -89,6 +90,8 @@ export class WorkbenchVm {
   /** 存档恢复成功标记(FR):Index.aboutToAppear 据此分流——恢复档
    *  走 reviveLocalSession,全新基线走 p1 即用绑定。 */
   restoredFromArchive: boolean = false
+  /** 左侧栏展开态(GUI 棒:收起=44px 图标列+悬停提示;展开=带标签)。 */
+  sidebarExpanded: boolean = false
   private tabSeq: number = 1
   private paneSeq: number = 0
   private wsSeq: number = 1
@@ -154,7 +157,7 @@ export class WorkbenchVm {
     // M3a:PTY EOF(sh exit)时通知 UI(model 保留供回看,termTick 驱动重评)
     TermHost.onDead = (): void => {
       this.termTick += 1
-      this.statusText = '会话已结束'
+      this.statusText = i18nT('status.ended')
     }
     // M6a:远程 SSH 会话死亡(connect 失败/断线/主动关)——清 slot 防幽灵,
     // termTick 驱动 PaneSurface 条件重评(statusText 由 refreshStatus 统一组装)
@@ -172,7 +175,7 @@ export class WorkbenchVm {
     // M6b:连接建立反馈(statusText;'ssh 已连接';onDead 同站点会覆写,
     // 文案不叠加)。错误原因经 RemoteTermHost.lastError 查询,不在此展开。
     RemoteTermHost.onOpen = (): void => {
-      this.statusText = 'ssh 已连接'
+      this.statusText = i18nT('status.sshok')
     }
     // +LEG-2: telnet 会话死亡/建立反馈(镜像 ssh 通道;文案 telnet 前缀)
     TelTermHost.onDead = (): void => {
@@ -186,7 +189,7 @@ export class WorkbenchVm {
       this.statusText = why !== '' ? 'telnet 失败:' + why : 'telnet 已断开'
     }
     TelTermHost.onOpen = (): void => {
-      this.statusText = 'telnet 已连接 ' + TelTermHost.endpoint()
+      this.statusText = i18nT('status.telnetok') + ' ' + TelTermHost.endpoint()
     }
   }
 
@@ -253,7 +256,7 @@ export class WorkbenchVm {
     this.tabs = ws.tabs
     this.activeTab = 0
     this.syncFromLayout(t.layout)
-    this.statusText = '新工作区 ' + ws.name
+    this.statusText = i18nT('status.wsnew') + ' ' + ws.name
     return ws.wsId
   }
 
@@ -267,7 +270,7 @@ export class WorkbenchVm {
     this.tabs = ws.tabs
     this.activeTab = ws.activeTab >= 0 && ws.activeTab < ws.tabs.length ? ws.activeTab : 0
     this.syncFromLayout(this.tabs[this.activeTab].layout)
-    this.statusText = '工作区 ' + ws.name
+    this.statusText = i18nT('status.wsswitch') + ' ' + ws.name
   }
 
   /** 关工作区(至少保留 1 个);active 落在被删位时右移收缩,在左侧时左移。 */
@@ -285,7 +288,7 @@ export class WorkbenchVm {
     this.tabs = ws.tabs
     this.activeTab = ws.activeTab >= 0 && ws.activeTab < ws.tabs.length ? ws.activeTab : 0
     this.syncFromLayout(this.tabs[this.activeTab].layout)
-    this.statusText = '关闭工作区,共 ' + this.workspaces.length.toString() + ' 个'
+    this.statusText = i18nT('status.wsclose') + ' ' + this.workspaces.length.toString()
     this.reapTermIfGone() // M3a:工作区收缩后绑定 pane 不在当前树 → 回收
   }
 
@@ -478,7 +481,7 @@ export class WorkbenchVm {
     // M6b:发起反馈('连接中';成败由 onOpen/onDead 异步覆写——成功
     // 'ssh 已连接',失败带原因前 60 字)。此处覆写 refreshStatus 文案可接受:
     // 布局/会话计数经后续 sync 重组,连接反馈为瞬时态。
-    this.statusText = 'ssh 连接中…'
+    this.statusText = i18nT('status.sshconnecting')
     return true
   }
 
@@ -544,7 +547,7 @@ export class WorkbenchVm {
     TelTermHost.bind(paneId)
     this.bindSession(paneId, 'telnet', connKey, 'telnet ' + (rec.name !== '' ? rec.name : rec.host))
     this.termTick += 1
-    this.statusText = 'telnet 连接中…'
+    this.statusText = i18nT('status.telnetconnecting')
     return true
   }
 
@@ -602,6 +605,20 @@ export class WorkbenchVm {
    *  触发 PaneSurface web 分支翻转(隐藏窗口期不建 Web,可见后才建)。 */
   shellVisible(): void {
     this.shellVisibleTick += 1
+  }
+
+  /** 左侧栏展开/收起切换(GUI 棒:收起=图标+悬停提示,展开=带标签)。 */
+  toggleSidebar(): void {
+    this.sidebarExpanded = !this.sidebarExpanded
+  }
+
+  /** 打开右侧面板指定页签(GUI 棒:侧栏 conn/git 图标真实接线;
+   *  setRightTab 白名单归一,已开仅切页)。 */
+  openRightTab(tab: string): void {
+    this.setRightTab(tab)
+    if (!this.rightPanelOpen) {
+      this.toggleRightPanel()
+    }
   }
 
   /** 指定 pane 绑本地会话(FR:bindLocalSession 的显式 pane 变体;
@@ -766,7 +783,7 @@ export class WorkbenchVm {
     this.projectTabsToWs()
     this.activeTab = this.tabs.length - 1
     this.syncFromLayout(t.layout)
-    this.statusText = '新标签 ' + this.tabSeq.toString()
+    this.statusText = i18nT('status.tabnew') + ' ' + this.tabSeq.toString()
   }
 
   /** 关 tab(至少保留 1 个);active 落在被删位时右移收缩,在左侧时左移。 */
@@ -782,7 +799,7 @@ export class WorkbenchVm {
       this.activeTab -= 1
     }
     this.syncFromLayout(this.tabs[this.activeTab].layout)
-    this.statusText = '关闭标签,共 ' + this.tabs.length.toString() + ' 个'
+    this.statusText = i18nT('status.tabclose') + ' ' + this.tabs.length.toString()
     this.reapTermIfGone() // M3a:新 active 树无绑定 pane → 回收 PTY
   }
 

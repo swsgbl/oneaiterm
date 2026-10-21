@@ -17,11 +17,13 @@ import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { recentMatches } from './ParityUi';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
+import { tr } from '../../common/AppI18n';
 
 @Component
 export struct WorkbenchPalette {
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
+  @StorageProp('ut.locale') locale: string = 'zh-CN'
   onClose: () => void = () => {
   }
   @State query: string = ''
@@ -30,7 +32,7 @@ export struct WorkbenchPalette {
     return themeByName(this.themeName)
   }
 
-  /** 过滤:label 含输入文本(大小写不敏感);空输入返回全表。 */
+  /** 过滤:译文 label 含输入文本(大小写不敏感);空输入返回全表。 */
   private visibleCmds(): PaletteCmd[] {
     const all = paletteCmds()
     const q = this.query.trim().toLowerCase()
@@ -39,7 +41,7 @@ export struct WorkbenchPalette {
     }
     const out: PaletteCmd[] = []
     for (const c of all) {
-      if (c.label.toLowerCase().indexOf(q) >= 0) {
+      if (tr(this.locale, c.label).toLowerCase().indexOf(q) >= 0) {
         out.push(c)
       }
     }
@@ -82,7 +84,7 @@ export struct WorkbenchPalette {
 
       // 居中面板(Stack 默认 Center)
       Column({ space: DesignTokens.SPACE_XS }) {
-        TextInput({ placeholder: '输入命令...' })
+        TextInput({ placeholder: tr(this.locale, 'palette.placeholder') })
           .fontSize(DesignTokens.FONT_BODY)
           .fontColor(this.th().ink)
           .placeholderColor(this.th().inkSubtle)
@@ -115,7 +117,7 @@ export struct WorkbenchPalette {
                 .onClick(() => {
                   const w = this.focusTermWrite()
                   if (w === null) {
-                    this.vm.setStatus('无绑定会话(先新建本地/SSH 会话)')
+                    this.vm.setStatus(tr(this.locale, 'status.nobindsess'))
                     return
                   }
                   w(r + '\r')
@@ -123,7 +125,7 @@ export struct WorkbenchPalette {
                 })
             }, (r: string, i: number) => 'rec#' + i.toString())
             ForEach(this.visibleCmds(), (c: PaletteCmd) => {
-              Text(c.label)
+              Text(tr(this.locale, c.label))
                 .fontSize(DesignTokens.FONT_BODY)
                 .fontColor(this.th().ink)
                 .width('100%')
