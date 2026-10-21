@@ -100,6 +100,26 @@ function syncTermHookJs(): string {
     '    }catch(e){return false;}',
     '  }',
     '};',
+    // GUI 丝滑棒:字号钳制页内实现(fontDelta 注入调用) + 快捷键层——
+    // Ctrl+Shift+P 命令面板 / T 新标签 / W 关标签 / = - 0 字号,
+    // 终端聚焦时也可直达(浏览器级快捷键体验);返回 false 吞键防进 shell
+    'window.__oatClamp=function(c,d){if(d===0){return 14;}var n=c+d;' +
+    'return n<8?8:(n>32?32:n);};',
+    'try{t.attachCustomKeyEventHandler(function(e){',
+    '  try{',
+    '    if(e&&e.type==="keydown"&&e.ctrlKey&&e.shiftKey&&!e.altKey){',
+    '      var k=(e.key||"").toLowerCase();var act="";',
+    '      if(k==="p"){act="palette";}',
+    '      else if(k==="t"){act="newtab";}',
+    '      else if(k==="w"){act="closetab";}',
+    '      else if(k==="="||k==="+"){act="fontup";}',
+    '      else if(k==="-"||k==="_"){act="fontdown";}',
+    '      else if(k==="0"){act="fontreset";}',
+    '      if(act){if(window.__oatrdProxy){window.__oatrdProxy.shortcut(act);}return false;}',
+    '    }',
+    '  }catch(e2){}',
+    '  return true;',
+    '});}catch(e){}',
     'if(window.__oatrdProxy){window.__oatrdProxy.hello();}',
     'return "armed";',
     '})()'
@@ -108,7 +128,7 @@ function syncTermHookJs(): string {
 }
 
 /** proxy 方法名清单(registerJavaScriptProxy methodList)。 */
-const PROXY_METHODS: string[] = ['push', 'input', 'hello', 'bye']
+const PROXY_METHODS: string[] = ['push', 'input', 'hello', 'bye', 'shortcut']
 
 /** term 钩子直装重试梯参数(10×600ms:覆盖前端 bundle 建 term 的窗口)。 */
 const ARM_MAX_TRIES: number = 10
@@ -129,6 +149,10 @@ export struct TermWebView {
   @StorageProp('ut.locale') locale: string = 'zh-CN'
   /** RD-2: 命令完成通知(PB 双落点;PaneSurface onCmdDone 注入)。 */
   onDone: () => void = () => {
+  }
+  /** GUI 丝滑棒: 页面快捷键上抛(Ctrl+Shift+P/T/W/=/- /0;PaneSurface
+   *  接线 vm.handleShortcut)。 */
+  onShortcut: (act: string) => void = () => {
   }
   /** RD-2: 完成探测状态(PB 复用;桥注入/用户提交均 probeSubmit 重启)。 */
   private probe: DoneProbeState = new DoneProbeState()
@@ -168,6 +192,12 @@ export struct TermWebView {
       bye(): void {
         TtydSession.markLive(pane, false)
         hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'rd2 ws bye pane=%{public}s', pane)
+      }
+
+      shortcut(act: string): void {
+        // GUI 丝滑棒:页面快捷键(Ctrl+Shift+P/T/W/=/- /0)上抛宿主
+        hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'shortcut pane=%{public}s act=%{public}s', pane, act)
+        self.onShortcut(act)
       }
     }
     const proxyObj = new TtydProxyObj()

@@ -149,7 +149,7 @@ export struct PaneSurface {
           .textAlign(TextAlign.Center)
           .borderRadius(DesignTokens.RADIUS_SM)
           .accessibilityText('关闭 ' + this.paneId)
-          .onClick(() => this.vm.closePane(this.paneId))
+          .onClick(() => this.closeWithConfirm())
           .onHover((h: boolean) => {
             this.hoverClose = h
           })
@@ -247,7 +247,8 @@ export struct PaneSurface {
           TermWebView({
             paneId: this.paneId,
             onUnreachable: (): void => { this.onTtydUnreachable() },
-            onDone: (): void => { this.onCmdDone(this.paneId) }
+            onDone: (): void => { this.onCmdDone(this.paneId) },
+            onShortcut: (act: string): void => { this.vm.handleShortcut(this.paneId, act) }
           })
         } else if (this.ttydOk === true) {
           // FR: 探测 ok 但窗口未上前——等待可见(shellVisibleTick 变化
@@ -274,12 +275,52 @@ export struct PaneSurface {
           })
         }
       } else {
-        Column() {
+        // GUI 丝滑棒:未绑会话 pane 的引导空态(原裸 paneId 水印)——
+        // 快速动作直达:新建本地 / SSH 连接 / 命令面板
+        Column({ space: DesignTokens.SPACE_SM }) {
           Text(this.paneId)
-            .fontSize(28)
-            .fontWeight(FontWeight.Bold)
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontColor(this.th().iconMuted)
+            .opacity(0.7)
+          Text(tr(this.locale, 'pane.empty.hint'))
+            .fontSize(DesignTokens.FONT_CAPTION)
             .fontColor(this.th().inkSubtle)
-            .opacity(0.55)
+            .opacity(0.8)
+          Row({ space: DesignTokens.SPACE_SM }) {
+            Text(tr(this.locale, 'pane.empty.local'))
+              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.th().surface)
+              .height(30)
+              .padding({ left: 14, right: 14 })
+              .borderRadius(DesignTokens.RADIUS_XL)
+              .backgroundColor(this.th().brand)
+              .textAlign(TextAlign.Center)
+              .onClick(() => this.vm.bindLocalSessionFor(this.paneId))
+            Text(tr(this.locale, 'pane.empty.ssh'))
+              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontColor(this.th().ink)
+              .height(30)
+              .padding({ left: 14, right: 14 })
+              .borderRadius(DesignTokens.RADIUS_XL)
+              .backgroundColor(this.th().inputBg)
+              .border({ width: 1, color: this.th().hairline })
+              .textAlign(TextAlign.Center)
+              .onClick(() => this.vm.openRightTab('conn'))
+            Text('⌘ ' + tr(this.locale, 'pane.empty.palette'))
+              .fontSize(DesignTokens.FONT_CAPTION)
+              .fontColor(this.th().inkSubtle)
+              .height(30)
+              .padding({ left: 14, right: 14 })
+              .borderRadius(DesignTokens.RADIUS_XL)
+              .backgroundColor(this.th().inputBg)
+              .border({ width: 1, color: this.th().hairline })
+              .textAlign(TextAlign.Center)
+              .onClick(() => {
+                this.vm.paletteOpen = true
+              })
+          }
+          .alignItems(VerticalAlign.Center)
         }
         .layoutWeight(1)
         .width('100%')
@@ -340,6 +381,34 @@ export struct PaneSurface {
    *  a. StatusBar——vm.setStatus('✓ 命令完成 · paneId')(现有通道);
    *  b. RightPanel 开着时 emit attention 事件到 AgentEventBus
    *     (type 'attention' kind 'finished' paneId——Agent 面板可见)。 */
+  /** GUI 丝滑棒:带活会话的 pane 关闭二次确认(防误杀会话;
+   *  未绑会话直接关)。 */
+  private closeWithConfirm(): void {
+    const slot = this.vm.sessionOf(this.paneId)
+    if (slot === null) {
+      this.vm.closePane(this.paneId)
+      return
+    }
+    this.getUIContext().showAlertDialog({
+      title: tr(this.locale, 'confirm.close.title'),
+      message: tr(this.locale, 'confirm.close.msg') + ' [' + (slot.title !== '' ? slot.title : this.paneId) + ']',
+      primaryButton: {
+        value: tr(this.locale, 'confirm.close.cancel'),
+        action: (): void => {
+        }
+      },
+      secondaryButton: {
+        value: tr(this.locale, 'confirm.close.ok'),
+        fontColor: this.th().danger,
+        action: (): void => {
+          this.vm.closePane(this.paneId)
+        }
+      },
+      cancel: (): void => {
+      }
+    })
+  }
+
   private onCmdDone(paneId: string): void {
     this.vm.setStatus(tr(this.locale, 'status.done') + paneId)
     if (this.vm.rightPanelOpen) {

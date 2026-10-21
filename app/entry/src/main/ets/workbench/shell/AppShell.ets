@@ -14,6 +14,7 @@ import { PaneGrid } from './PaneGrid';
 import { RightPanel } from './RightPanel';
 import { WorkbenchPalette } from './WorkbenchPalette';
 import { SettingsPanel } from './SettingsPanel';
+import { ToastHost } from './ToastHost';
 import { SshPicker } from './SshPicker';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { CommandBridge } from '../bridge/CommandBridge';
@@ -51,8 +52,9 @@ export struct AppShell {
   }
 
   build() {
-    Row() {
-      WorkspaceSidebar({ vm: this.vm })
+    Stack() {
+      Row() {
+        WorkspaceSidebar({ vm: this.vm })
       Column() {
         // 顶行:返回钮 + TabBar(28px 合一高度,返回钮嵌在 tab 行左端)
         Row() {
@@ -122,10 +124,19 @@ export struct AppShell {
       }
       .layoutWeight(1)
       .height('100%')
-      // RightPanel 抽屉(M1d 桩):条件分支直接读 vm.rightPanelOpen
+      .width('100%')
+      // RightPanel 抽屉(M1d 桩):条件分支直接读 vm.rightPanelOpen;
+      // GUI 丝滑棒:右侧滑入/淡出过渡
       if (this.vm.rightPanelOpen) {
         RightPanel({ vm: this.vm, themeName: this.themeName })
+          .transition(TransitionEffect.asymmetric(
+            TransitionEffect.OPACITY.combine(TransitionEffect.translate({ x: 56 })).animation({ duration: 180, curve: Curve.EaseOut }),
+            TransitionEffect.OPACITY.animation({ duration: 140 })
+          ))
       }
+      }
+      // GUI 丝滑棒:全局轻提示(顶部居中,自动消退;Stack 兄弟层悬浮)
+      ToastHost({ vm: this.vm, themeName: this.themeName })
     }
     .width('100%')
     .height('100%')

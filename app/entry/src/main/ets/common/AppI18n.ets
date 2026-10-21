@@ -122,6 +122,24 @@ const ZH: Record<string, string> = {
   'set.bridge': 'CLI 桥',
   'set.version': '版本',
   'set.done': '完成',
+  // ===== GUI 丝滑棒:空态/toast/确认/字号 =====
+  'pane.empty.hint': '此窗格还没有会话',
+  'pane.empty.local': '新建本地',
+  'pane.empty.ssh': 'SSH 连接',
+  'pane.empty.palette': '命令面板',
+  'toast.ended': '会话已结束',
+  'toast.localbound': '本地会话已就绪',
+  'toast.sshok': 'ssh 已连接',
+  'toast.font': '终端字号已调整(Ctrl+Shift+0 重置)',
+  'toast.fontreset': '终端字号已重置',
+  'confirm.close.title': '关闭确认',
+  'confirm.close.msg': '该窗格有正在运行的会话,关闭将结束它',
+  'confirm.close.tabMsg': '该标签有正在运行的会话,关闭将结束它们',
+  'confirm.close.cancel': '取消',
+  'confirm.close.ok': '关闭',
+  'cmd.view.fontup': '视图 · 字号增大',
+  'cmd.view.fontdown': '视图 · 字号减小',
+  'cmd.view.fontreset': '视图 · 字号重置',
   // 单测靶:en 刻意缺键,验证 tr 回退链(当前→zh→key)
   'test.zhoneonly': '仅中文值'
 }
@@ -208,7 +226,24 @@ const EN: Record<string, string> = {
   'set.language': 'Language',
   'set.bridge': 'CLI bridge',
   'set.version': 'Version',
-  'set.done': 'Done'
+  'set.done': 'Done',
+  'pane.empty.hint': 'No session in this pane yet',
+  'pane.empty.local': 'New local',
+  'pane.empty.ssh': 'SSH connect',
+  'pane.empty.palette': 'Palette',
+  'toast.ended': 'Session ended',
+  'toast.localbound': 'Local session ready',
+  'toast.sshok': 'ssh connected',
+  'toast.font': 'Terminal font adjusted (Ctrl+Shift+0 to reset)',
+  'toast.fontreset': 'Terminal font reset',
+  'confirm.close.title': 'Close confirmation',
+  'confirm.close.msg': 'This pane has a running session; closing will end it',
+  'confirm.close.tabMsg': 'This tab has running sessions; closing will end them',
+  'confirm.close.cancel': 'Cancel',
+  'confirm.close.ok': 'Close',
+  'cmd.view.fontup': 'View · Font larger',
+  'cmd.view.fontdown': 'View · Font smaller',
+  'cmd.view.fontreset': 'View · Font reset',
 }
 
 function dictOf(locale: string): Record<string, string> {

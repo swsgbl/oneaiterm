@@ -3,10 +3,19 @@
  * 靶: stripAnsi / splitFeedLines(ttyd 输出流的镜像前处理)。
  */
 import { describe, it, expect } from '@ohos/hypium';
-import { stripAnsi, splitFeedLines } from '../../../main/ets/workbench/term/TtydSession';
+import { stripAnsi, splitFeedLines, TtydSession } from '../../../main/ets/workbench/term/TtydSession';
 
 export default function ttydSessionTest() {
   describe('TtydSession', () => {
+    it('clampfont_bounds_and_reset', 0, () => {
+      // GUI 丝滑棒:字号钳制 [8,32];delta=0 重置 14
+      expect(TtydSession.clampFont(14, 1)).assertEqual(15)
+      expect(TtydSession.clampFont(14, -1)).assertEqual(13)
+      expect(TtydSession.clampFont(32, 1)).assertEqual(32)
+      expect(TtydSession.clampFont(8, -1)).assertEqual(8)
+      expect(TtydSession.clampFont(20, 0)).assertEqual(14)
+    })
+
     it('strip_ansi_removes_escape_sequences', 0, () => {
       expect(stripAnsi('\x1b[31mred\x1b[0m')).assertEqual('red')
       expect(stripAnsi('\x1b[2J\x1b[Hclean')).assertEqual('clean')

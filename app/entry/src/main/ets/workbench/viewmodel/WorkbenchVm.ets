@@ -160,6 +160,7 @@ export class WorkbenchVm {
     TermHost.onDead = (): void => {
       this.termTick += 1
       this.statusText = i18nT('status.ended')
+      this.toast(i18nT('toast.ended'))
     }
     // M6a:远程 SSH 会话死亡(connect 失败/断线/主动关)——清 slot 防幽灵,
     // termTick 驱动 PaneSurface 条件重评(statusText 由 refreshStatus 统一组装)
@@ -173,11 +174,13 @@ export class WorkbenchVm {
       this.termTick += 1
       // M6b:失败/断线反馈(带原因前 60 字;无错回退通用文案)
       this.statusText = why !== '' ? 'ssh 失败:' + why : 'ssh 已断开'
+      this.toast(why !== '' ? 'ssh 失败' : 'ssh 已断开')
     }
     // M6b:连接建立反馈(statusText;'ssh 已连接';onDead 同站点会覆写,
     // 文案不叠加)。错误原因经 RemoteTermHost.lastError 查询,不在此展开。
     RemoteTermHost.onOpen = (): void => {
       this.statusText = i18nT('status.sshok')
+      this.toast(i18nT('toast.sshok'))
     }
     // +LEG-2: telnet 会话死亡/建立反馈(镜像 ssh 通道;文案 telnet 前缀)
     TelTermHost.onDead = (): void => {
@@ -189,9 +192,11 @@ export class WorkbenchVm {
       }
       this.termTick += 1
       this.statusText = why !== '' ? 'telnet 失败:' + why : 'telnet 已断开'
+      this.toast(why !== '' ? 'telnet 失败' : 'telnet 已断开')
     }
     TelTermHost.onOpen = (): void => {
       this.statusText = i18nT('status.telnetok') + ' ' + TelTermHost.endpoint()
+      this.toast(i18nT('status.telnetok'))
     }
   }
 
@@ -598,6 +603,7 @@ export class WorkbenchVm {
     TermHost.bind(paneId)
     this.bindSession(paneId, 'local', '', 'local shell')
     this.termTick += 1
+    this.toast(i18nT('toast.localbound'))
     // statusText 由 bindSession→refreshStatus 统一组装(panes · focus · sess N),
     // 此处不覆写——保留布局与焦点信息(验收判据:状态栏含 sess 1)
     return true
@@ -865,6 +871,58 @@ export class WorkbenchVm {
   /** 命令面板开关翻转(M1d;syncFromLayout 不动它——非布局派生态)。 */
   togglePalette(): void {
     this.paletteOpen = !this.paletteOpen
+  }
+
+  /** 页面快捷键路由(GUI 丝滑棒:web 终端 Ctrl+Shift+P/T/W/=/- /0 上抛;
+   *  palette 字号命令复用同路;font 动作落目标 pane——空则焦点 pane)。 */
+  handleShortcut(fromPane: string, act: string): void {
+    if (act === 'palette') {
+      this.paletteOpen = true
+      return
+    }
+    if (act === 'newtab') {
+      this.newTab()
+      return
+    }
+    if (act === 'closetab') {
+      this.closeTab(this.activeTab)
+      return
+    }
+    if (act === 'fontup' || act === 'fontdown' || act === 'fontreset') {
+      const target = fromPane !== '' ? fromPane : this.focusedPane
+      if (target !== '') {
+        const delta = act === 'fontup' ? 1 : (act === 'fontdown' ? -1 : 0)
+        if (TtydSession.fontDelta(target, delta)) {
+          this.toast(i18nT(act === 'fontreset' ? 'toast.fontreset' : 'toast.font'))
+        }
+      }
+      return
+    }
+  }
+
+  /** 轻提示(GUI 丝滑棒:ToastHost 顶部居中,2.4s 自动消退,上限 3 条)。
+   *  数组整体替换驱动 V1 追踪;toastRev 作 ForEach 依赖锚。 */
+  toastMsgs: string[] = []
+  toastRev: number = 0
+  private toastSeq: number = 0
+
+  toast(text: string): void {
+    if (text === '') {
+      return
+    }
+    const seq = this.toastSeq++
+    let list = this.toastMsgs.concat([text])
+    if (list.length > 3) {
+      list = list.slice(list.length - 3)
+    }
+    this.toastMsgs = list
+    this.toastRev += 1
+    setTimeout(() => {
+      // FIFO 消退:定时器按入队顺序触发,slice(1) 恒移除队首
+      this.toastMsgs = this.toastMsgs.slice(1)
+      this.toastRev += 1
+    }, 2400)
+    void seq
   }
 
   /** 状态栏文案直写(Sidebar 桩动作回写)。 */

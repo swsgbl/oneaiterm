@@ -71,6 +71,18 @@ export default function appI18nTest() {
       }
     })
 
+    it('ux_polish_keys_translatable', 0, () => {
+      // GUI 丝滑棒:空态/toast/确认/字号命令键
+      const keys: string[] = ['pane.empty.hint', 'pane.empty.local', 'pane.empty.ssh', 'pane.empty.palette',
+        'toast.ended', 'toast.localbound', 'toast.sshok', 'toast.font', 'toast.fontreset',
+        'confirm.close.title', 'confirm.close.msg', 'confirm.close.tabMsg', 'confirm.close.cancel', 'confirm.close.ok',
+        'cmd.view.fontup', 'cmd.view.fontdown', 'cmd.view.fontreset']
+      for (const k of keys) {
+        expect(tr('zh-CN', k) !== k).assertTrue()
+        expect(tr('en-US', k) !== k).assertTrue()
+      }
+    })
+
     it('guide_five_steps_translatable', 0, () => {
       for (let i = 0; i < 5; i++) {
         expect(tr('zh-CN', 'guide.t' + i.toString()) !== 'guide.t' + i.toString()).assertTrue()

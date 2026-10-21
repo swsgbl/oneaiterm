@@ -8,15 +8,44 @@ import { TabState } from '../model/TabState';
 import { AppIcons } from '../../common/AppIcons';
 import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
+import { tr } from '../../common/AppI18n';
 
 @Component
 export struct TabBar {
   @ObjectLink vm: WorkbenchVm
   @Prop themeName: string = 'dark'
   @State hoverClose: number = -1
+  @StorageProp('ut.locale') locale: string = 'zh-CN'
 
   private th(): AppTheme {
     return themeByName(this.themeName)
+  }
+
+  /** GUI 丝滑棒:tab 内有活会话时关闭二次确认(防误杀整 tab 会话)。 */
+  private closeWithConfirm(idx: number): void {
+    const tab = this.vm.tabs[idx]
+    if (tab === undefined || tab.sessions.length === 0) {
+      this.vm.closeTab(idx)
+      return
+    }
+    this.getUIContext().showAlertDialog({
+      title: tr(this.locale, 'confirm.close.title'),
+      message: tr(this.locale, 'confirm.close.tabMsg') + ' [' + tab.title + ']',
+      primaryButton: {
+        value: tr(this.locale, 'confirm.close.cancel'),
+        action: (): void => {
+        }
+      },
+      secondaryButton: {
+        value: tr(this.locale, 'confirm.close.ok'),
+        fontColor: this.th().danger,
+        action: (): void => {
+          this.vm.closeTab(idx)
+        }
+      },
+      cancel: (): void => {
+      }
+    })
   }
 
   build() {
@@ -39,7 +68,7 @@ export struct TabBar {
               .height(16)
               .textAlign(TextAlign.Center)
               .borderRadius(DesignTokens.RADIUS_SM)
-              .onClick(() => this.vm.closeTab(idx))
+              .onClick(() => this.closeWithConfirm(idx))
               .onHover((h: boolean) => {
                 this.hoverClose = h ? idx : -1
               })

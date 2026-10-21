@@ -189,6 +189,34 @@ export class TtydSession {
     TtydSession.mirrorOf(paneId).sender = sender
   }
 
+  /** 字号钳制(纯,单测靶):当前字号 + 增量 → [8,32];delta=0 视为重置回 14。 */
+  static clampFont(cur: number, delta: number): number {
+    if (delta === 0) {
+      return 14
+    }
+    const n = cur + delta
+    return n < 8 ? 8 : (n > 32 ? 32 : n)
+  }
+
+  /** web 终端字号调节(GUI 丝滑棒):注入 xterm options.fontSize+fit;
+   *  delta 0=重置。返回 false = 通道未就绪。 */
+  static fontDelta(paneId: string, delta: number): boolean {
+    const m = TtydSession.panes.get(paneId)
+    if (m === undefined || m.sender === null) {
+      return false
+    }
+    const js = '(function(){try{var t=window.term;if(t&&t.options){' +
+      'var cur=(typeof t.options.fontSize==="number")?t.options.fontSize:14;' +
+      'var n=window.__oatClamp?window.__oatClamp(cur,' + delta.toString() + '):14;' +
+      't.options.fontSize=n;if(t.fit){t.fit();}}return true;}catch(e){return false;}})()'
+    try {
+      m.sender(js)
+      return true
+    } catch (e) {
+      return false
+    }
+  }
+
   /** 桥/引擎写入:经页面 __oatrd.write(b64) → 同一 socket 发 INPUT 帧。
    *  b64 承载避免引号/换行的 JS 注入地狱(util Base64)。返回 false = 通道
    *  未就绪(页面未加载/组件未挂)。 */

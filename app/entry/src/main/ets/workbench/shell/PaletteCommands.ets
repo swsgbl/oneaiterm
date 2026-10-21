@@ -342,6 +342,7 @@ export function paletteCmds(): PaletteCmd[] {
     run: (vm: WorkbenchVm) => {
       const next = setLocale(nextLocale(curLocale()))
       vm.setStatus(localeName(next))
+      vm.toast(localeName(next))
     }
   }
   // GUI-R2:设置(侧栏 ⚙ 同源入口;主题/语言/桥/版本面板)
@@ -352,9 +353,34 @@ export function paletteCmds(): PaletteCmd[] {
       vm.toggleSettings()
     }
   }
+  // GUI 丝滑棒:终端字号三命令(经 handleShortcut 同路;fontreset delta=0)
+  const fontUp: PaletteCmd = {
+    key: 'view.font.up',
+    label: 'cmd.view.fontup',
+    run: (vm: WorkbenchVm) => {
+      vm.handleShortcut('', 'fontup')
+    }
+  }
+  const fontDown: PaletteCmd = {
+    key: 'view.font.down',
+    label: 'cmd.view.fontdown',
+    run: (vm: WorkbenchVm) => {
+      vm.handleShortcut('', 'fontdown')
+    }
+  }
+  const fontReset: PaletteCmd = {
+    key: 'view.font.reset',
+    label: 'cmd.view.fontreset',
+    run: (vm: WorkbenchVm) => {
+      vm.handleShortcut('', 'fontreset')
+    }
+  }
   // 顶部置入(免滚动可达:palette 列表不自动滚到底)
   cmds.unshift(openSettings)
   cmds.unshift(helpLanguage)
   cmds.unshift(helpGuide)
+  cmds.push(fontUp)
+  cmds.push(fontDown)
+  cmds.push(fontReset)
   return cmds
 }
