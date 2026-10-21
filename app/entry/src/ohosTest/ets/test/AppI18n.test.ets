@@ -54,10 +54,20 @@ export default function appI18nTest() {
         'cmd.tunnel.start', 'cmd.tunnel.stop', 'cmd.tunnel.status',
         'cmd.session.end', 'cmd.session.telnet', 'cmd.ws.new',
         'cmd.cli.status', 'cmd.term.search', 'cmd.theme.toggle',
-        'cmd.git.commit', 'cmd.help.guide', 'cmd.help.language'
+        'cmd.git.commit', 'cmd.help.guide', 'cmd.help.language', 'cmd.settings'
       ]
       for (const k of keys) {
         expect(tr('zh-CN', k) !== k).assertTrue()
+        expect(tr('en-US', k) !== k).assertTrue()
+      }
+    })
+
+    it('settings_panel_keys_translatable', 0, () => {
+      const keys: string[] = ['set.title', 'set.theme', 'set.theme.dark', 'set.theme.light',
+        'set.language', 'set.bridge', 'set.version', 'set.done']
+      for (const k of keys) {
+        expect(tr('zh-CN', k) !== k).assertTrue()
+        expect(tr('en-US', k) !== k).assertTrue()
       }
     })
 

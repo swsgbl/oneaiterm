@@ -13,6 +13,7 @@ import { StatusBar } from './StatusBar';
 import { PaneGrid } from './PaneGrid';
 import { RightPanel } from './RightPanel';
 import { WorkbenchPalette } from './WorkbenchPalette';
+import { SettingsPanel } from './SettingsPanel';
 import { SshPicker } from './SshPicker';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { CommandBridge } from '../bridge/CommandBridge';
@@ -108,6 +109,10 @@ export struct AppShell {
                 this.vm.sshPickerOpen = false
               }
             })
+          }
+          // GUI-R2:设置面板(侧栏 ⚙ / palette「设置」打开;主题/语言/桥/版本)
+          if (this.vm.settingsOpen) {
+            SettingsPanel({ vm: this.vm })
           }
         }
         .layoutWeight(1)

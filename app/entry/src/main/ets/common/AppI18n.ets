@@ -49,6 +49,8 @@ const ZH: Record<string, string> = {
   'sb.tip.git': '打开 Git 面板(状态/暂存/提交)',
   'sb.tip.agent': '打开 AI 智能体面板(事件流/审批)',
   'sb.tip.theme': '切换深色/浅色主题',
+  'sb.settings': '设置',
+  'sb.tip.settings': '打开设置(主题/语言/版本)',
   // ===== tab/状态/pane 占位 =====
   'tab.default': '终端',
   'status.ready': '就绪',
@@ -80,8 +82,8 @@ const ZH: Record<string, string> = {
   'guide.d2': '点左上角箭头可展开侧栏查看功能名称;收起后悬停图标会弹出功能提示。',
   'guide.t3': '多窗格与多标签',
   'guide.d3': '命令面板「分屏」可左右/上下拆分窗格;顶部可开多标签,各自独立布局。',
-  'guide.t4': '右侧 AI 面板',
-  'guide.d4': '✦ 打开 AI 智能体面板:自然语言驱动终端,连接档案与文件传输也在右侧。',
+  'guide.t4': '右侧 AI 面板与设置',
+  'guide.d4': '✦ 打开 AI 智能体面板:自然语言驱动终端,连接档案与文件传输也在右侧。主题、语言等在左下角 ⚙ 设置里。',
   'guide.prev': '上一步',
   'guide.skip': '跳过',
   'guide.next': '下一步',
@@ -110,6 +112,16 @@ const ZH: Record<string, string> = {
   'cmd.git.commit': 'Git · 提交',
   'cmd.help.guide': '帮助 · 使用指引',
   'cmd.help.language': '语言 · Language',
+  'cmd.settings': '设置 · Settings',
+  // ===== 设置面板(GUI-R2) =====
+  'set.title': '设置',
+  'set.theme': '主题',
+  'set.theme.dark': '深色',
+  'set.theme.light': '浅色',
+  'set.language': '语言',
+  'set.bridge': 'CLI 桥',
+  'set.version': '版本',
+  'set.done': '完成',
   // 单测靶:en 刻意缺键,验证 tr 回退链(当前→zh→key)
   'test.zhoneonly': '仅中文值'
 }
@@ -128,6 +140,8 @@ const EN: Record<string, string> = {
   'sb.tip.git': 'Open Git panel (status/stage/commit)',
   'sb.tip.agent': 'Open AI agent panel (events/approvals)',
   'sb.tip.theme': 'Toggle dark/light theme',
+  'sb.settings': 'Settings',
+  'sb.tip.settings': 'Open settings (theme/language/version)',
   'tab.default': 'Terminal',
   'status.ready': 'Ready',
   'status.ended': 'Session ended',
@@ -157,8 +171,8 @@ const EN: Record<string, string> = {
   'guide.d2': 'Click the arrow at the top to expand the sidebar and see feature names. When collapsed, hovering an icon shows a tooltip.',
   'guide.t3': 'Panes and tabs',
   'guide.d3': 'Use "Split" in the palette to split panes horizontally or vertically. Open multiple tabs, each with its own layout.',
-  'guide.t4': 'AI panel on the right',
-  'guide.d4': '✦ opens the AI agent panel: drive the terminal in natural language. Connection profiles and file transfer also live on the right.',
+  'guide.t4': 'AI panel & settings',
+  'guide.d4': '✦ opens the AI agent panel: drive the terminal in natural language. Theme, language and more live in ⚙ Settings at the bottom left.',
   'guide.prev': 'Back',
   'guide.skip': 'Skip',
   'guide.next': 'Next',
@@ -185,7 +199,16 @@ const EN: Record<string, string> = {
   'cmd.theme.toggle': 'Toggle theme',
   'cmd.git.commit': 'Git · Commit',
   'cmd.help.guide': 'Help · Show guide',
-  'cmd.help.language': '语言 · Language'
+  'cmd.help.language': '语言 · Language',
+  'cmd.settings': '设置 · Settings',
+  'set.title': 'Settings',
+  'set.theme': 'Theme',
+  'set.theme.dark': 'Dark',
+  'set.theme.light': 'Light',
+  'set.language': 'Language',
+  'set.bridge': 'CLI bridge',
+  'set.version': 'Version',
+  'set.done': 'Done'
 }
 
 function dictOf(locale: string): Record<string, string> {

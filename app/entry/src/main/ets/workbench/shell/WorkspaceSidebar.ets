@@ -1,14 +1,13 @@
 /**
- * 左侧工作区栏(GUI 棒升级:可展开/收起 + 悬停提示 + 图标真实接线)。
+ * 左侧工作区栏(GUI 棒升级:可展开/收起 + 悬停提示 + 图标真实接线 + 设置入口)。
  *
- * - 收起(缺省,44px):纯图标列;悬停图标弹出功能提示(bindPopup 右侧
- *   气泡——用户指令「收起状态下悬停提示功能」);
- * - 展开(150px):图标+功能标签(工作区名/新建/连接/Git/Agent/主题),
+ * - 收起(缺省,44px):纯图标列;悬停图标弹出功能提示(bindPopup 右侧气泡);
+ * - 展开(150px):图标+功能标签(工作区名/新建/连接/Git/Agent/设置/主题),
  *   顶部箭头钮切换(animateTo 平滑过渡);
- * - 连接/Git 图标原为 setStatus 桩,现真实接线 vm.openRightTab
- *  ('conn'/'git')——与 palette「连接 · 管理档案」「Git · 打开面板」同落点;
- * - 文案全部经 tr(ut.locale) 反应式国际化(GUI-i18n 棒)。
- * 零业务 import(vm 通道外无 service 依赖)。
+ * - 连接/Git 图标真实接线 vm.openRightTab('conn'/'git');⚙ 打开设置面板。
+ * - tooltip 修正(R2):参数化 @Builder 在 bindPopup 内渲染空白(用户实见
+ *   「气泡没有字」)——改无参 @Builder 读 @State tipText 的惯用模式;
+ * - 文案全部经 tr(ut.locale) 反应式国际化。零业务 import。
  */
 import { WorkbenchVm } from '../viewmodel/WorkbenchVm';
 import { WorkspaceState } from '../model/WorkspaceState';
@@ -23,6 +22,7 @@ export struct WorkspaceSidebar {
   @StorageLink('ut.theme') themeName: string = 'dark'
   @StorageProp('ut.locale') locale: string = 'zh-CN'
   @State hoverId: string = ''
+  @State tipText: string = ''
 
   private th(): AppTheme {
     return themeByName(this.themeName)
@@ -33,15 +33,37 @@ export struct WorkspaceSidebar {
     return !this.vm.sidebarExpanded && this.hoverId === id
   }
 
+  /** 悬停进/出统一入口:高亮 + 备好气泡文案(无参 builder 读 tipText)。 */
+  private armTip(id: string, text: string, on: boolean): void {
+    this.hoverId = on ? id : (this.hoverId === id ? '' : this.hoverId)
+    if (on) {
+      this.tipText = text
+    }
+  }
+
   @Builder
-  TipText(text: string) {
+  TipBubble() {
     Column() {
-      Text(text)
+      Text(this.tipText)
         .fontSize(DesignTokens.FONT_CAPTION)
         .fontColor(this.th().ink)
         .maxLines(2)
     }
     .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+  }
+
+  /** bindPopup options 工厂(ArkTS 无对象字面量类型推断,显式组装)。 */
+  private tipOptions(): CustomPopupOptions {
+    const o: CustomPopupOptions = {
+      builder: (): void => {
+        this.TipBubble()
+      },
+      placement: Placement.Right,
+      popupColor: this.th().panel,
+      enableArrow: true,
+      autoCancel: false
+    }
+    return o
   }
 
   build() {
@@ -64,17 +86,9 @@ export struct WorkspaceSidebar {
           })
         })
         .onHover((h: boolean) => {
-          this.hoverId = h ? 'sbtoggle' : ''
+          this.armTip('sbtoggle', this.vm.sidebarExpanded ? tr(this.locale, 'sb.collapse') : tr(this.locale, 'sb.expand'), h)
         })
-        .bindPopup(this.tipShow('sbtoggle'), {
-          builder: (): void => {
-            this.TipText(this.vm.sidebarExpanded ? tr(this.locale, 'sb.collapse') : tr(this.locale, 'sb.expand'))
-          },
-          placement: Placement.Right,
-          popupColor: this.th().surfaceRaised,
-          enableArrow: true,
-          autoCancel: false
-        } as CustomPopupOptions)
+        .bindPopup(this.tipShow('sbtoggle'), this.tipOptions())
 
       // 工作区图标列(展开态带名称标签;active 高亮,hover 反馈,点击切换)
       ForEach(this.vm.workspaces, (ws: WorkspaceState, idx: number) => {
@@ -105,17 +119,9 @@ export struct WorkspaceSidebar {
         .accessibilityText(tr(this.locale, 'sb.tip.switchWs') + ' ' + ws.name)
         .onClick(() => this.vm.switchWorkspace(idx))
         .onHover((h: boolean) => {
-          this.hoverId = h ? 'ws' + idx.toString() : ''
+          this.armTip('ws' + idx.toString(), tr(this.locale, 'sb.tip.switchWs') + ': ' + ws.name, h)
         })
-        .bindPopup(this.tipShow('ws' + idx.toString()), {
-          builder: (): void => {
-            this.TipText(tr(this.locale, 'sb.tip.switchWs') + ': ' + ws.name)
-          },
-          placement: Placement.Right,
-          popupColor: this.th().surfaceRaised,
-          enableArrow: true,
-          autoCancel: false
-        } as CustomPopupOptions)
+        .bindPopup(this.tipShow('ws' + idx.toString()), this.tipOptions())
       }, (ws: WorkspaceState, idx: number) => ws.wsId + '#' + idx.toString() + '#' + ws.glyph + '#' + (this.vm.sidebarExpanded ? 'e' : 'c'))
 
       // + 新建工作区
@@ -143,19 +149,11 @@ export struct WorkspaceSidebar {
       .accessibilityText(tr(this.locale, 'sb.newWorkspace'))
       .onClick(() => this.vm.newWorkspace())
       .onHover((h: boolean) => {
-        this.hoverId = h ? 'wsnew' : ''
+        this.armTip('wsnew', tr(this.locale, 'sb.tip.new'), h)
       })
-      .bindPopup(this.tipShow('wsnew'), {
-        builder: (): void => {
-          this.TipText(tr(this.locale, 'sb.tip.new'))
-        },
-        placement: Placement.Right,
-        popupColor: this.th().surfaceRaised,
-        enableArrow: true,
-        autoCancel: false
-      } as CustomPopupOptions)
+      .bindPopup(this.tipShow('wsnew'), this.tipOptions())
 
-      // 连接(GUI 棒:真实接线 → RightPanel conn 页,原 setStatus 桩退役)
+      // 连接(真实接线 → RightPanel conn 页)
       Row({ space: 8 }) {
         Text(AppIcons.PANEL_CONNECTIONS)
           .fontSize(DesignTokens.FONT_HEADING)
@@ -180,19 +178,11 @@ export struct WorkspaceSidebar {
       .accessibilityText(tr(this.locale, 'sb.connections'))
       .onClick(() => this.vm.openRightTab('conn'))
       .onHover((h: boolean) => {
-        this.hoverId = h ? 'conn' : ''
+        this.armTip('conn', tr(this.locale, 'sb.tip.conn'), h)
       })
-      .bindPopup(this.tipShow('conn'), {
-        builder: (): void => {
-          this.TipText(tr(this.locale, 'sb.tip.conn'))
-        },
-        placement: Placement.Right,
-        popupColor: this.th().surfaceRaised,
-        enableArrow: true,
-        autoCancel: false
-      } as CustomPopupOptions)
+      .bindPopup(this.tipShow('conn'), this.tipOptions())
 
-      // Git(GUI 棒:真实接线 → RightPanel git 页)
+      // Git(真实接线 → RightPanel git 页)
       Row({ space: 8 }) {
         Text(AppIcons.PANEL_TUNNEL)
           .fontSize(DesignTokens.FONT_HEADING)
@@ -217,17 +207,9 @@ export struct WorkspaceSidebar {
       .accessibilityText(tr(this.locale, 'sb.git'))
       .onClick(() => this.vm.openRightTab('git'))
       .onHover((h: boolean) => {
-        this.hoverId = h ? 'git' : ''
+        this.armTip('git', tr(this.locale, 'sb.tip.git'), h)
       })
-      .bindPopup(this.tipShow('git'), {
-        builder: (): void => {
-          this.TipText(tr(this.locale, 'sb.tip.git'))
-        },
-        placement: Placement.Right,
-        popupColor: this.th().surfaceRaised,
-        enableArrow: true,
-        autoCancel: false
-      } as CustomPopupOptions)
+      .bindPopup(this.tipShow('git'), this.tipOptions())
 
       // Agent(状态点 = Vm.agentOnline 桩;点击切换 RightPanel)
       Row({ space: 8 }) {
@@ -266,19 +248,39 @@ export struct WorkspaceSidebar {
       .accessibilityText(tr(this.locale, 'sb.agent'))
       .onClick(() => this.vm.toggleRightPanel())
       .onHover((h: boolean) => {
-        this.hoverId = h ? 'agent' : ''
+        this.armTip('agent', tr(this.locale, 'sb.tip.agent'), h)
       })
-      .bindPopup(this.tipShow('agent'), {
-        builder: (): void => {
-          this.TipText(tr(this.locale, 'sb.tip.agent'))
-        },
-        placement: Placement.Right,
-        popupColor: this.th().surfaceRaised,
-        enableArrow: true,
-        autoCancel: false
-      } as CustomPopupOptions)
+      .bindPopup(this.tipShow('agent'), this.tipOptions())
 
       Blank()
+
+      // 设置(GUI-R2:侧栏 ⚙ → 设置面板,主题/语言/桥状态/版本)
+      Row({ space: 8 }) {
+        Text('⚙')
+          .fontSize(DesignTokens.FONT_HEADING)
+          .fontColor(this.hoverId === 'settings' ? this.th().brand : this.th().iconStrong)
+          .width(32)
+          .textAlign(TextAlign.Center)
+        if (this.vm.sidebarExpanded) {
+          Text(tr(this.locale, 'sb.settings'))
+            .fontSize(DesignTokens.FONT_CAPTION)
+            .fontColor(this.th().ink)
+            .maxLines(1)
+            .layoutWeight(1)
+        }
+      }
+      .width(this.vm.sidebarExpanded ? '100%' : 32)
+      .height(32)
+      .justifyContent(FlexAlign.Center)
+      .borderRadius(DesignTokens.RADIUS_MD)
+      .backgroundColor(this.hoverId === 'settings' ? this.th().hover : Color.Transparent)
+      .margin({ bottom: DesignTokens.SPACE_XS })
+      .accessibilityText(tr(this.locale, 'sb.settings'))
+      .onClick(() => this.vm.toggleSettings())
+      .onHover((h: boolean) => {
+        this.armTip('settings', tr(this.locale, 'sb.tip.settings'), h)
+      })
+      .bindPopup(this.tipShow('settings'), this.tipOptions())
 
       // 底部主题切换点(暗/浅互切,沿用 AppStorage 'ut.theme' 通道)
       Row({ space: 8 }) {
@@ -305,17 +307,9 @@ export struct WorkspaceSidebar {
         this.themeName = this.themeName === 'dark' ? 'light' : 'dark'
       })
       .onHover((h: boolean) => {
-        this.hoverId = h ? 'theme' : ''
+        this.armTip('theme', tr(this.locale, 'sb.tip.theme'), h)
       })
-      .bindPopup(this.tipShow('theme'), {
-        builder: (): void => {
-          this.TipText(tr(this.locale, 'sb.tip.theme'))
-        },
-        placement: Placement.Right,
-        popupColor: this.th().surfaceRaised,
-        enableArrow: true,
-        autoCancel: false
-      } as CustomPopupOptions)
+      .bindPopup(this.tipShow('theme'), this.tipOptions())
     }
     .width(this.vm.sidebarExpanded ? 150 : 44)
     .height('100%')

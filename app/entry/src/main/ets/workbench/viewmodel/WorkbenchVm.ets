@@ -92,6 +92,8 @@ export class WorkbenchVm {
   restoredFromArchive: boolean = false
   /** 左侧栏展开态(GUI 棒:收起=44px 图标列+悬停提示;展开=带标签)。 */
   sidebarExpanded: boolean = false
+  /** 设置面板开关(GUI-R2:侧栏 ⚙ / palette「设置」)。 */
+  settingsOpen: boolean = false
   private tabSeq: number = 1
   private paneSeq: number = 0
   private wsSeq: number = 1
@@ -610,6 +612,11 @@ export class WorkbenchVm {
   /** 左侧栏展开/收起切换(GUI 棒:收起=图标+悬停提示,展开=带标签)。 */
   toggleSidebar(): void {
     this.sidebarExpanded = !this.sidebarExpanded
+  }
+
+  /** 设置面板开关(GUI-R2)。 */
+  toggleSettings(): void {
+    this.settingsOpen = !this.settingsOpen
   }
 
   /** 打开右侧面板指定页签(GUI 棒:侧栏 conn/git 图标真实接线;

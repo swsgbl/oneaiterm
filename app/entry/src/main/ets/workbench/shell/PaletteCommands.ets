@@ -344,7 +344,16 @@ export function paletteCmds(): PaletteCmd[] {
       vm.setStatus(localeName(next))
     }
   }
+  // GUI-R2:设置(侧栏 ⚙ 同源入口;主题/语言/桥/版本面板)
+  const openSettings: PaletteCmd = {
+    key: 'app.settings',
+    label: 'cmd.settings',
+    run: (vm: WorkbenchVm) => {
+      vm.toggleSettings()
+    }
+  }
   // 顶部置入(免滚动可达:palette 列表不自动滚到底)
+  cmds.unshift(openSettings)
   cmds.unshift(helpLanguage)
   cmds.unshift(helpGuide)
   return cmds
