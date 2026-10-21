@@ -15,6 +15,7 @@ import { RightPanel } from './RightPanel';
 import { WorkbenchPalette } from './WorkbenchPalette';
 import { SettingsPanel } from './SettingsPanel';
 import { ToastHost } from './ToastHost';
+import { WebPaneLayer } from './WebPaneLayer';
 import { SshPicker } from './SshPicker';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { CommandBridge } from '../bridge/CommandBridge';
@@ -55,6 +56,8 @@ export struct AppShell {
 
   build() {
     Stack() {
+      // GUI-R4:web 终端常驻层(最底;布局树重建不碰,分屏/换页内容保活)
+      WebPaneLayer({ vm: this.vm })
       Row() {
         WorkspaceSidebar({ vm: this.vm })
       Column() {

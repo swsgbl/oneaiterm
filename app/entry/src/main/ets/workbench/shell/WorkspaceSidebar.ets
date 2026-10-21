@@ -81,7 +81,7 @@ export struct WorkspaceSidebar {
         .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
         .fontWeight(FontWeight.Bold)
         .fontColor(this.hoverId === 'sbtoggle' ? this.th().brand : this.th().iconMuted)
-        .width(this.vm.sidebarExpanded ? '100%' : 32)
+        .width('100%')
         .height(22)
         .textAlign(TextAlign.Center)
         .borderRadius(DesignTokens.RADIUS_MD)
@@ -117,7 +117,7 @@ export struct WorkspaceSidebar {
               .layoutWeight(1)
           }
         }
-        .width(this.vm.sidebarExpanded ? '100%' : 32)
+        .width('100%')
         .height(32)
         .justifyContent(FlexAlign.Center)
         .borderRadius(DesignTokens.RADIUS_MD)
@@ -148,7 +148,7 @@ export struct WorkspaceSidebar {
             .layoutWeight(1)
         }
       }
-      .width(this.vm.sidebarExpanded ? '100%' : 32)
+      .width('100%')
       .height(20)
       .justifyContent(FlexAlign.Center)
       .borderRadius(DesignTokens.RADIUS_MD)
@@ -177,7 +177,7 @@ export struct WorkspaceSidebar {
             .layoutWeight(1)
         }
       }
-      .width(this.vm.sidebarExpanded ? '100%' : 32)
+      .width('100%')
       .height(32)
       .justifyContent(FlexAlign.Center)
       .borderRadius(DesignTokens.RADIUS_MD)
@@ -206,7 +206,7 @@ export struct WorkspaceSidebar {
             .layoutWeight(1)
         }
       }
-      .width(this.vm.sidebarExpanded ? '100%' : 32)
+      .width('100%')
       .height(32)
       .justifyContent(FlexAlign.Center)
       .borderRadius(DesignTokens.RADIUS_MD)
@@ -248,7 +248,7 @@ export struct WorkspaceSidebar {
             .layoutWeight(1)
         }
       }
-      .width(this.vm.sidebarExpanded ? '100%' : 32)
+      .width('100%')
       .height(32)
       .justifyContent(FlexAlign.Center)
       .borderRadius(DesignTokens.RADIUS_MD)
@@ -277,7 +277,7 @@ export struct WorkspaceSidebar {
             .layoutWeight(1)
         }
       }
-      .width(this.vm.sidebarExpanded ? '100%' : 32)
+      .width('100%')
       .height(32)
       .justifyContent(FlexAlign.Center)
       .borderRadius(DesignTokens.RADIUS_MD)
@@ -305,7 +305,7 @@ export struct WorkspaceSidebar {
             .layoutWeight(1)
         }
       }
-      .width(this.vm.sidebarExpanded ? '100%' : 32)
+      .width('100%')
       .height(32)
       .justifyContent(FlexAlign.Center)
       .borderRadius(DesignTokens.RADIUS_MD)

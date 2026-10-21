@@ -22,6 +22,7 @@ import { buildFinishedAttention } from './ParityUi';
 import { unifiedDataChannel } from '@kit.ArkData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PaneDropTargets, PaneRectEntry, PaneDragState } from '../model/PaneDropTargets';
+import { WebPaneRects } from '../model/WebPaneRects';
 import { tr } from '../../common/AppI18n';
 import { fsc } from '../../common/UiFont';
 
@@ -50,6 +51,8 @@ export struct PaneSurface {
   private dragPaneId: string = ''
   /** RD-1: 本 pane ttyd 可达三态(null=探测中;true=web;false=旧自绘)。 */
   @State ttydOk: boolean | null = null
+  /** GUI-R4: 根矩形缓存(分支 onAppear 无 Area 上下文,用缓存发布)。 */
+  private rectCache: number[] = [0, 0, 0, 0]
   /** GUI-i18n: 占位/提示文案反应式语言。 */
   @StorageProp('ut.locale') locale: string = 'zh-CN'
   /** RD-1: 退避重探链句柄(-1 未挂;pane 销毁清)。 */
@@ -102,14 +105,39 @@ export struct PaneSurface {
   /** RD-1: pane 出现即探测 ttyd(会话缓存命中时零网络)。 */
   aboutToAppear(): void {
     this.probeReach()
+    // GUI-R4: web 不可达回调注册(常驻层的 TermWebView → 本组件探测状态机)
+    WebPaneRects.setUnreach(this.paneId, (): void => {
+      this.onTtydUnreachable()
+    })
   }
 
   aboutToDisappear(): void {
     PaneDropTargets.unregister(this.paneId)
+    WebPaneRects.setUnreach(this.paneId, null)
     if (this.reachTimer !== -1) {
       clearTimeout(this.reachTimer)
       this.reachTimer = -1
     }
+    // 注:不撤 WebPaneRects 条目——rev 整树重建也触发本回调,真关闭由
+    // vm.closePane/closeTab 显式清理(GUI-R4 内容保活的关键约束)
+  }
+
+  /** web 分支激活判定(层可见性 = 探测过 + 窗口可见 + 本地会话槽)。 */
+  private webActive(): boolean {
+    return this.ttydOk === true && this.vm.shellVisibleTick > 0 &&
+      this.vm.sessionKindOf(this.paneId) === 'local'
+  }
+
+  /** 分支 onAppear 入口:用缓存矩形发布(分支切换无 Area 回调)。 */
+  private publishFromCache(show: boolean): void {
+    WebPaneRects.update(this.paneId, this.rectCache[0], this.rectCache[1], this.rectCache[2], this.rectCache[3], show)
+  }
+
+  /** web 层矩形上报(布局变化/分支切换统一入口;show=false 仅隐藏保活)。 */
+  private publishWebRect(show: boolean, n: Area): void {
+    WebPaneRects.update(this.paneId,
+      Number(n.globalPosition.x), Number(n.globalPosition.y),
+      Number(n.width), Number(n.height), show)
   }
 
   build() {
@@ -242,17 +270,23 @@ export struct PaneSurface {
           .layoutWeight(1)
           .width('100%')
           .justifyContent(FlexAlign.Center)
-        } else if (this.ttydOk === true && this.vm.shellVisibleTick > 0) {
-          // RD-2: web 分支接完成通知(桥注入/用户提交 → ✓ 双落点,同 TermPaneView)
-          // FR: 门控 vm.shellVisibleTick(if 表达式读它建立追踪)——
-          // 窗口可见后才建 Web:ArkWeb 在隐藏窗口创建的 Web 永不 attach
-          // 且无重试(冷启后台启动即死 pane;tick 0→1 翻转本分支时才创建)
-          TermWebView({
-            paneId: this.paneId,
-            onUnreachable: (): void => { this.onTtydUnreachable() },
-            onDone: (): void => { this.onCmdDone(this.paneId) },
-            onShortcut: (act: string): void => { this.vm.handleShortcut(this.paneId, act) }
+          .onAppear(() => {
+            this.publishFromCache(false)
           })
+        } else if (this.ttydOk === true && this.vm.shellVisibleTick > 0) {
+          // GUI-R4 生产级修复:web 终端与布局树解耦——本分支只画「透明
+          // 占位 + 矩形上报」(WebPaneRects),真身在 AppShell 常驻
+          // WebPaneLayer。布局树 rev 重建/分屏/换页只改矩形,web 实例
+          // 与会话内容永不重载(用户实锤「新建分屏刷掉第一屏」根治)。
+          // 占位 hitTest None:点击直达下层 web;xterm 自获焦点。
+          Column()
+            .layoutWeight(1)
+            .width('100%')
+            .backgroundColor(Color.Transparent)
+            .hitTestBehavior(HitTestMode.None)
+            .onAppear(() => {
+              this.publishFromCache(true)
+            })
         } else if (this.ttydOk === true) {
           // FR: 探测 ok 但窗口未上前——等待可见(shellVisibleTick 变化
           // 驱动翻转到 web 分支;冷启 aa start 不抢前台的窗口属此态)
@@ -270,6 +304,9 @@ export struct PaneSurface {
           .layoutWeight(1)
           .width('100%')
           .justifyContent(FlexAlign.Center)
+          .onAppear(() => {
+            this.publishFromCache(false)
+          })
         } else {
           // 降级路径(ttyd 不可达):TermPaneView 依赖 TermHost 单例——
           // 归属本 pane 才渲染;被其它 pane 占用时占位提示(web 为主)
@@ -294,6 +331,9 @@ export struct PaneSurface {
             .layoutWeight(1)
             .width('100%')
             .justifyContent(FlexAlign.Center)
+            .onAppear(() => {
+              this.publishFromCache(false)
+            })
           }
         }
       } else {
@@ -347,18 +387,27 @@ export struct PaneSurface {
         .layoutWeight(1)
         .width('100%')
         .justifyContent(FlexAlign.Center)
+        .onAppear(() => {
+          this.publishFromCache(false)
+        })
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(this.th().panel)
+    // GUI-R4:web 分支激活时透明——真身在 AppShell 底层 WebPaneLayer,
+    // 本容器仅画边框/标题(内容区占位 hitTest None 点击直达 web)
+    .backgroundColor(this.webActive() ? Color.Transparent : this.th().panel)
     .borderRadius(DesignTokens.RADIUS_MD)
     .border({
       width: this.dragOver ? 2 : (this.vm.focusedPane === this.paneId ? 2 : 1),
       color: this.dragOver ? this.th().danger :
         (this.vm.focusedPane === this.paneId ? this.th().brand : this.th().hairline)
     })
-    .onClick(() => this.vm.focusPane(this.paneId))
+    .onClick(() => {
+      if (!this.webActive()) {
+        this.vm.focusPane(this.paneId)
+      }
+    })
     // M1e drop 目标:onDragEnter/Leave 高亮(danger 2px 边框近似"可放");
     // onDrop 读拖源 paneId 换位。不设 allowDrop = 默认接受全部数据类型
     // (API12 枚举 Array<UniformDataType> 无自定义成员,设了反而拒收)。
@@ -396,6 +445,9 @@ export struct PaneSurface {
       r.w = Number(n.width)
       r.h = Number(n.height)
       PaneDropTargets.update(r)
+      // GUI-R4:缓存 + web 层矩形同源上报(show=当前分支判定)
+      this.rectCache = [r.x, r.y, r.w, r.h]
+      this.publishWebRect(this.webActive(), n)
     })
   }
 

@@ -26,6 +26,9 @@ import { TermHost } from '../term/TermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { TelTermHost } from '../remote/TelTermHost';
 import { TtydSession } from '../term/TtydSession';
+import { WebPaneRects } from '../model/WebPaneRects';
+import { AgentEventBus } from '../agent/AgentEventBus';
+import { buildFinishedAttention } from '../shell/ParityUi';
 import { reachState } from '../term/TermReach';
 import { getSharedStore } from '../../store/ConnStore';
 import { PaneDropTargets } from '../model/PaneDropTargets';
@@ -278,6 +281,7 @@ export class WorkbenchVm {
     this.tabs = ws.tabs
     this.activeTab = ws.activeTab >= 0 && ws.activeTab < ws.tabs.length ? ws.activeTab : 0
     this.syncFromLayout(this.tabs[this.activeTab].layout)
+    this.syncWebPanes()
     this.statusText = i18nT('status.wsswitch') + ' ' + ws.name
   }
 
@@ -607,6 +611,15 @@ export class WorkbenchVm {
     this.settingsOpen = !this.settingsOpen
   }
 
+  /** 命令完成通知双落点(GUI-R4:WebPaneLayer 与降级路径共用——
+   *  状态栏 + RightPanel attention)。 */
+  cmdDone(paneId: string): void {
+    this.setStatus(i18nT('status.done') + paneId)
+    if (this.rightPanelOpen) {
+      AgentEventBus.instance().emit(buildFinishedAttention(paneId))
+    }
+  }
+
   /** 打开右侧面板指定页签(GUI 棒:侧栏 conn/git 图标真实接线;
    *  setRightTab 白名单归一,已开仅切页)。 */
   openRightTab(tab: string): void {
@@ -774,6 +787,21 @@ export class WorkbenchVm {
     this.syncFromLayout(LayoutOps.close(this.layout, id))
     this.pruneSessions()
     this.reapTermIfGone() // M3a:被删 pane 持有 PTY → 回收
+    // GUI-R4:真关闭才卸 web 层条目(会话终结);其余条目按当前树同步显隐
+    WebPaneRects.remove(id)
+    this.syncWebPanes()
+  }
+
+  /** GUI-R4:web 层显隐权威同步——非当前 tab 布局内的 pane 全部隐藏
+   *  (跨页/跨工作区保活:组件保留、内容存活,切回即恢复)。 */
+  syncWebPanes(): void {
+    const active: string[] = this.panes
+    const snap = WebPaneRects.snapshot()
+    for (const r of snap) {
+      if (active.indexOf(r.paneId) < 0 && r.show) {
+        WebPaneRects.update(r.paneId, r.x, r.y, r.w, r.h, false)
+      }
+    }
   }
 
   /** 焦点叶 zoom 切换(zoom 语义由 PaneGrid 渲染层实现)。 */
@@ -818,6 +846,11 @@ export class WorkbenchVm {
     if (i < 0 || i >= this.tabs.length || this.tabs.length <= 1) {
       return
     }
+    // GUI-R4:被删 tab 的全部 web 会话终结(条目卸载)
+    const dying = this.tabs[i]
+    for (const pid of LayoutOps.panes(dying.layout)) {
+      WebPaneRects.remove(pid)
+    }
     this.tabs = this.tabs.slice(0, i).concat(this.tabs.slice(i + 1))
     this.projectTabsToWs()
     if (this.activeTab >= this.tabs.length) {
@@ -835,6 +868,7 @@ export class WorkbenchVm {
     if (i >= 0 && i < this.tabs.length && i !== this.activeTab) {
       this.activeTab = i
       this.syncFromLayout(this.tabs[i].layout)
+      this.syncWebPanes() // GUI-R4:旧 tab pane 隐藏(保活),新 tab 面板自行上报
     }
   }
 
