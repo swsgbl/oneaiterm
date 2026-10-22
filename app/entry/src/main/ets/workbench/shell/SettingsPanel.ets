@@ -39,6 +39,8 @@ export struct SettingsPanel {
   @State updLatest: string = ''
   @State updFound: boolean = false
   @State updAuto: boolean = false
+  // R4f 键盘测试器(最近收到的键)
+  @State kbLast: string = ''
 
   aboutToAppear(): void {
     // 版本号读运行时 bundle 信息(app.json5 单源;读不到回退缺省)
@@ -556,6 +558,37 @@ export struct SettingsPanel {
               .margin({ left: 8 })
           }
           .width('100%')
+
+          // ===== 键盘测试器(R4f:用户自判键盘信号是否到达应用) =====
+          Divider().color(this.th().hairline).margin({ top: 2 })
+
+          Text(tr(this.locale, 'kb.title'))
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_HEADING))
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.th().ink)
+            .width('100%')
+          Text(tr(this.locale, 'kb.hint'))
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
+            .fontColor(this.th().inkSubtle)
+            .width('100%')
+          TextInput({ placeholder: '' })
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))
+            .fontColor(this.th().ink)
+            .backgroundColor(this.th().inputBg)
+            .borderRadius(DesignTokens.RADIUS_MD)
+            .height(36)
+            .width('100%')
+            .onKeyEvent((e: KeyEvent) => {
+              if (e.type === KeyType.Down) {
+                this.kbLast = 'key=' + e.keyCode.toString() +
+                  (e.keyText !== undefined && e.keyText !== '' ? ' "' + e.keyText + '"' : '')
+              }
+            })
+          Text(tr(this.locale, 'kb.received') + ' ' +
+            (this.kbLast !== '' ? this.kbLast : tr(this.locale, 'kb.none')))
+            .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
+            .fontColor(this.kbLast !== '' ? this.th().brand : this.th().iconMuted)
+            .width('100%')
 
           Text(tr(this.locale, 'set.done'))
             .fontSize(fsc(this.fontScale, DesignTokens.FONT_BODY))

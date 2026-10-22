@@ -876,7 +876,7 @@ export class WorkbenchVm {
   focusPane(id: string): void {
     if (this.panes.indexOf(id) >= 0 && id !== this.focusedPane) {
       this.syncFromLayout(LayoutOps.focus(this.layout, id))
-      WebPaneRects.requestFocus(id) // R4b:键盘焦点跟随(R4 解耦后显式路由)
+      // R4f:不再对 Web 组件请求焦点(与透明输入框互抢的根因已拆除)
     }
   }
 

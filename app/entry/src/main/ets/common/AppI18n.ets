@@ -123,6 +123,11 @@ const ZH: Record<string, string> = {
   'set.bridge': 'CLI 桥',
   'set.version': '版本',
   'set.done': '完成',
+  // R4f 键盘测试器
+  'kb.title': '键盘测试',
+  'kb.hint': '点下面的输入框,敲几个键:',
+  'kb.none': '(未收到按键)',
+  'kb.received': '收到:',
   // ===== GUI 丝滑棒:空态/toast/确认/字号 =====
   'pane.empty.hint': '此窗格还没有会话',
   'pane.empty.local': '新建本地',
@@ -283,6 +288,10 @@ const EN: Record<string, string> = {
   'set.bridge': 'CLI bridge',
   'set.version': 'Version',
   'set.done': 'Done',
+  'kb.title': 'Keyboard test',
+  'kb.hint': 'Tap the box below and press some keys:',
+  'kb.none': '(no keys received)',
+  'kb.received': 'Received:',
   'pane.empty.hint': 'No session in this pane yet',
   'pane.empty.local': 'New local',
   'pane.empty.ssh': 'SSH connect',

@@ -197,9 +197,8 @@ export struct TermWebView {
       hello(): void {
         TtydSession.markLive(pane, true)
         hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'rd2 armed pane=%{public}s', pane)
-        // R4b:armed 即请求键盘焦点(ArkUI 键盘事件走焦点树——解耦后
-        // Web 组件需显式拿组件级焦点) + 页面 textarea 聚焦兜底
-        WebPaneRects.requestFocus(pane)
+        // R4f:armed 不再抢组件焦点(R4c 焦点机器与 R4e 透明输入框互抢,
+        // 键盘永失——已全部废弃);仅页面 textarea 聚焦兜底(xterm 内部)
         try {
           self.controller.runJavaScript('try{window.term&&window.term.focus&&window.term.focus()}catch(e){}')
         } catch (e) {
