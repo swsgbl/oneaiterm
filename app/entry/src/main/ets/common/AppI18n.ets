@@ -128,6 +128,10 @@ const ZH: Record<string, string> = {
   'kb.hint': '点下面的输入框,敲几个键:',
   'kb.none': '(未收到按键)',
   'kb.received': '收到:',
+  // R4g 屏幕软键盘
+  'sk.title': '屏幕键盘',
+  'sk.close': '收起键盘',
+  'kb.nofocus': '没有可输入的焦点窗格',
   // ===== GUI 丝滑棒:空态/toast/确认/字号 =====
   'pane.empty.hint': '此窗格还没有会话',
   'pane.empty.local': '新建本地',
@@ -292,6 +296,9 @@ const EN: Record<string, string> = {
   'kb.hint': 'Tap the box below and press some keys:',
   'kb.none': '(no keys received)',
   'kb.received': 'Received:',
+  'sk.title': 'On-screen keyboard',
+  'sk.close': 'Hide keyboard',
+  'kb.nofocus': 'No focused pane to type into',
   'pane.empty.hint': 'No session in this pane yet',
   'pane.empty.local': 'New local',
   'pane.empty.ssh': 'SSH connect',

@@ -37,6 +37,7 @@ import telnetSessionTest from './TelnetSession.test.ets'; // +LEG-2: telnet 会�
 import agentPanelTest from './AgentPanel.test.ets'; // +LEG-2: 引擎/prompt 守卫
 import ttydSessionTest from './TtydSession.test.ets';
 import tunnelCmdTest from './TunnelCmd.test.ets'; // +RD-2: ttyd 输出流镜像纯函数
+import softKeyboardTest from './SoftKeyboard.test.ets'; // +R4g: 屏幕软键盘键表/序列 + 输入路由
 // +M1e: LayoutOps.swapPane 用例并入 LayoutTree.test.ets(任务书允许可并入,layoutTreeTest 注册即执行)
 
 export default function testsuite() {
@@ -74,6 +75,7 @@ export default function testsuite() {
   agentPanelTest(); // +LEG-2
   ttydSessionTest(); // +RD-2
   tunnelCmdTest(); // +LEG-3b
+  softKeyboardTest(); // +R4g
   agentPanelTest(); // +LEG-2
   // +M1e: swap 用例并入 layoutTreeTest(上面已调用,不重复注册)
 }

@@ -16,6 +16,7 @@ import { WorkbenchPalette } from './WorkbenchPalette';
 import { SettingsPanel } from './SettingsPanel';
 import { ToastHost } from './ToastHost';
 import { WebPaneLayer } from './WebPaneLayer';
+import { SoftKeyboard } from './SoftKeyboard';
 import { SshPicker } from './SshPicker';
 import { HmhEventBridge } from '../agent/HmhEventBridge';
 import { CommandBridge } from '../bridge/CommandBridge';
@@ -142,6 +143,17 @@ export struct AppShell {
       }
       // GUI 丝滑棒:全局轻提示(顶部居中,自动消退;Stack 兄弟层悬浮)
       ToastHost({ vm: this.vm, themeName: this.themeName })
+      // R4g:屏幕软键盘(点击式确定性输入)——全幅透明容器垫底,键盘本体
+      // 沉底;容器 hitTest Transparent,键盘外点击穿透到下层 UI。
+      if (this.vm.softKbOpen) {
+        Column() {
+          Blank()
+          SoftKeyboard({ vm: this.vm, themeName: this.themeName })
+        }
+        .width('100%')
+        .height('100%')
+        .hitTestBehavior(HitTestMode.Transparent)
+      }
     }
     .width('100%')
     .height('100%')

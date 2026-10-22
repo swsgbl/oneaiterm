@@ -292,7 +292,11 @@ export struct PaneGrid {
     .width('100%')
     .height('100%')
     .padding(DesignTokens.SPACE_XS)
-    .backgroundColor(this.th().surface)
+    // R4g:透明——AppShell 根 Stack 底层有 WebPaneLayer(web 终端真身),本层
+    // 画不透明 surface 会整面盖住 web(实锤:R4f 拆焦点属性后 web 渲染面
+    // 回落到普通层,被本背景遮蔽→终端内容区全黑)。基底色由 AppShell 根
+    // Stack backgroundColor(surface) 提供,视觉不变,web 恒可见(机制无关)。
+    .backgroundColor(Color.Transparent)
   }
 
   private isEmptyRoot(): boolean {

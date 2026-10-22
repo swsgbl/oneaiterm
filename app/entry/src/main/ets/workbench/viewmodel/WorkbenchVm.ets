@@ -98,6 +98,8 @@ export class WorkbenchVm {
   sidebarExpanded: boolean = false
   /** 设置面板开关(GUI-R2:侧栏 ⚙ / palette「设置」)。 */
   settingsOpen: boolean = false
+  /** 屏幕软键盘开关(R4g:点击式确定性输入;状态栏 ⌨ 切换)。 */
+  softKbOpen: boolean = false
   private tabSeq: number = 1
   private paneSeq: number = 0
   private wsSeq: number = 1
@@ -878,6 +880,37 @@ export class WorkbenchVm {
       this.syncFromLayout(LayoutOps.focus(this.layout, id))
       // R4f:不再对 Web 组件请求焦点(与透明输入框互抢的根因已拆除)
     }
+  }
+
+  /** R4g:屏幕软键盘输入路由——焦点 pane 按会话种类分发:
+   *  本地(web 架构)→ TtydSession 桥;降级本地 → TermHost;
+   *  remote → RemoteTermHost;telnet → TelTermHost。
+   *  返回 false=无焦点/无通道(调用方 toast 提示;不静默吞)。 */
+  sendToFocusedPane(text: string): boolean {
+    const pane = this.focusedPane
+    if (pane === '' || text.length === 0) {
+      return false
+    }
+    const kind = this.sessionKindOf(pane)
+    if (kind === 'local') {
+      if (TtydSession.sendText(pane, text)) {
+        return true
+      }
+      if (TermHost.bound() === pane) {
+        TermHost.write(text)
+        return true
+      }
+      return false
+    }
+    if (kind === 'remote' && RemoteTermHost.bound() === pane) {
+      RemoteTermHost.write(text)
+      return true
+    }
+    if (kind === 'telnet' && TelTermHost.bound() === pane) {
+      TelTermHost.write(text)
+      return true
+    }
+    return false
   }
 
   /** 拖拽落点判定(M1e onDragEnd 兜底通道,纯查询):
