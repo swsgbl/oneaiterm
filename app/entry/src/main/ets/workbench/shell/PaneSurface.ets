@@ -172,9 +172,13 @@ export struct PaneSurface {
       this.vm.sessionKindOf(this.paneId) === 'local'
   }
 
-  /** 分支 onAppear 入口:用缓存矩形发布(分支切换无 Area 回调)。 */
+  /** 分支 onAppear 入口:用缓存矩形发布(分支切换无 Area 回调)。
+   *  R4h:缓存未测得(0×0)时强制 show=false——web 若以 0×0 创建会永久
+   *  不可见(时序竞速实锤:快探路径下分支先于首布局激活,缓存为空);
+   *  保持隐藏,待占位 onAreaChange 上报真实矩形后再显示。 */
   private publishFromCache(show: boolean): void {
-    WebPaneRects.update(this.paneId, this.rectCache[0], this.rectCache[1], this.rectCache[2], this.rectCache[3], show)
+    const real = this.rectCache[2] > 0 && this.rectCache[3] > 0
+    WebPaneRects.update(this.paneId, this.rectCache[0], this.rectCache[1], this.rectCache[2], this.rectCache[3], show && real)
   }
 
   /** web 层矩形上报(布局变化/分支切换统一入口;show=false 仅隐藏保活)。 */
@@ -358,7 +362,12 @@ export struct PaneSurface {
           .backgroundColor(Color.Transparent)
           .onAppear(() => {
             this.publishFromCache(true)
-            })
+          })
+          // R4h:占位自身区域=web 真身矩形——分支切换/布局变化必触发本回调
+          // (根容器 onAreaChange 在纯分支切换时不触发,0×0 卡死根源)。
+          .onAreaChange((_o: Area, n: Area) => {
+            this.publishWebRect(true, n)
+          })
         } else if (this.ttydOk === true) {
           // FR: 探测 ok 但窗口未上前——等待可见(shellVisibleTick 变化
           // 驱动翻转到 web 分支;冷启 aa start 不抢前台的窗口属此态)
@@ -516,7 +525,11 @@ export struct PaneSurface {
       PaneDropTargets.update(r)
       // GUI-R4:缓存 + web 层矩形同源上报(show=当前分支判定)
       this.rectCache = [r.x, r.y, r.w, r.h]
-      this.publishWebRect(this.webActive(), n)
+      // R4h:web 分支激活时矩形由分支内占位自身 onAreaChange 上报(内容区
+      // 更准且分支切换必触发);根容器仅在非 web 分支时发布隐藏保活语义。
+      if (!this.webActive()) {
+        this.publishWebRect(false, n)
+      }
     })
   }
 
