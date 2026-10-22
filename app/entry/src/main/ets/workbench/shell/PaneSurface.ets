@@ -101,6 +101,13 @@ export struct PaneSurface {
   @StorageProp('ut.locale') locale: string = 'zh-CN'
   /** RD-1: 退避重探链句柄(-1 未挂;pane 销毁清)。 */
   private reachTimer: number = -1
+  /** R4i 自愈看门狗:web 分支激活期间周期性重发布矩形(show=webActive)。
+   *  动机:实勘存在「shell 活/镜像活/像素黑」的矩形或显隐卡死形态(启动
+   *  路径相关的时序竞速,R4h 修了已知的 0×0 形态,用户路径仍复现)——
+   *  看门狗不区分成因,以最新占位面积强制重发布,层侧属性重应用驱动
+   *  ArkWeb 表面重排版,任何卡死形态 3 秒内自愈。 */
+  private healTimer: number = -1
+  private webAreaCache: number[] = [0, 0, 0, 0]
 
   private th(): AppTheme {
     return themeByName(this.themeName)
@@ -162,6 +169,7 @@ export struct PaneSurface {
       clearTimeout(this.reachTimer)
       this.reachTimer = -1
     }
+    this.stopHeal()
     // 注:不撤 WebPaneRects 条目——rev 整树重建也触发本回调,真关闭由
     // vm.closePane/closeTab 显式清理(GUI-R4 内容保活的关键约束)
   }
@@ -186,6 +194,27 @@ export struct PaneSurface {
     WebPaneRects.update(this.paneId,
       Number(n.globalPosition.x), Number(n.globalPosition.y),
       Number(n.width), Number(n.height), show)
+  }
+
+  /** R4i:自愈看门狗启动(幂等;3s 周期重发布,webActive 且面积有效才发)。 */
+  private startHeal(): void {
+    if (this.healTimer !== -1) {
+      return
+    }
+    this.healTimer = setInterval((): void => {
+      if (this.webActive() && this.webAreaCache[2] > 0 && this.webAreaCache[3] > 0) {
+        WebPaneRects.update(this.paneId,
+          this.webAreaCache[0], this.webAreaCache[1],
+          this.webAreaCache[2], this.webAreaCache[3], true)
+      }
+    }, 3000)
+  }
+
+  private stopHeal(): void {
+    if (this.healTimer !== -1) {
+      clearInterval(this.healTimer)
+      this.healTimer = -1
+    }
   }
 
   build() {
@@ -365,8 +394,11 @@ export struct PaneSurface {
           })
           // R4h:占位自身区域=web 真身矩形——分支切换/布局变化必触发本回调
           // (根容器 onAreaChange 在纯分支切换时不触发,0×0 卡死根源)。
+          // R4i:缓存面积 + 启动自愈看门狗(周期重发布,兜住一切卡死形态)。
           .onAreaChange((_o: Area, n: Area) => {
+            this.webAreaCache = [Number(n.globalPosition.x), Number(n.globalPosition.y), Number(n.width), Number(n.height)]
             this.publishWebRect(true, n)
+            this.startHeal()
           })
         } else if (this.ttydOk === true) {
           // FR: 探测 ok 但窗口未上前——等待可见(shellVisibleTick 变化

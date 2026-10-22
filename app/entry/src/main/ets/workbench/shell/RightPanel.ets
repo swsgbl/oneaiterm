@@ -221,13 +221,18 @@ export struct RightPanel {
     }
     HmhEventBridge.sendTask(t, this.vm.focusedPane, engineOfKey(this.engine)).then((r: string): void => {
       if (r === 'no_engine') {
+        // R4i:未配置不能只沉在状态栏——全局 toast 醒目提示(用户实闈
+        // 「AI 窗口里什么都没有」),并留状态栏细文。
+        this.vm.toast(tr(this.locale, 'ai.toast.noengine'))
         this.vm.setStatus('AI 引擎未配置')
       } else if (r.indexOf('reject:') === 0 || r.indexOf('fail:') === 0) {
+        this.vm.toast(tr(this.locale, 'ai.toast.taskfail'))
         this.vm.setStatus('AI 任务未受理(' + r + ')')
       } else if (r === 'ok') {
         this.vm.setStatus('AI 任务已提交')
       }
     }).catch((_e: Object): void => {
+      this.vm.toast(tr(this.locale, 'ai.toast.taskfail'))
       this.vm.setStatus('AI 任务发送失败')
     })
     this.input = '' // 不发假事件,只清输入行
