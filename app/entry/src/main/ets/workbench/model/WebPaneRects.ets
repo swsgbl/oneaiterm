@@ -10,6 +10,8 @@
  * 同 PaneDropTargets 模式:globalPosition 即窗口坐标;onRevTap 驱动层重渲。
  */
 
+import { hilog } from '@kit.PerformanceAnalysisKit';
+
 export class WebPaneRect {
   paneId: string = ''
   x: number = 0

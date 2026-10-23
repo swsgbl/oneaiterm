@@ -272,6 +272,8 @@ export struct TermWebView {
   }
 
   aboutToAppear(): void {
+    // R4SDBG(warn 级,排查用):组件构造
+    hilog.warn(RDPOC_DOMAIN, 'R4SDBG', 'tw appear pane=%{public}s', this.paneId)
     // 桥写入锚点:sendText 成功即重启完成探测(同用户提交语义)
     TtydSession.onWriteTap = (pane: string): void => {
       if (pane === this.paneId) {
@@ -297,13 +299,18 @@ export struct TermWebView {
 
   build() {
     Stack() {
-      Web({ src: TTYD_URL, controller: this.controller })
+      // R4s:renderMode=SYNC_RENDER——Web 作为画布节点同步画进组件树。
+      // 本机(KaihongOS 5.0 Quickemu)合成器不采样 ArkWeb 默认 ASYNC_RENDER
+      // 的独立表面(平台级零像素;R4g..R4o 七轮无效,自绘 canvas 同路径
+      // 可渲染实证组件树纹理通路正常)——SYNC_RENDER 走组件树通路绕开。
+      Web({ src: TTYD_URL, controller: this.controller, renderMode: RenderMode.SYNC_RENDER })
         .width('100%')
         .height('100%')
         .javaScriptOnDocumentStart([
           { script: darkInjectJs(), scriptRules: ['*'] }
         ])
         .onControllerAttached(() => {
+          hilog.warn(RDPOC_DOMAIN, 'R4SDBG', 'tw attached pane=%{public}s', this.paneId)
           hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'controllerAttached pane=%{public}s', this.paneId)
           this.setupProxy()
           TtydSession.setSender(this.paneId, (js: string): void => {
@@ -318,6 +325,7 @@ export struct TermWebView {
           // capture 有」实勘);pageEnd 同步直装已覆盖注入时序,refresh 冗余。
         })
         .onPageEnd((e: OnPageEndEvent) => {
+          hilog.warn(RDPOC_DOMAIN, 'R4SDBG', 'tw pageEnd pane=%{public}s', this.paneId)
           this.pageState = 'loaded'
           hilog.info(RDPOC_DOMAIN, RDPOC_TAG, 'pageEnd pane=%{public}s url=%{public}s',
             this.paneId, e.url)
