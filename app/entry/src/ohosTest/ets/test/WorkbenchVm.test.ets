@@ -5,7 +5,7 @@
  * 可在无 UI 环境直接实例化验证（沿用 LayoutTree.test 的真实 import 范式）。
  *
  * 覆盖（对应 M1c 验收点）：
- *   1. 初始基线：双 pane（p1|p2 左右分），panes/focusedPane/statusText 同步
+ *   1. 初始基线：单 pane（p1）——R4r 默认单屏（用户指令）;多 pane 场景经 vmBase() 自建
  *   2. newPane('h'/'v')：对焦点叶 split，新 id=p{最大+1}
  *   3. closePane：父折叠 + 焦点迁移；全关 → 空模型；空模型上 newPane 重建 p1
  *   4. focusPane：切换与非法 id 拒绝
@@ -17,9 +17,17 @@ import { WorkbenchVm, firstLocalSlotPaneId } from '../../../main/ets/workbench/v
 import { PaneLeaf, SplitNode } from '../../../main/ets/workbench/layout/LayoutTree';
 import { SessionSlot } from '../../../main/ets/workbench/model/TabState';
 
+/** 双 pane 基线(R4r 起构造器默认单屏;多 pane 用例经本函数自建 p1|h|p2)。 */
+function vmBase(): WorkbenchVm {
+  const vm = new WorkbenchVm() // 单叶 p1
+  vm.newPane('h') // → p1|h|p2(焦点 p1)
+  vm.focusPane('p1')
+  return vm
+}
+
 /** 构造 2x2：p1|p2 两列，各列上下再分。 */
 function vm2x2(): WorkbenchVm {
-  const vm = new WorkbenchVm() // 基线 p1|h|p2
+  const vm = vmBase() // 基线 p1|h|p2
   vm.focusPane('p1')
   vm.newPane('v') // p1 上/下 → p3
   vm.focusPane('p2')
@@ -30,20 +38,19 @@ function vm2x2(): WorkbenchVm {
 export default function workbenchVmTest() {
   describe('workbenchVm', () => {
     // ===== 1. 初始基线 =====
-    it('initial_baseline_two_panes', 0, () => {
+    it('initial_baseline_single_pane', 0, () => {
+      // R4r:默认单屏(用户指令「初始就是一个屏」);原双 pane 开发期基线退役
       const vm = new WorkbenchVm()
-      expect(vm.panes.join(',')).assertEqual('p1,p2')
+      expect(vm.panes.join(',')).assertEqual('p1')
       expect(vm.focusedPane).assertEqual('p1')
       expect(vm.layout.zoomedPaneId).assertEqual('')
-      expect(vm.statusText).assertEqual('panes 2 · focus p1')
-      const sp = vm.layout.root as SplitNode
-      expect(sp.dir).assertEqual('h')
-      expect(sp.children.length).assertEqual(2)
+      expect(vm.statusText).assertEqual('panes 1 · focus p1')
+      expect(vm.layout.root instanceof PaneLeaf).assertTrue()
     })
 
     // ===== 2. newPane =====
     it('newpane_splits_focused_leaf_with_next_id', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       vm.newPane('v')
       expect(vm.panes.join(',')).assertEqual('p1,p3,p2')
       expect(vm.focusedPane).assertEqual('p1')
@@ -58,7 +65,7 @@ export default function workbenchVmTest() {
     })
 
     it('newpane_on_empty_layout_rebuilds_p1', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       vm.closePane('p1')
       vm.closePane('p2')
       expect(vm.panes.join(',')).assertEqual('')
@@ -70,7 +77,7 @@ export default function workbenchVmTest() {
 
     // ===== 3. closePane =====
     it('closepane_collapses_parent_and_moves_focus', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       vm.focusPane('p2')
       vm.closePane('p2')
       // p2 被删后整树折叠为单叶 p1,焦点迁回 p1
@@ -81,7 +88,7 @@ export default function workbenchVmTest() {
     })
 
     it('closepane_zoomed_clears_zoom', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       vm.focusPane('p2')
       vm.zoomToggle()
       expect(vm.layout.zoomedPaneId).assertEqual('p2')
@@ -91,7 +98,7 @@ export default function workbenchVmTest() {
 
     // ===== 4. focusPane =====
     it('focuspane_switches_and_rejects_unknown', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       vm.focusPane('p2')
       expect(vm.focusedPane).assertEqual('p2')
       vm.focusPane('Z')
@@ -109,7 +116,7 @@ export default function workbenchVmTest() {
 
     // ===== 6. resizeSplit =====
     it('resizesplit_clamps_and_syncs_derived_state', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       const spId = (vm.layout.root as SplitNode).id
       vm.resizeSplit(spId, 1.5)
       expect((vm.layout.root as SplitNode).ratio).assertEqual(0.9)

@@ -19,6 +19,14 @@ import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
 import { serializeWorkspaces, deserializeWorkspaces } from '../../../main/ets/workbench/store/WorkbenchStore';
 import { WorkspaceState } from '../../../main/ets/workbench/model/WorkspaceState';
 
+/** 双 pane 基线(R4r 起构造器默认单屏;多 pane 用例自建 p1|h|p2)。 */
+function vmBase(): WorkbenchVm {
+  const vm = new WorkbenchVm()
+  vm.newPane('h')
+  vm.focusPane('p1')
+  return vm
+}
+
 export default function workbenchVmSessionsTest() {
   describe('workbenchVmSessions', () => {
     // ===== 1. bind/unbind/sessionOf 基本链 + 覆盖 =====
@@ -58,7 +66,7 @@ export default function workbenchVmSessionsTest() {
 
     // ===== 3. closePane 联动清理 slot =====
     it('closepane_prunes_orphan_slot', 0, () => {
-      const vm = new WorkbenchVm() // p1|h|p2
+      const vm = vmBase() // p1|h|p2
       vm.bindSession('p2', 'local', '', 'local shell')
       expect(vm.sessionCount()).assertEqual(1)
       vm.closePane('p2') // 树折叠为单叶 p1
@@ -71,7 +79,7 @@ export default function workbenchVmSessionsTest() {
 
     // ===== 4. 多工作区独立 =====
     it('workspaces_tabs_are_isolated', 0, () => {
-      const vm = new WorkbenchVm() // ws1 tab1: p1|h|p2
+      const vm = vmBase() // ws1 tab1: p1|h|p2
       expect(vm.workspaces.length).assertEqual(1)
       vm.newWorkspace() // ws2:空工作区(单 tab 空模型)
       expect(vm.workspaces.length).assertEqual(2)
@@ -131,7 +139,7 @@ export default function workbenchVmSessionsTest() {
 
     // ===== 7. slotsRev 递增 =====
     it('slotsrev_increments_on_bind_and_unbind', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       const r0 = vm.slotsRev
       vm.bindSession('p1', 'local', '', 'a')
       expect(vm.slotsRev).assertEqual(r0 + 1)

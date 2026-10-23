@@ -13,6 +13,14 @@ import { WorkbenchVm } from '../../../main/ets/workbench/viewmodel/WorkbenchVm';
 import { SshWorkspaceProvider } from '../../../main/ets/workbench/remote/RemoteWorkspaceProvider';
 import { RemoteTermHost } from '../../../main/ets/workbench/remote/RemoteTermHost';
 
+/** 双 pane 基线(R4r 起构造器默认单屏;多 pane 用例自建 p1|h|p2)。 */
+function vmBase(): WorkbenchVm {
+  const vm = new WorkbenchVm()
+  vm.newPane('h')
+  vm.focusPane('p1')
+  return vm
+}
+
 export default function remoteWorkspaceTest() {
   describe('RemoteWorkspace', () => {
     // ===== T1 provider open:store 未就绪 → null + error 事件 =====
@@ -54,7 +62,7 @@ export default function remoteWorkspaceTest() {
 
     // ===== T4 bindSession 元数据链(ssh kind):写入 + unbind 清理 =====
     it('vm_bindsession_ssh_metadata_chain', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       expect(vm.bindSession('p2', 'ssh', 'conn-1', 'ssh 测试')).assertTrue()
       const s = vm.sessionOf('p2')
       expect(s !== null).assertTrue()

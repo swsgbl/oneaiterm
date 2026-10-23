@@ -69,27 +69,32 @@ export default function termHostTest() {
       expect(vm.statusText.indexOf('sess 1') >= 0).assertTrue()
     })
 
-    // ===== 5. 二次调用幂等:绑定他 pane 先迁再绑;unbindTerm 后全清 =====
+    // ===== 5. 二次调用幂等;R4q 守卫拒绝他 pane 再绑;unbindTerm 后全清 =====
     it('vm_bindlocal_idempotent_and_unbind_reaps', 0, () => {
       TermHost.stop()
-      const vm = new WorkbenchVm() // 焦点 p1
+      // 双 pane 自建(R4r 起构造器默认单屏;本用例需要 p2)
+      const vm = new WorkbenchVm()
+      vm.newPane('h')
+      vm.focusPane('p1')
       expect(vm.bindLocalSession()).assertTrue()
       expect(TermHost.bound()).assertEqual('p1')
       // 幂等:同 pane 再调 → true,bound 不变,不重起 PTY
       expect(vm.bindLocalSession()).assertTrue()
       expect(TermHost.bound()).assertEqual('p1')
-      // 换绑:p1 释放,p2 接管(单会话迁移)
+      // R4q 守卫:回退路径(TermHost 单例)下 p1 会话存活时,p2 再绑被拒
+      // (原「换绑迁移」语义会杀旧会话换主——用户实锤「开新分屏刷掉旧窗格」
+      // 已废弃;web 恢复后多 pane 由 web 槽位承担,本守卫自然旁路)
       vm.focusPane('p2')
-      expect(vm.bindLocalSession()).assertTrue()
-      expect(TermHost.bound()).assertEqual('p2')
-      expect(vm.sessionOf('p1')).assertNull()
-      expect(vm.sessionOf('p2') !== null).assertTrue()
+      expect(vm.bindLocalSession()).assertFalse()
+      expect(TermHost.bound()).assertEqual('p1')
+      expect(vm.sessionOf('p1') !== null).assertTrue()
+      expect(vm.sessionOf('p2')).assertNull()
       // 结束:PTY 关、slot 清、termTick 再 ++
       const t1 = vm.termTick
       vm.unbindTerm()
       expect(TermHost.bound()).assertEqual('')
       expect(TermHost.term()).assertNull()
-      expect(vm.sessionOf('p2')).assertNull()
+      expect(vm.sessionOf('p1')).assertNull()
       expect(vm.termTick > t1).assertTrue()
     })
 

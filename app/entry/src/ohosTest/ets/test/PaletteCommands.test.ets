@@ -28,6 +28,14 @@ function cmdByKey(key: string): PaletteCmd | null {
   return null
 }
 
+/** 双 pane 基线(R4r 起构造器默认单屏;多 pane 用例自建 p1|h|p2)。 */
+function vmBase(): WorkbenchVm {
+  const vm = new WorkbenchVm()
+  vm.newPane('h')
+  vm.focusPane('p1')
+  return vm
+}
+
 export default function paletteCommandsTest() {
   describe('workbenchPaletteCommands', () => {
     // ===== 1. 注册表完整性 =====
@@ -44,7 +52,7 @@ export default function paletteCommandsTest() {
 
     // ===== 2. split.h / split.v =====
     it('split_h_yields_three_panes_and_h_split_node', 0, () => {
-      const vm = new WorkbenchVm() // 基线 p1|h|p2,焦点 p1
+      const vm = vmBase() // 基线 p1|h|p2,焦点 p1
       const cmd = cmdByKey('split.h')
       expect(cmd !== null).assertTrue()
       ;(cmd as PaletteCmd).run(vm)
@@ -55,7 +63,7 @@ export default function paletteCommandsTest() {
     })
 
     it('split_v_yields_three_panes_and_v_split_node', 0, () => {
-      const vm = new WorkbenchVm()
+      const vm = vmBase()
       const cmd = cmdByKey('split.v')
       expect(cmd !== null).assertTrue()
       ;(cmd as PaletteCmd).run(vm)

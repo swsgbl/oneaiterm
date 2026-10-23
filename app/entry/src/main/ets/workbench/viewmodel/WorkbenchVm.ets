@@ -14,7 +14,7 @@
  * SessionSlot 挂接:bindSession/unbindSession/sessionOf(当前 tab,pane 必须存在
  * 于树);closePane 联动清理被删 pane 的 slot;slotsRev 计数器驱动 PaneSurface
  * 标题行刷新(V1 方法调用不追踪,表达式读 slotsRev 绑定字段建立依赖)。
- * 持久化:构造恢复(失败→双 pane 基线);sync/会话变更/工作区操作后 saveWorkbench(v2)。
+ * 持久化:构造恢复(失败→单 pane 基线,R4r);sync/会话变更/工作区操作后 saveWorkbench(v2)。
  */
 import { LayoutTreeModel, SplitDir } from '../layout/LayoutTree';
 import { LayoutOps } from '../layout/LayoutOps';
@@ -105,7 +105,7 @@ export class WorkbenchVm {
   private wsSeq: number = 1
 
   constructor() {
-    // 恢复存档(v2 直读/v1 降级);失败(无档/损坏/无 context)→ 双 pane 基线:
+    // 恢复存档(v2 直读/v1 降级);失败(无档/损坏/无 context)→ 单 pane 基线(R4r):
     // 单工作区单 tab,single('p1') 再 split 出 p2。
     let restored = false
     try {
@@ -149,7 +149,8 @@ export class WorkbenchVm {
       const t = new TabState()
       t.tabId = 't1'
       t.title = '终端'
-      t.layout = LayoutOps.split(LayoutOps.single('p1'), 'p1', 'h', 'p2')
+      // R4r:默认单屏(用户指令「初始就是一个屏」)——原双 pane 开发期基线退役
+      t.layout = LayoutOps.single('p1')
       const ws = new WorkspaceState()
       ws.wsId = 'w1'
       ws.name = 'workspace'

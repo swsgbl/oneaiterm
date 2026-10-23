@@ -20,9 +20,17 @@ import { TabState } from '../../../main/ets/workbench/model/TabState';
 import { WorkspaceState } from '../../../main/ets/workbench/model/WorkspaceState';
 import { PaneLeaf, SplitNode } from '../../../main/ets/workbench/layout/LayoutTree';
 
+/** 双 pane 基线(R4r 起构造器默认单屏;多 pane 用例自建 p1|h|p2)。 */
+function vmBase(): WorkbenchVm {
+  const vm = new WorkbenchVm()
+  vm.newPane('h')
+  vm.focusPane('p1')
+  return vm
+}
+
 /** 构造 2x2 树:p1|p2 两列,各列上下再分(p3 挂 p1 下,p4 挂 p2 下)。 */
 function tab2x2(): TabState {
-  const vm = new WorkbenchVm() // 基线 p1|h|p2(恢复失败降级分支)
+  const vm = vmBase() // 基线 p1|h|p2(恢复失败降级分支)
   vm.focusPane('p1')
   vm.newPane('v') // p1 上/下 → p3
   vm.focusPane('p2')
@@ -129,7 +137,7 @@ export default function workbenchStoreTest() {
 
     // ===== 5. Vm 层:布局独立性 =====
     it('vm_tab_layouts_are_independent', 0, () => {
-      const vm = new WorkbenchVm() // 基线 p1|h|p2,activeTab=0
+      const vm = vmBase() // 基线 p1|h|p2,activeTab=0
       vm.newTab() // tab2(空模型根叶)
       expect(vm.tabs.length).assertEqual(2)
       expect(vm.activeTab).assertEqual(1)
@@ -147,7 +155,7 @@ export default function workbenchStoreTest() {
 
     // ===== 6. Vm 层:派生态跟随 =====
     it('vm_setactivetab_derived_state_follows', 0, () => {
-      const vm = new WorkbenchVm() // tab1: p1|h|p2
+      const vm = vmBase() // tab1: p1|h|p2
       vm.newTab() // tab2
       vm.newPane('h') // tab2: single p1
       vm.setActiveTab(0)
