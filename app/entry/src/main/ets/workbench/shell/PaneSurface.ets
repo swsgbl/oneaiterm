@@ -113,26 +113,15 @@ export struct PaneSurface {
     return themeByName(this.themeName)
   }
 
-  /** RD-1: 探测入口:退避窗口内直接消费会话缓存,不发网络。
-   *  R4s:web 终端通道恢复——TermWebView 改 renderMode=SYNC_RENDER(Web
-   *  画进组件树纹理)后,绕开了本机合成器不采样独立表面的平台缺陷,
-   *  R4p 的临时下线早退移除。 */
+  /** RD-1: 探测入口(原:退避窗口内消费会话缓存探测 ttyd)。
+   *  R4t:web 通道再次临时下线——R4s 的 SYNC_RENDER 用户实测显示仍零像素
+   *  (eglQuerySurface failed 平台缺陷两种渲染模式通杀),回退自绘
+   *  TermPaneView(用户实证可见+可打字的配置,R4q/R4r)。web 调查
+   *  (EGL 表面/第二 pane 构造)按 HANDOFF-R4Q.md 另案推进,不在
+   *  用户路径上试验。 */
   private probeReach(): void {
-    const now = Date.now()
-    if (!reachState.probe(now)) {
-      this.ttydOk = reachState.ok === true
-      return
-    }
-    probeTtyd().then((ok: boolean) => {
-      this.ttydOk = ok
-      if (!ok) {
-        this.scheduleReachRetry()
-      }
-    }).catch(() => {
-      // probeTtyd 设计上绝不抛;此处防御兜底
-      this.ttydOk = false
-      this.scheduleReachRetry()
-    })
+    this.ttydOk = false
+    return
   }
 
   /** RD-1: 失败退避重试链(TermReach 1s/5s/30s;pane 销毁即断)。 */
