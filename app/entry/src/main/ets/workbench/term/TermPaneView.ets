@@ -782,7 +782,7 @@ export struct TermPaneView {
         Column() {
           ForEach(this.viewRows, (line: TermLine, idx: number) => {
             this.TermLineRow(line, this.viewTop + idx, idx)
-          }, (line: TermLine, idx: number) => (this.viewTop + idx).toString() + ':' + line.rev.toString() + ':'
+          }, (line: TermLine, idx: number) => (this.viewTop + idx).toString() + ':' + line.rev.toString() + ':t' + this.tick.toString() + ':'
             + this.curSegCache.toString() + ':e' + this.modelEpoch.toString() + ':s' + this.searchEpoch.toString()
             + (this.isHitRowCur(idx) ? ':h' + this.hitCur.toString() : ''))
         }

@@ -113,23 +113,16 @@ export struct PaneSurface {
     return themeByName(this.themeName)
   }
 
-  /** RD-1: 探测入口:退避窗口内直接消费会话缓存,不发网络。 */
+  /** RD-1: 探测入口(原:退避窗口内消费会话缓存探测 ttyd)。
+   *  R4p:临时下线 web 终端通道——本机(KaihongOS 5.0 Quickemu)ArkWeb
+   *  渲染表面零像素呈现(平台级:页面活/shell 活/命令执行/capture 有
+   *  数据,但窗口合成不采样其表面;R4g..R4o 七轮修复+前台断言验证全部
+   *  无效)。回退自绘 TermPaneView(ArkUI 原生组件,不经 ArkWeb,
+   *  M0-M9 时代长期稳定);软键盘输入路由已兼容 TermHost.write。
+   *  平台问题解决后删除本早退恢复探测即回 web 架构。 */
   private probeReach(): void {
-    const now = Date.now()
-    if (!reachState.probe(now)) {
-      this.ttydOk = reachState.ok === true
-      return
-    }
-    probeTtyd().then((ok: boolean) => {
-      this.ttydOk = ok
-      if (!ok) {
-        this.scheduleReachRetry()
-      }
-    }).catch(() => {
-      // probeTtyd 设计上绝不抛;此处防御兜底
-      this.ttydOk = false
-      this.scheduleReachRetry()
-    })
+    this.ttydOk = false
+    return
   }
 
   /** RD-1: 失败退避重试链(TermReach 1s/5s/30s;pane 销毁即断)。 */

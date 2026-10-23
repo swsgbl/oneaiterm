@@ -665,6 +665,14 @@ export class WorkbenchVm {
       this.toast(i18nT('toast.localbound'))
       return true
     }
+    // R4q:回退路径(自绘单会话)保护——TermHost 是单例,再绑会把现有
+    // 本地终端会话杀掉换主(用户实锤「开新分屏刷掉旧窗格」)。web 通道
+    // 故障期间明确拒绝并提示,保住已开的会话。
+    if (TermHost.bound() !== '' && TermHost.bound() !== paneId) {
+      this.toast(i18nT('toast.localsingle'))
+      this.focusPane(TermHost.bound())
+      return false
+    }
     if (TermHost.bound() !== '') {
       this.unbindSession(TermHost.bound())
     }

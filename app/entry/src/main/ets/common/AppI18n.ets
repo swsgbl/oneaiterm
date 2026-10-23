@@ -134,6 +134,7 @@ const ZH: Record<string, string> = {
   'kb.nofocus': '没有可输入的焦点窗格',
   // R4i AI 未配置/失败醒目提示
   'ai.toast.noengine': 'AI 引擎未配置——点左侧 ⚙ 设置 → AI 模型配置',
+  'toast.localsingle': '终端渲染通道故障期间,同一时间仅支持一个本地终端(已保留现有会话)',
   'ai.toast.taskfail': 'AI 任务未受理(详见状态栏)',
   // ===== GUI 丝滑棒:空态/toast/确认/字号 =====
   'pane.empty.hint': '此窗格还没有会话',
@@ -303,6 +304,7 @@ const EN: Record<string, string> = {
   'sk.close': 'Hide keyboard',
   'kb.nofocus': 'No focused pane to type into',
   'ai.toast.noengine': 'AI engine not configured — Settings (⚙) → AI model',
+  'toast.localsingle': 'While the render channel is degraded, only ONE local terminal is supported (existing session kept)',
   'ai.toast.taskfail': 'AI task rejected (see status bar)',
   'pane.empty.hint': 'No session in this pane yet',
   'pane.empty.local': 'New local',
