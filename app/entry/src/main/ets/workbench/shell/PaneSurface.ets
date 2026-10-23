@@ -10,6 +10,7 @@ import { AppTheme, themeByName } from '../../common/AppTheme';
 import { DesignTokens } from '../../common/DesignTokens';
 import { AppIcons } from '../../common/AppIcons';
 import { TermHost } from '../term/TermHost';
+import { WsTermHost } from '../term/WsTermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { TelTermHost } from '../remote/TelTermHost'; // +LEG-2: telnet 会话宿主
 import { TermPaneView } from '../term/TermPaneView';
@@ -113,15 +114,26 @@ export struct PaneSurface {
     return themeByName(this.themeName)
   }
 
-  /** RD-1: 探测入口(原:退避窗口内消费会话缓存探测 ttyd)。
-   *  R4t:web 通道再次临时下线——R4s 的 SYNC_RENDER 用户实测显示仍零像素
-   *  (eglQuerySurface failed 平台缺陷两种渲染模式通杀),回退自绘
-   *  TermPaneView(用户实证可见+可打字的配置,R4q/R4r)。web 调查
-   *  (EGL 表面/第二 pane 构造)按 HANDOFF-R4Q.md 另案推进,不在
-   *  用户路径上试验。 */
+  /** RD-1: 探测入口:退避窗口内直接消费会话缓存,不发网络。
+   *  R4u:探测恢复——WSS 引擎(自绘+WebSocket 直连 ttyd)需要 ttyd 可达
+   *  判定;显示不依赖探测结果(自绘渲染),探测只决定 WSS vs 降级自绘
+   *  PTY(ArkWeb 通道已整体退役)。 */
   private probeReach(): void {
-    this.ttydOk = false
-    return
+    const now = Date.now()
+    if (!reachState.probe(now)) {
+      this.ttydOk = reachState.ok === true
+      return
+    }
+    probeTtyd().then((ok: boolean) => {
+      this.ttydOk = ok
+      if (!ok) {
+        this.scheduleReachRetry()
+      }
+    }).catch(() => {
+      // probeTtyd 设计上绝不抛;此处防御兜底
+      this.ttydOk = false
+      this.scheduleReachRetry()
+    })
   }
 
   /** RD-1: 失败退避重试链(TermReach 1s/5s/30s;pane 销毁即断)。 */
@@ -343,54 +355,43 @@ export struct PaneSurface {
           .onAppear(() => {
             this.publishFromCache(false)
           })
+        } else if (WsTermHost.model(this.paneId) !== null) {
+          // R4u:WSS 终端引擎——自绘 TermPaneView(显示实证可用)+ WebSocket
+          // 直连系统 ttyd(协议:输入'0'+文本/输出'0'+原始字节;每连接独立
+          // shell、完整系统环境)。注入模式复用 M6a 远程管道(model/writeFn/
+          // resizeFn);零 ArkWeb 依赖(平台零像素缺陷绕开),天然多实例。
+          TermPaneView({
+            paneId: this.paneId,
+            model: WsTermHost.model(this.paneId),
+            writeFn: (t: string): void => {
+              WsTermHost.write(this.paneId, t)
+            },
+            resizeFn: (c: number, r: number): void => {
+              WsTermHost.resize(this.paneId, c, r)
+            },
+            onDone: (): void => {
+              this.onCmdDone(this.paneId)
+            },
+            wantFocus: this.vm.focusedPane === this.paneId
+          })
         } else if (this.ttydOk === true && this.vm.shellVisibleTick > 0) {
-          // GUI-R4 生产级修复:web 终端与布局树解耦——本分支只画「透明
-          // 占位 + 矩形上报」(WebPaneRects),真身在 AppShell 常驻
-          // WebPaneLayer。布局树 rev 重建/分屏/换页只改矩形,web 实例
-          // 与会话内容永不重载(用户实锤「新建分屏刷掉第一屏」根治)。
-          // R4e 键盘确定性通路:全幅透明 TextInput 持焦点并把按键转发到
-          // 同一 shell(视觉零存在)。**全部走 onKeyEvent 直转**(字母
-          // 键码→字符,2054→\r,功能键→ANSI)——不依赖 IME 文本插入
-          // (实勘:IME 连接断后 onChange 永不触发,但 KeyEvent 始终
-          // 到达节点,昨夜 AceFocus 日志实锤);返回 true 消费防双发。
-          Stack() {
-            TextInput({
-              placeholder: '',
-            })
-              .fontSize(fsc(this.fontScale, 13))
-              .fontColor(Color.Transparent)
-              .caretColor(Color.Transparent)
-              .placeholderColor(Color.Transparent)
-              .backgroundColor(Color.Transparent)
-              .borderRadius(0)
-              .padding(0)
-              .width('100%')
-              .height('100%')
-              .defaultFocus(this.vm.focusedPane === this.paneId)
-              .onKeyEvent((e: KeyEvent) => {
-                if (e.type === KeyType.Down) {
-                  const seq = keyToSeq(e.keyCode)
-                  if (seq !== '') {
-                    TtydSession.sendText(this.paneId, seq)
-                    return true
-                  }
-                }
-                return false
-              })
+          // R4u:ttyd 可达但 WSS 会话未建(vm 绑定时建连)——连接中占位。
+          Column() {
+            Text(this.paneId)
+              .fontSize(fsc(this.fontScale, 20))
+              .fontWeight(FontWeight.Bold)
+              .fontColor(this.th().inkSubtle)
+              .opacity(0.55)
+            Text(tr(this.locale, 'pane.wsconnecting'))
+              .fontSize(fsc(this.fontScale, DesignTokens.FONT_CAPTION))
+              .fontColor(this.th().inkSubtle)
+              .opacity(0.7)
           }
           .layoutWeight(1)
           .width('100%')
-          .backgroundColor(Color.Transparent)
+          .justifyContent(FlexAlign.Center)
           .onAppear(() => {
-            this.publishFromCache(true)
-          })
-          // R4h:占位自身区域=web 真身矩形——分支切换/布局变化必触发本回调
-          // (根容器 onAreaChange 在纯分支切换时不触发,0×0 卡死根源)。
-          // R4i:缓存面积 + 启动自愈看门狗(周期重发布,兜住一切卡死形态)。
-          .onAreaChange((_o: Area, n: Area) => {
-            this.webAreaCache = [Number(n.globalPosition.x), Number(n.globalPosition.y), Number(n.width), Number(n.height)]
-            this.publishWebRect(true, n)
-            this.startHeal()
+            this.publishFromCache(false)
           })
         } else if (this.ttydOk === true) {
           // FR: 探测 ok 但窗口未上前——等待可见(shellVisibleTick 变化

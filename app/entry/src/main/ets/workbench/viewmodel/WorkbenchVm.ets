@@ -23,6 +23,7 @@ import { WorkspaceState } from '../model/WorkspaceState';
 import { restoreWorkbench, saveWorkbench } from '../store/WorkbenchStore';
 import { TermModel } from '../../components/TermModel';
 import { TermHost } from '../term/TermHost';
+import { WsTermHost } from '../term/WsTermHost';
 import { RemoteTermHost } from '../remote/RemoteTermHost';
 import { TelTermHost } from '../remote/TelTermHost';
 import { TtydSession } from '../term/TtydSession';
@@ -341,6 +342,8 @@ export class WorkbenchVm {
 
   /** 解除绑定(未绑定 no-op)。 */
   unbindSession(paneId: string): void {
+    // R4u:WSS 会话随槽位解绑而拆除(多实例生命周期闭环)
+    WsTermHost.detach(paneId)
     const cur = this.curTabOrNull()
     if (cur === null) {
       return
@@ -659,12 +662,17 @@ export class WorkbenchVm {
       this.focusPane(paneId)
       return true
     }
-    if (this.localViaWeb(paneId)) {
-      this.bindSession(paneId, 'local', '', 'local shell')
-      this.termTick += 1
-      this.focusPane(paneId)
-      this.toast(i18nT('toast.localbound'))
-      return true
+    // R4u:WSS 引擎——WebSocket 直连系统 ttyd(每连接独立 shell+完整系统
+    // 环境)。探测未知(null)时也直连(冷启绑定先于探测;ttyd 为开机
+    // 常驻服务);仅探测已判死(false)才跳过回落 TermHost 单会话。
+    if (false && reachState.ok !== false) { // R4u-hotfix:WSS 停用(服务端零回帧,原因待查),回落 TermHost 可用配置
+      if (WsTermHost.connect(paneId, 80, 24) !== null) {
+        this.bindSession(paneId, 'local', '', 'local shell')
+        this.termTick += 1
+        this.focusPane(paneId)
+        this.toast(i18nT('toast.localbound'))
+        return true
+      }
     }
     // R4q:回退路径(自绘单会话)保护——TermHost 是单例,再绑会把现有
     // 本地终端会话杀掉换主(用户实锤「开新分屏刷掉旧窗格」)。web 通道
@@ -902,6 +910,10 @@ export class WorkbenchVm {
     }
     const kind = this.sessionKindOf(pane)
     if (kind === 'local') {
+      // R4u:WSS 通路优先(多实例+系统环境);web 桥(ArkWeb)已退役保留兼容。
+      if (WsTermHost.write(pane, text)) {
+        return true
+      }
       if (TtydSession.sendText(pane, text)) {
         return true
       }
