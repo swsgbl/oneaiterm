@@ -646,6 +646,10 @@ export class WorkbenchVm {
     if (TtydSession.isLive(paneId)) {
       return true
     }
+    // RD3:WSS 会话活=web 架构语义(恢复档复活判定覆盖冷启探测未决窗口)
+    if (WsTermHost.isLive(paneId)) {
+      return true
+    }
     return reachState.ok === true
   }
 
@@ -665,7 +669,7 @@ export class WorkbenchVm {
     // R4u:WSS 引擎——WebSocket 直连系统 ttyd(每连接独立 shell+完整系统
     // 环境)。探测未知(null)时也直连(冷启绑定先于探测;ttyd 为开机
     // 常驻服务);仅探测已判死(false)才跳过回落 TermHost 单会话。
-    if (false && reachState.ok !== false) { // R4u-hotfix:WSS 停用(服务端零回帧,原因待查),回落 TermHost 可用配置
+    if (reachState.ok !== false) { // RD3:WSS 启用——ttyd 1.7.1 子协议 "tty" 根修(零回帧根因),协议层探针实证输入输出全通
       if (WsTermHost.connect(paneId, 80, 24) !== null) {
         this.bindSession(paneId, 'local', '', 'local shell')
         this.termTick += 1
@@ -702,13 +706,28 @@ export class WorkbenchVm {
     if (TermHost.bound() !== '') {
       return
     }
-    const target = firstLocalSlotPaneId(this.tabs[this.activeTab].sessions)
-    if (target === '' || this.panes.indexOf(target) < 0) {
+    // RD3:WSS 多实例——当前 tab 的全部 local 槽逐一复活(旧语义只取首个
+    // 是 TermHost 单例时代产物;WSS 每连接独立 shell,多槽多连)。
+    const cur = this.tabs[this.activeTab]
+    if (cur === undefined) {
       return
     }
-    if (this.localViaWeb(target)) {
-      // web 架构:可见性门控下 pane 自行 arm,仅驱动一次重评
+    let revived = false
+    for (const s of cur.sessions) {
+      if (s.kind !== 'local' || this.panes.indexOf(s.paneId) < 0) {
+        continue
+      }
+      if (WsTermHost.connect(s.paneId, 80, 24) !== null) {
+        revived = true
+      }
+    }
+    if (revived) {
       this.termTick += 1
+      return
+    }
+    // 全员失败(如 ttyd 不可达)→ 旧单 PTY 兜底(仅首个槽)
+    const target = firstLocalSlotPaneId(cur.sessions)
+    if (target === '' || this.panes.indexOf(target) < 0) {
       return
     }
     if (TermHost.start(80, 24)) {

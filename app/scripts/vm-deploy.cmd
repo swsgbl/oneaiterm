@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 rem vm-deploy.cmd -- ONE-COMMAND deploy of D:\oneaiterm\app to the KaihongOS VM
-rem (127.0.0.1:15566): sync -> adapt -> build(+ohpm) -> repack -> install
+rem (192.168.161.137:10178): sync -> adapt -> build(+ohpm) -> repack -> install
 rem [+ /smoke]. Evidence dir: .verify\m8r1\ . Stage logs land there too.
 rem Idempotent: safe to re-run; every stage verifies its own result before
 rem moving on. BUILD runs ohpm install first when entry/oh_modules is
@@ -16,7 +16,7 @@ set "SCR=%APP%\scripts"
 set "EV=%REPO%\.verify\m8r1"
 set "PY=C:\Users\hongfu\AppData\Local\mise\shims\python.exe"
 set "HDC=C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"
-set "T=-t 127.0.0.1:15566"
+set "T=-t 192.168.161.137:10178"
 set "VMROOT=/data/local/home/tmp/app"
 
 if not exist "%EV%" mkdir "%EV%"
@@ -85,7 +85,7 @@ echo ===== VM-DEPLOY DONE + SMOKE PASS =====
 endlocal & exit /b 0
 
 :fail_online
-echo FAIL stage 0: device offline. Check hdc target 127.0.0.1:15566.
+echo FAIL stage 0: device offline. Check hdc target 192.168.161.137:10178.
 type "%EV%\stage0-online.txt"
 endlocal & exit /b 1
 :fail_sync

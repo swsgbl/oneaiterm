@@ -33,6 +33,7 @@ import { GitService, GitBranchInfo, GitFileEntry, GitCommit } from '../git/GitSe
 import { LayoutNode, SplitNode, SplitDir, PaneLeaf } from '../layout/LayoutTree';
 import { SessionSlot } from '../model/TabState';
 import { TtydSession } from '../term/TtydSession';
+import { WsTermHost } from '../term/WsTermHost';
 import { trimBlankTail } from '../shell/ParityUi';
 
 const DOMAIN: number = 0x0700;
@@ -667,6 +668,17 @@ interface HostSink {
 /** pane 路由到宿主(RD-2:ttyd 会话优先——TtydSession live 时走 Web 注入
  *  (与用户屏同一会话);其余先本地后远程,未命中 null)。 */
 function routeToHost(paneId: string): HostSink | null {
+  // RD3:WSS 引擎优先——WsTermHost 直连系统 ttyd(多实例+全环境);桥
+  // send/capture 与用户所见同一会话。镜像(TtydSession)由 WsTermHost
+  // 输出帧同步 feed,capture 走 vm.paneCapture 的镜像分支。
+  if (WsTermHost.isLive(paneId)) {
+    const sink: HostSink = {
+      write: (t: string): void => {
+        WsTermHost.write(paneId, t)
+      }
+    }
+    return sink
+  }
   if (TtydSession.isLive(paneId)) {
     const sink: HostSink = {
       write: (t: string): void => {

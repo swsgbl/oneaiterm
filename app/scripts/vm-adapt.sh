@@ -18,10 +18,10 @@ APP=/data/local/home/tmp/app
 BP=$APP/build-profile.json5
 MOD=$APP/entry/src/main/module.json5
 
-echo "[adapt] A1 build-profile runtimeOS + sdk versions -> OpenHarmony/14"
+echo "[adapt] A1 build-profile runtimeOS + sdk versions -> OpenHarmony/23"
 sed -i 's/"runtimeOS": *"HarmonyOS"/"runtimeOS": "OpenHarmony"/g' "$BP"
-sed -i 's/"\(compatible\|target\)SdkVersion": *"5\.0\.2(14)"/"\1SdkVersion": 14/g' "$BP"
-sed -i 's/"\(compatible\|target\)SdkVersion": *"6\.1\.1(24)"/"\1SdkVersion": 14/g' "$BP"
+sed -i 's/"\(compatible\|target\)SdkVersion": *"5\.0\.2(14)"/"\1SdkVersion": 23/g' "$BP"
+sed -i 's/"\(compatible\|target\)SdkVersion": *"6\.1\.1(24)"/"\1SdkVersion": 23/g' "$BP"
 # ensure compileSdkVersion on both products. ANCHOR MATTERS: targets[]
 # objects also carry "name": "default"/"store" lines -- anchoring the
 # insert on "name" polluted modules[1].targets[1] (schema error 00303038,
@@ -30,7 +30,7 @@ sed -i 's/"\(compatible\|target\)SdkVersion": *"6\.1\.1(24)"/"\1SdkVersion": 14/
 # line (also cleans any pollution from older runs), then re-insert after
 # each normalized compatibleSdkVersion line. Idempotent by construction.
 sed -i '/"compileSdkVersion"/d' "$BP"
-sed -i '/"compatibleSdkVersion": 14,/a\        "compileSdkVersion": 14,' "$BP"
+sed -i '/"compatibleSdkVersion": 23,/a\        "compileSdkVersion": 23,' "$BP"
 N=$(grep -c '"compileSdkVersion"' "$BP")
 echo "[adapt] compileSdkVersion count (must be exactly 2, products only): $N"
 if [ "$N" -ne 2 ]; then
@@ -45,6 +45,10 @@ sed -i 's/"deviceTypes": *\[[^]]*\]/"deviceTypes": [ "default" ]/' "$MOD"
 MODTEST=$APP/entry/src/ohosTest/module.json5
 if [ -f "$MODTEST" ]; then
   sed -i 's/"deviceTypes": *\[[^]]*\]/"deviceTypes": [ "default" ]/' "$MODTEST"
+  echo "[adapt] A3 ohosTest module.json5 deviceTypes collapsed"
+fi
+echo "[adapt] DONE_VM_ADAPT"
+i 's/"deviceTypes": *\[[^]]*\]/"deviceTypes": [ "default" ]/' "$MODTEST"
   echo "[adapt] A3 ohosTest module.json5 deviceTypes collapsed"
 fi
 echo "[adapt] DONE_VM_ADAPT"

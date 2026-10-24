@@ -16,7 +16,7 @@ import time
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 EV = os.path.join(REPO, ".verify", "m8r1")
 HDC = r"C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"
-TARGET = "127.0.0.1:15566"
+TARGET = "192.168.161.137:10178"
 BUNDLE = "com.oneaiterm.terminal"
 MARKER = "\u4e00\u7ad9AI\u7ec8\u7aef"          # 一站AI终端
 SKIP = "\u8df3\u8fc7"                          # 跳过

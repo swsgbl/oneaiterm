@@ -28,7 +28,7 @@ APP = os.path.join(REPO, "app")
 VM_DST = "/data/local/home/tmp/app"
 VM_TARBALL = "/data/local/tmp/m8r1-sync.tar.gz"
 HDC = r"C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe"
-TARGET = "127.0.0.1:15566"
+TARGET = "192.168.161.137:10178"
 HAR_KEEP = (".ets", ".json5", ".ts")  # extensions synced from the HAR tree
 # (.ts is hvigorfile.ts -- hard-required by VM hvigor, 00303148 without it;
 #  the vm_find filter MUST mirror the manifest rules or files that DID land

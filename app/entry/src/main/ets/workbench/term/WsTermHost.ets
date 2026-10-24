@@ -117,10 +117,14 @@ export class WsTermHost {
       hilog.info(WST_DOMAIN, WST_TAG, 'ws open pane=%{public}s', paneId)
       try {
         sess.sendBin(wsHelloFrame(sess.cols, sess.rows))
-        // 诊断:800ms 后发一个回车探测回环(shell 应回显新提示符)
+        // 诊断+RD3 环境补全:ttyd 会话的 mount namespace 无 /usr/local/bin
+        // (宿主 su 域可见但 ttyd 域不可见,实测 ls 报 No such file),node/npm
+        // 只在 /data/local/home/.ohos/node/bin。open 后注入 PATH export,
+        // 让每个终端 which node/npm/hdc 直接可用(原回车探测帧并入)。
         setTimeout((): void => {
           try {
-            sess.sendBin(wsInputFrame('\r'))
+            sess.sendBin(wsInputFrame(
+              'export PATH=/data/local/home/.ohos/node/bin:/data/local/home/.local/bin:$PATH\r'))
           } catch (e2) {
           }
         }, 800)
@@ -157,7 +161,11 @@ export class WsTermHost {
       sess.live = false
       hilog.info(WST_DOMAIN, WST_TAG, 'ws close pane=%{public}s', paneId)
     })
-    sess.ws.connect(TTYD_WS_URL, (_err: BusinessError, _ok: boolean): void => {
+    // RD3 根修:ttyd 1.7.1(libwebsockets)要求客户端握手携带子协议
+    // "tty",否则升级成功但服务端静默不启动会话(零回帧实锤;VM node
+    // 探针 A/C 无子协议=零回帧,B 带 tty=输出帧全通)。OHOS webSocket
+    // 经 WebSocketRequestOptions.protocol 映射 Sec-WebSocket-Protocol。
+    sess.ws.connect(TTYD_WS_URL, { protocol: 'tty' }, (_err: BusinessError, _ok: boolean): void => {
     })
     return model
   }
